@@ -76,8 +76,18 @@ const worker = {
     if (url.pathname === '/api/models' && request.method === 'GET') {
       const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
       if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured.' }, 503)
-      const response = await fetch(`${GEMINI_BASE}/models?key=${encodeURIComponent(apiKey)}`)
-      const body = (await response.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> }
+      let response: Response
+      try {
+        response = await fetch(`${GEMINI_BASE}/models?key=${encodeURIComponent(apiKey)}`)
+      } catch {
+        return json({ ok: false, error: 'Gemini model discovery could not reach Google.' }, 502)
+      }
+      let body: { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> }
+      try {
+        body = (await response.json()) as typeof body
+      } catch {
+        return json({ ok: false, error: `Gemini model discovery returned a non-JSON response (${response.status}).` }, 502)
+      }
       if (!response.ok) return json({ ok: false, error: `Gemini model discovery failed (${response.status}).` }, 502)
       const models = (body.models ?? [])
         .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
