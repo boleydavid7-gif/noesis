@@ -19,10 +19,13 @@ npm install
 npm run dev
 ```
 
-The first slice is a responsive dashboard prototype. It demonstrates the
-library, learning paths, notes, progress, tutor context, and import entry point.
-EPUB parsing, the persistent reader, Supabase storage, and AI calls will be
-added in the next slices.
+The first slice is a responsive dashboard with a working Second Brain capture
+flow and a server-side GAYL tutor endpoint. Notes persist in the browser and
+sync to Supabase when the browser-safe Supabase variables and anonymous auth
+are enabled. Cloudflare serves the static Vite build and keeps `GEMINI_API_KEY`
+on the Worker.
+
+EPUB parsing and the persistent reader are still the next product slices.
 
 ## Direction
 
@@ -41,3 +44,11 @@ The existing IT PATH repository is the reference implementation for the
 Second Brain, AI runtime, authentication, and learner-state patterns. Noesis
 is intentionally a separate application so its universal reading model can
 develop without changing the production IT PATH app.
+
+## Cloudflare setup
+
+This repository uses a static-assets Worker. Keep the build command as
+`npm run build` and the deploy command as `npx wrangler deploy`. Add the
+`GEMINI_API_KEY` Worker secret before asking GAYL a question. To enable cloud
+note sync, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build
+variables and apply the migration in `supabase/migrations/`.
