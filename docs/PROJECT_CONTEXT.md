@@ -1,106 +1,73 @@
 # Noesis project context
 
-This file is the handoff point for future work. Noesis is a separate
-development product; it must not change the production IT PATH application.
+Noesis is a separate development product; it must not change the production IT
+PATH application.
 
 ## Product direction
 
-Noesis is a subject-agnostic, reader-first learning space. A learner imports
-an EPUB, PDF, or permitted web source, reads it, highlights passages, writes
-notes, asks the tutor about the current reading context, and groups books into
-learning paths. A book stays a book; the system may add summaries, questions,
-flashcards, and review prompts without forcing the source into fixed lessons.
+Noesis is a subject-agnostic, reader-first learning space. A learner imports an
+EPUB, reads it, captures highlights and notes, asks Noema about the current
+reading context, searches permitted free resources, and groups books into
+learning paths. A book stays a book; optional summaries, questions, and review
+prompts can be added without forcing the source into fixed lessons.
 
-The visual reference is the dashboard mockup in the conversation: a dark,
-calm workspace with a left navigation rail, a resume-reading card, a library
-of cover cards with progress, learning-path collections, recent notes, a GAYL
-tutor panel, and useful progress metrics.
+The visual reference is the dashboard mockup: a dark, calm workspace with a
+left navigation rail, a resume-reading card, a library of cover cards with
+progress, learning-path collections, recent notes, a Noema tutor popup, and
+useful progress metrics.
 
 ## Reusable IT PATH reference
 
 Port concepts selectively from `/workspace/itpath-builder`:
 
 - `src/components/layout/side-panel.tsx`: Second Brain popup and text-to-note flow.
-- `src/lib/knowledge.functions.ts`: authenticated knowledge storage, extraction,
-  and source-grounded search.
-- `src/lib/ai/run.server.ts` and `src/lib/ai/gemini-runtime.server.ts`: Gemini
-  runtime and guarded AI calls.
-- `src/integrations/supabase/client.ts`, `client.server.ts`, and
-  `auth-middleware.ts`: Supabase browser/server boundaries.
-- `supabase/migrations/20261006000000_create_knowledge_bucket.sql`: knowledge
-  storage setup.
+- `src/lib/knowledge.functions.ts`: authenticated knowledge storage and source-grounded search.
+- `src/lib/ai/run.server.ts` and `src/lib/ai/gemini-runtime.server.ts`: Gemini runtime and guarded AI calls.
+- Supabase client and auth boundaries.
 
 Do not copy the IT-specific curriculum, certifications, automotive content,
-domain registry, or fixed lesson engines into the universal core. IT can become
-an optional future content pack.
+domain registry, or fixed lesson engines into the universal core.
 
 ## Current repository status
 
-The repository started empty. Commit `23d7574` contains the first responsive
-dashboard prototype and README. It currently demonstrates:
+The current app is a working reader-first build:
 
-- Library cards with progress rings and a resume-reading card.
-- Learning path cards.
-- Highlight, idea, and question note cards.
-- A GAYL context panel and responsive navigation.
-- Local EPUB/PDF import into prototype library state.
-- A reader-preview panel that marks the next implementation boundary.
-- A Second Brain panel with manual notes, text-selection capture, local
-  persistence, and optional Supabase anonymous sync.
-- A Cloudflare Worker `/api/tutor` route that sends the active book and saved
-  notes to Gemini without exposing the API key to the browser.
-
-The import action currently adds a placeholder book. It does not parse EPUB
-contents yet. Notes use local storage until Supabase variables and anonymous
-auth are available; the migration in `supabase/migrations/` is idempotent for
-an existing `knowledge_items` table.
+- EPUB import extracts title, author, cover, and table of contents.
+- EPUB binaries live in IndexedDB; metadata, CFI, and progress live in local
+  storage, so the reader resumes on the same browser.
+- Read, Notes, Learning Paths, Progress, Explore, and Cloud Backup are real
+  pages. Learning paths can contain books and show aggregate progress.
+- Second Brain captures typed notes and selected text from any page.
+- Noema is a global tutor popup backed by the Cloudflare Worker `/api/tutor`.
+- Explore searches Project Gutenberg and Open Library through `/api/search`.
+- Cloud Backup exports/restores a complete ZIP and can upload it to a private
+  Supabase Storage bucket after the backup migration is applied.
 
 ## Installed foundation
 
-Noesis uses React and Vite and now carries the reusable dependency foundation
-from IT PATH: Supabase, TanStack Router/Start/Query, Zod, Sonner, Radix UI,
-Tailwind utilities, Drizzle, Wrangler, Nitro, Vitest, and the existing UI/data
-helpers. EPUB work also has `epubjs` and `jszip` available.
+Noesis uses React and Vite with Supabase, epubjs, jszip, and Wrangler. Install
+with `npm install` or `bun install`. Never commit `.env` or secret values.
 
-Install with `npm install` or `bun install`. Never commit `.env` or secret
-values. `.env.example` documents the browser-safe Supabase values, server-side
-Supabase key names, Gemini key names, and `DATABASE_URL`.
+## Next build order
 
-## Recommended build order
-
-1. Create the reader data model: `books`, `book_chapters`,
-   `reading_progress`, `highlights`, `notes`, `learning_paths`, `path_books`,
-   `study_sessions`, and `tutor_threads`.
-2. Parse an unencrypted EPUB in the browser or an ingestion worker; retain
-   metadata, cover, table of contents, chapter text, and stable source
-   locations.
-3. Build the persistent reader with resume position, chapter navigation,
-   search, appearance controls, highlights, and notes.
-4. Expand the Second Brain and let GAYL answer in four scopes: selection,
-   chapter, book, and library. Answers should cite source locations. The
-   current first slice already supports note capture and book/note context.
-5. Add learning paths as user-curated book collections with goal, order, and
-   progress. AI suggestions require user approval.
-6. Add source-grounded practice and review prompts. Subject-specific applied
-   activities can come later through adapters.
+1. Add account-based Supabase Auth so a cloud backup can be restored on a new
+   device instead of being tied to an anonymous browser session.
+2. Add chapter text indexing, in-reader search, stable source locations, and
+   more precise Noema answers and highlights.
+3. Add appearance controls, richer annotations, and review prompts.
+4. Add optional OAuth connectors for Google Drive, Dropbox, and OneDrive when
+   provider app registrations are available.
+5. Add source-grounded practice and subject-specific activity adapters.
 
 ## Boundaries
 
 Only import material the learner is permitted to use. DRM-protected EPUBs
-cannot be processed. Public links can be inaccessible, paywalled, or dynamic;
-the importer needs size, timeout, and source-citation safeguards. AI output
-must remain grounded in imported text and should be reviewable before it is
-treated as a learning record.
+cannot be processed. Public links can be inaccessible, paywalled, or dynamic.
+AI output must remain grounded in imported text and should be reviewable before
+it is treated as a learning record.
 
 ## Verification
 
-The current prototype passes:
-
-```sh
-npm run build
-npm run lint
-git diff --check
-```
-
-The empty GitHub repository is configured as `origin`; the initial commit is
-local until it is pushed from the authenticated Codespace.
+The current source passes `npm run typecheck`, `npm run build`, `npm run lint`,
+and a Wrangler dry run. The live health endpoint is
+`/api/health`; free-resource search is `/api/search?q=...`.
