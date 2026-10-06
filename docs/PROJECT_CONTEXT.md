@@ -39,6 +39,8 @@ The current app is a working reader-first build:
   pages. Learning paths can contain books and show aggregate progress.
 - Second Brain captures typed notes and selected text from any page.
 - Noema is a global tutor popup backed by the Cloudflare Worker `/api/tutor`.
+- Account supports email/password sign-in and can upgrade an anonymous session
+  without moving its notes to a new user.
 - Explore searches Project Gutenberg and Open Library through `/api/search`.
 - Cloud Backup exports/restores a complete ZIP and can upload it to a private
   Supabase Storage bucket after the backup migration is applied.
@@ -50,14 +52,12 @@ with `npm install` or `bun install`. Never commit `.env` or secret values.
 
 ## Next build order
 
-1. Add account-based Supabase Auth so a cloud backup can be restored on a new
-   device instead of being tied to an anonymous browser session.
-2. Add chapter text indexing, in-reader search, stable source locations, and
+1. Add chapter text indexing, in-reader search, stable source locations, and
    more precise Noema answers and highlights.
-3. Add appearance controls, richer annotations, and review prompts.
-4. Add optional OAuth connectors for Google Drive, Dropbox, and OneDrive when
+2. Add appearance controls, richer annotations, and review prompts.
+3. Add optional OAuth connectors for Google Drive, Dropbox, and OneDrive when
    provider app registrations are available.
-5. Add source-grounded practice and subject-specific activity adapters.
+4. Add source-grounded practice and subject-specific activity adapters.
 
 ## Boundaries
 
