@@ -130,6 +130,26 @@ async function searchFreeResources(request: Request): Promise<Response> {
           source: 'OpenAlex', sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '', downloadUrl: item.primary_location?.pdf_url, free: item.open_access?.is_oa === true, format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article', kind: 'article',
         }))
       }).catch(() => [] as SearchResult[])
+    const academicFallback = fetch(`https://api.crossref.org/works?query=${encoded}&filter=type:journal-article&rows=12`, { headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as { message?: { items?: Array<{ DOI?: string; title?: string[]; author?: Array<{ given?: string; family?: string }>; published?: { 'date-parts'?: number[][] }; URL?: string; link?: Array<{ URL?: string; 'content-type'?: string }>; license?: Array<{ URL?: string }> }> } }
+        return (body.message?.items ?? []).filter((item) => item && item.title?.[0]).map((item, index): SearchResult => {
+          const pdf = item.link?.find((link) => link['content-type']?.toLowerCase().includes('pdf'))?.URL
+          return {
+            id: item.DOI ?? `${item.title?.[0]}-${index}`,
+            title: item.title?.[0] ?? 'Journal article',
+            author: item.author?.slice(0, 3).map((author) => [author.given, author.family].filter(Boolean).join(' ')).filter(Boolean).join(', ') || 'Unknown author',
+            year: item.published?.['date-parts']?.[0]?.[0],
+            source: 'Crossref',
+            sourceUrl: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : ''),
+            downloadUrl: pdf,
+            free: Boolean(pdf || item.license?.length),
+            format: pdf ? 'Journal PDF' : 'Journal article',
+            kind: 'article',
+          }
+        })
+      }).catch(() => [] as SearchResult[])
     const archive = fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
@@ -154,8 +174,9 @@ async function searchFreeResources(request: Request): Promise<Response> {
           }
         })
       }).catch(() => [] as SearchResult[])
-    const [library, gutenbergResults, academicResults, archiveResults] = await Promise.all([openLibrary, gutenberg, academic, archive])
-    return json({ ok: true, results: [...gutenbergResults, ...academicResults, ...archiveResults, ...library] })
+    const [library, gutenbergResults, academicResults, academicFallbackResults, archiveResults] = await Promise.all([openLibrary, gutenberg, academic, academicFallback, archive])
+    const academicResultsToUse = academicResults.length > 0 ? academicResults : academicFallbackResults
+    return json({ ok: true, results: [...gutenbergResults, ...academicResultsToUse, ...archiveResults, ...library] })
   } catch {
     return json({ ok: false, error: 'Free-resource search is temporarily unavailable.' }, 502)
   }
