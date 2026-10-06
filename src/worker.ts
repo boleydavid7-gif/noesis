@@ -8,6 +8,7 @@ type Env = {
 const MAX_QUESTION_LENGTH = 2_000
 const MAX_CONTEXT_LENGTH = 32_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
+const MAX_SEARCH_LENGTH = 160
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -25,7 +26,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   }
 
   const question = typeof input.question === 'string' ? input.question.trim().slice(0, MAX_QUESTION_LENGTH) : ''
-  if (question.length < 2) return json({ ok: false, error: 'Ask GAYL a question first.' }, 400)
+  if (question.length < 2) return json({ ok: false, error: 'Ask Noema a question first.' }, 400)
 
   const context = typeof input.context === 'string' ? input.context.slice(0, MAX_CONTEXT_LENGTH) : ''
   const book = typeof input.book === 'string' ? input.book.slice(0, 2_000) : ''
@@ -35,7 +36,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
   const models = [...new Set([configuredModel, 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
-    'You are GAYL, a calm and practical learning guide inside Noesis.',
+    'You are Noema, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
     'When the context does not contain enough evidence, say that clearly and offer a useful next step.',
     'Do not invent quotations or pretend to have read a book that is not in the supplied context.',
@@ -58,7 +59,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
         }),
       })
     } catch {
-      return json({ ok: false, error: 'GAYL could not reach Gemini right now.' }, 502)
+      return json({ ok: false, error: 'Noema could not reach Gemini right now.' }, 502)
     }
 
     if (response.ok) {
@@ -78,6 +79,45 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     if (![404, 500, 502, 503, 504].includes(response.status)) break
   }
   return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}` }, 502)
+}
+
+type SearchResult = {
+  id: string
+  title: string
+  author: string
+  year?: number
+  coverUrl?: string
+  source: string
+  sourceUrl: string
+  free: boolean
+  format: string
+}
+
+async function searchFreeResources(request: Request): Promise<Response> {
+  const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
+  if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
+  const encoded = encodeURIComponent(query)
+  const openLibrary = fetch(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`)
+    .then(async (response) => {
+      if (!response.ok) return [] as SearchResult[]
+      const body = await response.json() as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
+      return (body.docs ?? []).filter((item) => item.title).map((item): SearchResult => ({
+        id: item.key ?? item.title ?? crypto.randomUUID(), title: item.title ?? 'Untitled', author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author', year: item.first_publish_year,
+        coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
+        source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata',
+      }))
+    }).catch(() => [] as SearchResult[])
+  const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`)
+    .then(async (response) => {
+      if (!response.ok) return [] as SearchResult[]
+      const body = await response.json() as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
+      return (body.results ?? []).filter((item) => item.title).slice(0, 12).map((item): SearchResult => ({
+        id: String(item.id ?? item.title), title: item.title ?? 'Untitled', author: item.authors?.map((author) => author.name).filter(Boolean).join(', ') || 'Unknown author',
+        coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, free: item.copyright === false, format: 'Public domain',
+      }))
+    }).catch(() => [] as SearchResult[])
+  const [library, gutenbergResults] = await Promise.all([openLibrary, gutenberg])
+  return json({ ok: true, results: [...gutenbergResults, ...library] })
 }
 
 const worker = {
@@ -113,6 +153,7 @@ const worker = {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return answerTutor(request, env)
     }
+    if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     return env.ASSETS.fetch(request)
   },
 }
