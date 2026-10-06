@@ -245,6 +245,7 @@
 .create-form input:focus, .explore-search input:focus { border-color: #68b5fb; }
 .path-delete { position: absolute; right: 11px; top: 10px; z-index: 2; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; color: #bbd5eb; background: rgba(0, 0, 0, .18); }
 .path-delete:hover { color: #ffabb0; background: rgba(255, 80, 100, .15); }
+.path-book-select { position: relative; z-index: 2; width: max-content; max-width: calc(100% - 32px); margin-top: 8px; padding: 5px 7px; border: 1px solid rgba(156, 208, 255, .28); border-radius: 6px; outline: 0; color: #cbe5fa; background: rgba(5, 23, 42, .75); font-size: 9px; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .metric-card { display: grid; gap: 7px; padding: 18px; }
 .metric-card span { color: var(--muted); font-size: 11px; }
