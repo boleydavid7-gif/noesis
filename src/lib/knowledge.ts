@@ -106,9 +106,15 @@ export async function persistNote(note: BrainNote): Promise<'remote' | 'local'> 
     return 'local'
   }
 
+  const user = await client.auth.getUser()
+  if (user.error || !user.data.user) {
+    writeLocalNotes([note, ...readLocalNotes().filter((item) => item.id !== note.id)])
+    return 'local'
+  }
   const result = await client
     .from('knowledge_items')
     .insert({
+      user_id: user.data.user.id,
       kind: 'note',
       title: note.title || 'Quick note',
       source_url: note.source || null,
