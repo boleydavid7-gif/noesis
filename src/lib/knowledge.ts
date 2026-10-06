@@ -55,6 +55,11 @@ function getSupabase(): SupabaseClient | null {
 let authPromise: Promise<SupabaseClient | null> | null = null
 
 async function getAuthenticatedSupabase(): Promise<SupabaseClient | null> {
+  if (authPromise) {
+    const cached = await authPromise
+    if (cached) return cached
+    authPromise = null
+  }
   if (!authPromise) {
     authPromise = (async () => {
       const client = getSupabase()
@@ -133,4 +138,10 @@ export async function persistNote(note: BrainNote): Promise<'remote' | 'local'> 
   const saved = fromRemote(result.data as Record<string, unknown>)
   writeLocalNotes([saved, ...readLocalNotes().filter((item) => item.id !== note.id && item.id !== saved.id)])
   return 'remote'
+}
+
+export async function syncPendingNotes(notes: BrainNote[]): Promise<BrainNote[]> {
+  const pending = notes.filter((note) => !note.synced)
+  for (const note of pending) await persistNote(note)
+  return hydrateRemoteNotes(readLocalNotes())
 }
