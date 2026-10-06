@@ -91,6 +91,8 @@ type SearchResult = {
   sourceUrl: string
   free: boolean
   format: string
+  downloadUrl?: string
+  kind: 'book' | 'article'
 }
 
 async function searchFreeResources(request: Request): Promise<Response> {
@@ -105,7 +107,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
         return (body.docs ?? []).filter((item) => item && typeof item.title === 'string').map((item, index): SearchResult => ({
           id: item.key ?? `${item.title}-${index}`, title: item.title ?? 'Untitled', author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author', year: item.first_publish_year,
           coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
-          source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata',
+          source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
     const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
@@ -114,14 +116,37 @@ async function searchFreeResources(request: Request): Promise<Response> {
         const body = JSON.parse(await response.text()) as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
         return (body.results ?? []).filter((item) => item && typeof item.title === 'string').slice(0, 12).map((item): SearchResult => ({
           id: String(item.id ?? item.title), title: item.title ?? 'Untitled', author: item.authors?.map((author) => author?.name).filter(Boolean).join(', ') || 'Unknown author',
-          coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, free: item.copyright === false, format: 'Public domain',
+          coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, downloadUrl: item.formats?.['application/epub+zip'] || item.formats?.['application/pdf'], free: item.copyright === false, format: item.formats?.['application/epub+zip'] ? 'EPUB' : 'Public domain', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
-    const [library, gutenbergResults] = await Promise.all([openLibrary, gutenberg])
-    return json({ ok: true, results: [...gutenbergResults, ...library] })
+    const academic = fetch(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12`, { headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as { results?: Array<{ id?: string; title?: string; publication_year?: number; authorships?: Array<{ author?: { display_name?: string } }>; doi?: string; primary_location?: { landing_page_url?: string; pdf_url?: string; source?: { display_name?: string } }; open_access?: { is_oa?: boolean } }> }
+        return (body.results ?? []).filter((item) => item && typeof item.title === 'string').map((item, index): SearchResult => ({
+          id: item.id ?? `${item.title}-${index}`, title: item.title ?? 'Untitled article', author: item.authorships?.slice(0, 3).map((entry) => entry.author?.display_name).filter(Boolean).join(', ') || 'Unknown author', year: item.publication_year,
+          source: 'OpenAlex', sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '', downloadUrl: item.primary_location?.pdf_url, free: item.open_access?.is_oa === true, format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article', kind: 'article',
+        }))
+      }).catch(() => [] as SearchResult[])
+    const [library, gutenbergResults, academicResults] = await Promise.all([openLibrary, gutenberg, academic])
+    return json({ ok: true, results: [...gutenbergResults, ...academicResults, ...library] })
   } catch {
     return json({ ok: false, error: 'Free-resource search is temporarily unavailable.' }, 502)
   }
+}
+
+const RESOURCE_HOSTS = ['gutenberg.org', 'archive.org', 'arxiv.org', 'nih.gov', 'pmc.ncbi.nlm.nih.gov', 'zenodo.org', 'doaj.org']
+
+async function proxyResource(request: Request): Promise<Response> {
+  const target = new URL(request.url).searchParams.get('url')
+  if (!target) return json({ ok: false, error: 'A resource URL is required.' }, 400)
+  let url: URL
+  try { url = new URL(target) } catch { return json({ ok: false, error: 'The resource URL is invalid.' }, 400) }
+  if (url.protocol !== 'https:' || !RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) return json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
+  const response = await fetch(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' } })
+  if (!response.ok) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
+  const headers = new Headers({ 'cache-control': 'public, max-age=3600', 'content-type': response.headers.get('content-type') || 'application/octet-stream' })
+  return new Response(response.body, { status: response.status, headers })
 }
 
 const worker = {
@@ -158,6 +183,7 @@ const worker = {
       return answerTutor(request, env)
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
+    if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)
     return env.ASSETS.fetch(request)
   },
 }
