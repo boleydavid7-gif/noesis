@@ -50,9 +50,11 @@ This repository uses a static-assets Worker. Keep the build command as
 `npm run build` and the deploy command as `npx wrangler deploy`. Add the
 `GEMINI_API_KEY` Worker secret before asking Noema a question. Set
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build variables and
-enable anonymous sign-in in Supabase. Apply both migrations in
-`supabase/migrations/` to enable note sync and the private `noesis-backups`
-storage bucket. Cloud Backup can then upload and restore the complete EPUB,
-notes, covers, and learning-path ZIP. The downloaded ZIP can also be stored in
-Google Drive, Dropbox, or OneDrive; direct provider OAuth sync requires an app
-registration with that provider.
+enable email/password accounts in Supabase. Anonymous sign-in is optional for
+local-first use; a learner can create an account from the Account page and
+upgrade the current anonymous session without losing notes. Apply both
+migrations in `supabase/migrations/` to enable note sync and the private
+`noesis-backups` storage bucket. Cloud Backup can then upload and restore the
+complete EPUB, notes, covers, and learning-path ZIP. The downloaded ZIP can
+also be stored in Google Drive, Dropbox, or OneDrive; direct provider OAuth
+sync requires an app registration with that provider.
