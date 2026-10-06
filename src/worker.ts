@@ -70,6 +70,9 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === '/api/health' && request.method === 'GET') {
+      return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
+    }
     if (url.pathname === '/api/tutor') {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204 })
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
