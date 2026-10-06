@@ -94,30 +94,34 @@ type SearchResult = {
 }
 
 async function searchFreeResources(request: Request): Promise<Response> {
-  const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
-  if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
-  const encoded = encodeURIComponent(query)
-  const openLibrary = fetch(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`)
-    .then(async (response) => {
-      if (!response.ok) return [] as SearchResult[]
-      const body = await response.json() as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
-      return (body.docs ?? []).filter((item) => item.title).map((item): SearchResult => ({
-        id: item.key ?? item.title ?? crypto.randomUUID(), title: item.title ?? 'Untitled', author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author', year: item.first_publish_year,
-        coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
-        source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata',
-      }))
-    }).catch(() => [] as SearchResult[])
-  const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`)
-    .then(async (response) => {
-      if (!response.ok) return [] as SearchResult[]
-      const body = await response.json() as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
-      return (body.results ?? []).filter((item) => item.title).slice(0, 12).map((item): SearchResult => ({
-        id: String(item.id ?? item.title), title: item.title ?? 'Untitled', author: item.authors?.map((author) => author.name).filter(Boolean).join(', ') || 'Unknown author',
-        coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, free: item.copyright === false, format: 'Public domain',
-      }))
-    }).catch(() => [] as SearchResult[])
-  const [library, gutenbergResults] = await Promise.all([openLibrary, gutenberg])
-  return json({ ok: true, results: [...gutenbergResults, ...library] })
+  try {
+    const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
+    if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
+    const encoded = encodeURIComponent(query)
+    const openLibrary = fetch(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
+        return (body.docs ?? []).filter((item) => item && typeof item.title === 'string').map((item, index): SearchResult => ({
+          id: item.key ?? `${item.title}-${index}`, title: item.title ?? 'Untitled', author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author', year: item.first_publish_year,
+          coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
+          source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata',
+        }))
+      }).catch(() => [] as SearchResult[])
+    const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
+        return (body.results ?? []).filter((item) => item && typeof item.title === 'string').slice(0, 12).map((item): SearchResult => ({
+          id: String(item.id ?? item.title), title: item.title ?? 'Untitled', author: item.authors?.map((author) => author?.name).filter(Boolean).join(', ') || 'Unknown author',
+          coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, free: item.copyright === false, format: 'Public domain',
+        }))
+      }).catch(() => [] as SearchResult[])
+    const [library, gutenbergResults] = await Promise.all([openLibrary, gutenberg])
+    return json({ ok: true, results: [...gutenbergResults, ...library] })
+  } catch {
+    return json({ ok: false, error: 'Free-resource search is temporarily unavailable.' }, 502)
+  }
 }
 
 const worker = {
