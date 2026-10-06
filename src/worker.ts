@@ -32,7 +32,8 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
   if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
 
-  const model = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-2.5-flash'
+  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
+  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
     'You are GAYL, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
@@ -42,29 +43,34 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   ].join(' ')
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
 
-  let response: Response
-  try {
-    response = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.35, maxOutputTokens: 800 },
-      }),
-    })
-  } catch {
-    return json({ ok: false, error: 'GAYL could not reach Gemini right now.' }, 502)
-  }
+  let lastStatus = 0
+  for (const model of models) {
+    let response: Response
+    try {
+      response = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.35, maxOutputTokens: 800 },
+        }),
+      })
+    } catch {
+      return json({ ok: false, error: 'GAYL could not reach Gemini right now.' }, 502)
+    }
 
-  if (!response.ok) {
+    if (response.ok) {
+      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
+      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+      return text ? json({ ok: true, text, model }) : json({ ok: false, error: 'Gemini returned an empty answer.' }, 502)
+    }
+
+    lastStatus = response.status
     if (response.status === 429) return json({ ok: false, error: 'Gemini is busy. Try again in a moment.' }, 429)
-    return json({ ok: false, error: `Gemini request failed (${response.status}) using ${model}.` }, 502)
+    if (![404, 500, 502, 503, 504].includes(response.status)) break
   }
-
-  const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-  const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
-  return text ? json({ ok: true, text }) : json({ ok: false, error: 'Gemini returned an empty answer.' }, 502)
+  return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.` }, 502)
 }
 
 const worker = {
