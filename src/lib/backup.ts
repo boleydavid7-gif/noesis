@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { loadEpubFile, saveEpubFile, type LibraryBook } from './library'
 import type { BrainNote } from './knowledge'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
+import { isAnonymousUser } from './auth'
 
 export type BackupPayload = { version: 1; createdAt: string; books: LibraryBook[]; notes: BrainNote[]; paths: unknown[] }
 
@@ -53,10 +54,8 @@ export async function downloadBackup(books: LibraryBook[], notes: BrainNote[], p
 async function authenticatedClient(): Promise<{ client: SupabaseClient; userId: string }> {
   const client = getClient(); if (!client) throw new Error('Supabase browser configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Cloudflare build variables.')
   const session = await client.auth.getSession()
-  if (session.data.session?.user.id) return { client, userId: session.data.session.user.id }
-  const anonymous = await client.auth.signInAnonymously()
-  if (anonymous.error || !anonymous.data.user?.id) throw new Error(anonymous.error?.message || 'Supabase could not sign in anonymously. In Supabase, open Authentication → Sign In / Providers and enable Anonymous sign-ins.')
-  return { client, userId: anonymous.data.user.id }
+  if (session.data.session?.user.id && !isAnonymousUser(session.data.session.user)) return { client, userId: session.data.session.user.id }
+  throw new Error('Sign in to your Noesis account before using Supabase backup.')
 }
 
 export async function uploadCloudBackup(books: LibraryBook[], notes: BrainNote[], paths: unknown[]): Promise<void> {
