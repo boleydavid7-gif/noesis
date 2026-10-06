@@ -42,8 +42,9 @@ The current app is a working reader-first build:
 - Account supports email/password sign-in and can upgrade an anonymous session
   without moving its notes to a new user.
 - Explore searches Project Gutenberg, Open Library, OpenAlex, and Internet Archive through `/api/search`; hosted and borrowed items can open their official reader inside Noesis.
-- Cloud Backup exports/restores a complete ZIP and can upload it to a private
-  Supabase Storage bucket after the backup migration is applied.
+- Cloud Backup can connect a learner's own Google Drive, OneDrive, or Dropbox.
+  It syncs a manifest and separate EPUB files, then merges them on another
+  device. ZIP remains an optional manual export only.
 
 ## Installed foundation
 
@@ -55,8 +56,7 @@ with `npm install` or `bun install`. Never commit `.env` or secret values.
 1. Add chapter text indexing, in-reader search, stable source locations, and
    more precise Noema answers and highlights.
 2. Add appearance controls, richer annotations, and review prompts.
-3. Add optional OAuth connectors for Google Drive, Dropbox, and OneDrive when
-   provider app registrations are available.
+3. Add deletion tombstones and richer conflict history to cloud sync.
 4. Add source-grounded practice and subject-specific activity adapters.
 
 ## Boundaries
