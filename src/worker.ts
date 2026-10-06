@@ -10,6 +10,13 @@ const MAX_CONTEXT_LENGTH = 32_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const MAX_SEARCH_LENGTH = 160
 
+function fetchWithTimeout(input: string, init: RequestInit, milliseconds = 5_000): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('upstream timeout')), milliseconds)
+    fetch(input, init).then((response) => { clearTimeout(timer); resolve(response) }).catch((reason) => { clearTimeout(timer); reject(reason) })
+  })
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -121,7 +128,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, downloadUrl: item.formats?.['application/epub+zip'] || item.formats?.['application/pdf'], free: item.copyright === false, format: item.formats?.['application/epub+zip'] ? 'EPUB' : 'Public domain', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
-    const academic = fetch(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12&mailto=noesis@proairetos.com`, { headers: { accept: 'application/json' } })
+    const academic = fetchWithTimeout(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12&mailto=noesis@proairetos.com`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { results?: Array<{ id?: string; title?: string; publication_year?: number; authorships?: Array<{ author?: { display_name?: string } }>; doi?: string; primary_location?: { landing_page_url?: string; pdf_url?: string; source?: { display_name?: string } }; open_access?: { is_oa?: boolean } }> }
@@ -130,7 +137,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           source: 'OpenAlex', sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '', downloadUrl: item.primary_location?.pdf_url, free: item.open_access?.is_oa === true, format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article', kind: 'article',
         }))
       }).catch(() => [] as SearchResult[])
-    const academicFallback = fetch(`https://api.crossref.org/works?query=${encoded}&filter=type:journal-article&rows=12`, { headers: { accept: 'application/json' } })
+    const academicFallback = fetchWithTimeout(`https://api.crossref.org/works?query=${encoded}&filter=type:journal-article&rows=12`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { message?: { items?: Array<{ DOI?: string; title?: string[]; author?: Array<{ given?: string; family?: string }>; published?: { 'date-parts'?: number[][] }; URL?: string; link?: Array<{ URL?: string; 'content-type'?: string }>; license?: Array<{ URL?: string }> }> } }
