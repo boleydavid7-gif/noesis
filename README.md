@@ -25,8 +25,12 @@ again. The reader saves its CFI and percentage as you move through a book.
 Explore searches Open Library, Project Gutenberg, OpenAlex, and Internet
 Archive. Downloadable files are imported locally; borrowed or hosted items open
 their official reader inside Noesis with a source-page fallback. Notes persist
-in the browser and sync to Supabase after email sign-in. Noesis keeps
-`GEMINI_API_KEY` on the Worker.
+in the browser and sync to Supabase after email sign-in. Cloud Backup can
+connect a signed-in learner's own Google Drive, OneDrive, or Dropbox through
+OAuth. Noesis stores a manifest plus separate EPUB files in that provider and
+merges changes when the learner signs in on another device. A ZIP is available
+only as an optional manual export; it is not the live cloud format. Noesis
+keeps `GEMINI_API_KEY` on the Worker.
 
 ## Direction
 
@@ -53,10 +57,14 @@ This repository uses a static-assets Worker. Keep the build command as
 `GEMINI_API_KEY` Worker secret before asking Noema a question. Set
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build variables and
 enable email/password accounts in Supabase. Anonymous sign-in is optional for
-local-first use; a learner can create an account from the Account page and
-upgrade the current anonymous session without losing notes. Apply both
-migrations in `supabase/migrations/` to enable note sync and the private
-`noesis-backups` storage bucket. Cloud Backup can then upload and restore the
-complete EPUB, notes, covers, and learning-path ZIP. The downloaded ZIP can
-also be stored in Google Drive, Dropbox, or OneDrive; direct provider OAuth
-sync requires an app registration with that provider.
+local-first use; a learner can create an account from the Account page. Apply
+the knowledge migration in `supabase/migrations/` to enable note sync.
+
+For personal cloud sync, add these public build variables in Cloudflare when
+you configure the corresponding OAuth apps: `VITE_GOOGLE_DRIVE_CLIENT_ID`,
+`VITE_ONEDRIVE_CLIENT_ID`, and `VITE_DROPBOX_APP_KEY`. Register the live Noesis
+URL and your local development URL as redirect URLs in each provider. The
+provider connection uses a browser access token and the learner's own account;
+Noesis never receives the provider password or client secret. Connect the
+provider from Cloud Backup after signing in. A ZIP export remains available
+for one-off manual transfers.
