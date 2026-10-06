@@ -44,6 +44,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
 
   let lastStatus = 0
+  let lastDetail = ''
   for (const model of models) {
     let response: Response
     try {
@@ -67,10 +68,16 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     }
 
     lastStatus = response.status
+    try {
+      const providerError = (await response.clone().json()) as { error?: { message?: string } }
+      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
+    } catch {
+      lastDetail = ''
+    }
     if (response.status === 429) return json({ ok: false, error: 'Gemini is busy. Try again in a moment.' }, 429)
     if (![404, 500, 502, 503, 504].includes(response.status)) break
   }
-  return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.` }, 502)
+  return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}` }, 502)
 }
 
 const worker = {
