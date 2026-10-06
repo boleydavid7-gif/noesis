@@ -1,317 +1,103 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowRight,
-  BookOpen,
-  Brain,
-  Check,
-  CircleHelp,
-  FileText,
-  Flame,
-  FolderOpen,
-  Highlighter,
-  Home,
-  Library,
-  ListChecks,
-  Menu,
-  MessageCircle,
-  MoreVertical,
-  Network,
-  Plus,
-  Search,
-  Sparkles,
-  Upload,
-  X,
+  ArrowLeft, ArrowRight, BookOpen, Brain, CircleHelp, Cloud, Download, FileText, Highlighter, Home, Library, ListChecks,
+  Menu, MessageCircle, MoreVertical, Network, Plus, RotateCcw, Search, Sparkles, Trash2, Upload, X,
 } from 'lucide-react'
 import './App.css'
 import { hydrateRemoteNotes, persistNote, readLocalNotes, type BrainNote } from './lib/knowledge'
-
-type Book = {
-  id: string
-  title: string
-  author: string
-  progress: number
-  chapter: string
-  updated: string
-  accent: string
-  cover: string
-}
+import { epubBookFromParsed, openEpub, parseEpub } from './lib/epub'
+import { loadEpubFile, readLibraryBooks, removeLibraryBook, saveEpubFile, upsertLibraryBook, writeLibraryBooks, type LibraryBook } from './lib/library'
+import { downloadBackup as downloadBackupFile, downloadCloudBackup, restoreBackup, uploadCloudBackup } from './lib/backup'
+import { writeLocalNotes } from './lib/knowledge'
 
 type Note = BrainNote
+type Overlay = 'brain' | 'noema' | null
+type SelectionOffer = { text: string; top: number; left: number }
+type NoteDraft = { title: string; body: string; source: string }
+type LearningPath = { id: string; title: string; description: string; bookIds: string[]; createdAt: string }
+type Resource = { id: string; title: string; author: string; year?: number; coverUrl?: string; source: string; sourceUrl: string; free: boolean; format: string }
 
-type SelectionOffer = {
-  text: string
-  top: number
-  left: number
-}
-
-type NoteDraft = {
-  title: string
-  body: string
-  source: string
-}
-
-const initialBooks: Book[] = [
-  { id: 'deep-work', title: 'Deep Work', author: 'Cal Newport', progress: 42, chapter: 'Chapter 4 · Rules for Focus', updated: 'Last read 2 hours ago', accent: 'cover-amber', cover: 'DEEP\nWORK' },
-  { id: 'atomic-habits', title: 'Atomic Habits', author: 'James Clear', progress: 18, chapter: 'Chapter 2 · The Four Laws', updated: 'Last read yesterday', accent: 'cover-sand', cover: 'Atomic\nHabits' },
-  { id: 'pragmatic-programmer', title: 'The Pragmatic Programmer', author: 'Hunt & Thomas', progress: 73, chapter: 'Chapter 6 · Concurrency', updated: 'Last read 3 days ago', accent: 'cover-blue', cover: 'The Pragmatic\nProgrammer' },
-  { id: 'clean-architecture', title: 'Clean Architecture', author: 'Robert C. Martin', progress: 25, chapter: 'Chapter 5 · Architecture', updated: 'Last read 4 days ago', accent: 'cover-navy', cover: 'Clean\nArchitecture' },
-  { id: 'thinking-fast-slow', title: 'Thinking, Fast and Slow', author: 'Daniel Kahneman', progress: 10, chapter: 'Part 1 · Two Systems', updated: 'Last read last week', accent: 'cover-cream', cover: 'THINKING,\nFAST AND SLOW' },
-  { id: 'art-learning', title: 'The Art of Learning', author: 'Josh Waitzkin', progress: 0, chapter: 'Ready to begin', updated: 'Added recently', accent: 'cover-mountain', cover: 'The Art of\nLearning' },
-]
-
-const initialNotes: Note[] = [
-  { id: 'demo-highlight', kind: 'highlight', title: 'Saved highlight', body: 'Attention is a resource that must be managed.', source: 'Deep Work · p. 52', createdAt: '2026-10-03T10:00:00.000Z', synced: true },
-  { id: 'demo-idea', kind: 'idea', title: 'Implementation idea', body: 'Combine deep work principles with my shift schedule.', source: 'Deep Work · Chapter 4', createdAt: '2026-10-02T10:00:00.000Z', synced: true },
-  { id: 'demo-question', kind: 'question', title: 'Open question', body: 'How does this apply to team environments at work?', source: 'Deep Work · Chapter 4', createdAt: '2026-10-01T10:00:00.000Z', synced: true },
-]
-
-const paths = [
-  { title: 'Focused Learning', books: 5, progress: 28, icon: Brain, accent: 'path-green' },
-  { title: 'IT Fundamentals', books: 8, progress: 15, icon: Network, accent: 'path-blue' },
-  { title: 'Automotive Basics', books: 6, progress: 0, icon: FolderOpen, accent: 'path-orange' },
-]
-
+const PATHS_KEY = 'noesis:paths:v1'
 const navItems = [
-  { label: 'Home', icon: Home },
-  { label: 'My Library', icon: Library },
-  { label: 'Learning Paths', icon: ListChecks },
-  { label: 'Read', icon: BookOpen },
-  { label: 'Notes', icon: FileText },
-  { label: 'Second Brain', icon: Brain },
-  { label: 'Ask GAYL', icon: MessageCircle },
-  { label: 'Progress', icon: Network },
+  { label: 'Home', icon: Home }, { label: 'My Library', icon: Library }, { label: 'Learning Paths', icon: ListChecks },
+  { label: 'Read', icon: BookOpen }, { label: 'Notes', icon: FileText }, { label: 'Second Brain', icon: Brain },
+  { label: 'Ask Noema', icon: MessageCircle }, { label: 'Progress', icon: Network }, { label: 'Explore', icon: Search }, { label: 'Cloud Backup', icon: Cloud },
 ]
 
-function ProgressRing({ value }: { value: number }) {
-  return <div className="progress-ring" style={{ '--progress': `${value * 3.6}deg` } as React.CSSProperties}><span>{value}%</span></div>
+function readPaths(): LearningPath[] {
+  try { const value = JSON.parse(localStorage.getItem(PATHS_KEY) ?? '[]') as unknown; return Array.isArray(value) ? value as LearningPath[] : [] } catch { return [] }
 }
+function writePaths(paths: LearningPath[]) { localStorage.setItem(PATHS_KEY, JSON.stringify(paths)) }
+function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.valueOf()) ? 'Recently' : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date) }
 
-function BookCover({ book, compact = false }: { book: Book; compact?: boolean }) {
-  return <div className={`book-cover ${book.accent} ${compact ? 'book-cover-compact' : ''}`}>
-    <div className="book-cover-mark">N</div>
-    <strong>{book.cover.split('\n').map((line) => <span key={line}>{line}</span>)}</strong>
-    <small>{book.author}</small>
-  </div>
+function BookCover({ book, compact = false }: { book: LibraryBook; compact?: boolean }) {
+  const title = book.title.split(/\s+/).slice(0, compact ? 5 : 10).join(' ')
+  const image = book.coverDataUrl || book.coverUrl
+  return <div className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`} style={image ? { backgroundImage: `linear-gradient(180deg, rgba(3,12,22,.06), rgba(3,12,22,.68)), url(${image})` } : undefined}>{!image ? <><div className="book-cover-mark">N</div><strong>{title}</strong><small>{book.author}</small></> : <div className="book-cover-caption"><strong>{book.title}</strong><small>{book.author}</small></div>}</div>
+}
+function ProgressRing({ value }: { value: number }) { return <div className="progress-ring" style={{ '--progress': `${Math.max(0, Math.min(100, value)) * 3.6}deg` } as React.CSSProperties}><span>{Math.round(value)}%</span></div> }
+
+function Reader({ book, onClose, onProgress, onNote }: { book: LibraryBook; onClose: () => void; onProgress: (progress: number, cfi?: string, href?: string, chapter?: string) => void; onNote: (text: string) => void }) {
+  const frame = useRef<HTMLDivElement>(null)
+  const rendition = useRef<Awaited<ReturnType<typeof openEpub>>['renderTo'] extends (...args: never[]) => infer R ? R : never>(null)
+  const epubRef = useRef<Awaited<ReturnType<typeof openEpub>> | null>(null)
+  const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [toc, setToc] = useState(book.toc ?? []); const [chapter, setChapter] = useState(book.chapter)
+  useEffect(() => {
+    let cancelled = false
+    const start = async () => {
+      setLoading(true); setError('')
+      try {
+        const data = await loadEpubFile(book.id); if (!data) throw new Error('This EPUB is no longer stored on this device. Import it again to continue reading.')
+        const epub = await openEpub(data); if (cancelled || !frame.current) { epub.destroy(); return }; epubRef.current = epub
+        const navigation = await epub.loaded.navigation; setToc(navigation.toc?.map((item) => ({ label: item.label, href: item.href })) ?? book.toc ?? [])
+        const instance = epub.renderTo(frame.current, { width: '100%', height: '100%', flow: 'paginated', spread: 'none' }); rendition.current = instance
+        instance.on('relocated', (location: { start?: { percentage?: number; cfi?: string; href?: string } }) => { const startLocation = location.start; if (!startLocation) return; const progress = Math.round(Math.max(0, Math.min(1, startLocation.percentage ?? 0)) * 100); const found = (book.toc ?? []).find((item) => startLocation.href?.includes(item.href.split('#')[0])); setChapter(found?.label ?? book.chapter); onProgress(progress, startLocation.cfi, startLocation.href, found?.label) })
+        await instance.display(book.cfi || undefined)
+      } catch (reason) { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not open this EPUB.') } finally { if (!cancelled) setLoading(false) }
+    }
+    void start(); return () => { cancelled = true; rendition.current?.destroy(); epubRef.current?.destroy(); rendition.current = null; epubRef.current = null }
+  }, [book.id])
+  return <section className="reader-page panel-card"><div className="reader-toolbar"><button className="secondary-button" onClick={onClose}><ArrowLeft size={15} /> Library</button><div className="reader-title"><strong>{book.title}</strong><span>{chapter}</span></div><div className="reader-controls"><button className="icon-button" onClick={() => void rendition.current?.prev()} aria-label="Previous page"><ArrowLeft size={17} /></button><button className="icon-button" onClick={() => void rendition.current?.next()} aria-label="Next page"><ArrowRight size={17} /></button></div></div><div className="reader-progress"><span style={{ width: `${book.progress}%` }} /></div><div className="reader-body"><aside className="reader-toc"><strong>Contents</strong>{toc.length === 0 ? <p>No table of contents was found.</p> : toc.map((item) => <button key={`${item.href}-${item.label}`} onClick={() => void rendition.current?.display(item.href)}>{item.label}</button>)}</aside><div className="reader-frame-wrap"><div ref={frame} className="reader-frame" />{loading ? <div className="reader-overlay"><Sparkles size={18} /> Opening {book.title}…</div> : null}{error ? <div className="reader-overlay reader-error"><CircleHelp size={18} /><p>{error}</p></div> : null}</div></div><div className="reader-footer"><span>{Math.round(book.progress)}% complete</span><button className="secondary-button" onClick={() => onNote(`Reading note from ${book.title}: `)}><Highlighter size={15} /> Add a note</button></div></section>
 }
 
 function App() {
-  const [books, setBooks] = useState(initialBooks)
-  const [notes, setNotes] = useState<Note[]>(() => {
-    const saved = readLocalNotes()
-    return saved.length > 0 ? saved : initialNotes
-  })
-  const [activeNav, setActiveNav] = useState('Home')
-  const [query, setQuery] = useState('')
-  const [tutorPrompt, setTutorPrompt] = useState('')
-  const [tutorReply, setTutorReply] = useState('')
-  const [tutorBusy, setTutorBusy] = useState(false)
-  const [notice, setNotice] = useState('')
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [brainOpen, setBrainOpen] = useState(false)
-  const [selectionOffer, setSelectionOffer] = useState<SelectionOffer | null>(null)
-  const [noteDraft, setNoteDraft] = useState<NoteDraft>({ title: '', body: '', source: '' })
-  const fileInput = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void hydrateRemoteNotes(notes).then((hydrated) => {
-      if (!cancelled && hydrated.length > 0) setNotes(hydrated)
-    })
-    return () => { cancelled = true }
-    // Notes are intentionally hydrated once when the dashboard opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    let timer: number | undefined
-    const updateSelection = () => {
-      if (timer) window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        const selection = window.getSelection()
-        const anchor = selection?.anchorNode
-        const element = anchor instanceof Element ? anchor : anchor?.parentElement
-        const text = selection?.toString().trim() ?? ''
-        if (!selection || text.length < 2 || !element || element.closest('[data-second-brain-panel], input, textarea, select, [contenteditable="true"]')) {
-          setSelectionOffer(null)
-          return
-        }
-        const rect = selection.rangeCount > 0 ? selection.getRangeAt(0).getBoundingClientRect() : null
-        if (!rect || (rect.width === 0 && rect.height === 0)) {
-          setSelectionOffer(null)
-          return
-        }
-        const halfWidth = 108
-        setSelectionOffer({
-          text: text.slice(0, 20_000),
-          left: Math.min(Math.max(rect.left + rect.width / 2, halfWidth), window.innerWidth - halfWidth),
-          top: rect.bottom + 10 <= window.innerHeight - 54 ? rect.bottom + 10 : Math.max(8, rect.top - 52),
-        })
-      }, 20)
-    }
-    document.addEventListener('selectionchange', updateSelection)
-    document.addEventListener('pointerup', updateSelection)
-    document.addEventListener('keyup', updateSelection)
-    return () => {
-      if (timer) window.clearTimeout(timer)
-      document.removeEventListener('selectionchange', updateSelection)
-      document.removeEventListener('pointerup', updateSelection)
-      document.removeEventListener('keyup', updateSelection)
-    }
-  }, [])
-
-  const filteredBooks = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!normalized) return books
-    return books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(normalized))
-  }, [books, query])
-
-  function showNotice(message: string) {
-    setNotice(message)
-    window.setTimeout(() => setNotice(''), 3500)
-  }
-
-  function selectNav(label: string) {
-    setActiveNav(label)
-    setMobileNavOpen(false)
-    if (label === 'Second Brain' || label === 'Notes') setBrainOpen(true)
-  }
-
-  function openBook(book: Book) {
-    setSelectedBook(book)
-    showNotice(`Reader preview ready for ${book.title}.`)
-  }
-
-  function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
-    const title = file.name.replace(/\.(epub|pdf)$/i, '').replace(/[-_]+/g, ' ').trim()
-    const imported: Book = { id: `import-${Date.now()}`, title: title || 'Imported book', author: 'Imported locally', progress: 0, chapter: 'Ready to read', updated: 'Added just now', accent: 'cover-violet', cover: title || 'Imported\nBook' }
-    setBooks((current) => [imported, ...current])
-    showNotice(`${file.name} is in your library. EPUB parsing and reader import come next.`)
-    event.target.value = ''
-  }
-
-  function openNotePanel(seed = '') {
-    setNoteDraft({
-      title: seed ? 'Saved selection' : '',
-      body: seed,
-      source: selectedBook ? `${selectedBook.title} · ${selectedBook.chapter}` : 'Noesis',
-    })
-    setBrainOpen(true)
-  }
-
-  async function saveNote(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const body = noteDraft.body.trim()
-    if (body.length < 2) {
-      showNotice('Write a note or highlight text first.')
-      return
-    }
-    const note: Note = {
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: noteDraft.title.toLowerCase().includes('question') ? 'question' : noteDraft.title.toLowerCase().includes('idea') ? 'idea' : 'note',
-      title: noteDraft.title.trim() || 'Quick note',
-      body,
-      source: noteDraft.source.trim() || 'Noesis',
-      createdAt: new Date().toISOString(),
-    }
-    setNotes((current) => [note, ...current])
-    setNoteDraft({ title: '', body: '', source: '' })
-    const destination = await persistNote(note)
-    showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device. Add Supabase variables to sync it.')
-  }
-
-  async function askTutor(prompt: string) {
-    const question = prompt.trim()
-    if (!question) return
-    setTutorPrompt(question)
-    setTutorReply('')
-    setTutorBusy(true)
-    try {
-      const response = await fetch('/api/tutor', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          book: selectedBook ? `${selectedBook.title} by ${selectedBook.author}\n${selectedBook.chapter}` : '',
-          context: notes.slice(0, 30).map((note) => `${note.title} (${note.source}): ${note.body}`).join('\n\n'),
-        }),
-      })
-      const result = (await response.json()) as { ok?: boolean; text?: string; error?: string }
-      if (!response.ok || !result.ok) throw new Error(result.error || 'GAYL could not answer right now.')
-      setTutorReply(result.text || 'GAYL returned an empty answer.')
-      showNotice('GAYL answered using your current context.')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'GAYL could not answer right now.'
-      setTutorReply(message)
-      showNotice(message)
-    } finally {
-      setTutorBusy(false)
-    }
-  }
-
-  return <div className="app-shell">
-    <div className="ambient ambient-top" />
-    <div className="ambient ambient-bottom" />
-
-    <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
-      <div className="brand-row">
-        <div className="brand-mark"><BookOpen size={20} /></div>
-        <div><strong>NOESIS</strong><span>Your learning space</span></div>
-        <button className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={18} /></button>
-      </div>
-      <nav className="main-nav" aria-label="Main navigation">
-        {navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${activeNav === label ? 'nav-item-active' : ''}`} onClick={() => selectNav(label)}><Icon size={17} /><span>{label}</span></button>)}
-      </nav>
-      <div className="sidebar-bottom">
-        <div className="sidebar-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search books..." aria-label="Search books" /></div>
-        <p className="eyebrow sidebar-eyebrow">Quick actions</p>
-        <button className="quick-action" onClick={() => openNotePanel()}><Plus size={16} /> Add note</button>
-        <button className="quick-action" onClick={() => fileInput.current?.click()}><Upload size={16} /> Import EPUB / PDF</button>
-        <button className="quick-action" onClick={() => showNotice('Path builder will use books from your library.')}><ListChecks size={16} /> Create learning path</button>
-      </div>
-    </aside>
-    {mobileNavOpen ? <button className="mobile-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" /> : null}
-
-    <main className="main-column">
-      <header className="topbar">
-        <button className="icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={20} /></button>
-        <div className="greeting"><p className="eyebrow">{activeNav === 'Home' ? 'Today' : activeNav}</p><h1>Good morning, David<span>.</span></h1><p>Continue reading. Keep building what matters.</p></div>
-        <div className="top-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="What do you want to learn?" aria-label="Search your library" /><kbd>⌘ K</kbd></div>
-        <button className="avatar-button" aria-label="Open account menu">D</button>
-      </header>
-
-      <div className="dashboard-grid">
-        <section className="content-column">
-          {selectedBook ? <section className="reader-preview panel-card">
-            <div className="reader-preview-head"><div><p className="eyebrow">Reader preview</p><h2>{selectedBook.title}</h2><p>{selectedBook.chapter} · {selectedBook.author}</p></div><button className="icon-button" onClick={() => setSelectedBook(null)} aria-label="Close reader preview"><X size={18} /></button></div>
-            <div className="reader-preview-body"><BookCover book={selectedBook} /><div className="reader-copy"><p className="reader-kicker"><Sparkles size={15} /> Your reader will open here</p><h3>Read, highlight, and ask about the page you are on.</h3><p>The next slice connects EPUB chapter text to this reader, saved locations, highlights, and GAYL context.</p><div className="reader-preview-actions"><button className="primary-button" onClick={() => showNotice('EPUB reader setup is next.')}>Resume reading <ArrowRight size={16} /></button><button className="secondary-button" onClick={() => showNotice('Notes will follow the selected book.')}>View notes</button></div></div></div>
-          </section> : <section className="continue-card panel-card">
-            <div className="continue-cover-wrap"><BookCover book={books[0]} /></div><div className="continue-details"><p className="eyebrow">Continue reading</p><h2>{books[0].title}</h2><p className="muted">{books[0].author}</p><div className="progress-row"><div className="progress-track"><span style={{ width: `${books[0].progress}%` }} /></div><strong>{books[0].progress}%</strong></div><p className="chapter-line"><BookOpen size={14} /> {books[0].chapter}</p><p className="muted small">{books[0].updated}</p></div><div className="continue-actions"><button className="primary-button" onClick={() => openBook(books[0])}>Resume reading <ArrowRight size={16} /></button><button className="secondary-button" onClick={() => setActiveNav('Notes')}><FileText size={16} /> View notes</button></div>
-          </section>}
-
-          <section className="section-block"><div className="section-heading"><div><h2>My library</h2><p>Books you are reading and keeping close.</p></div><button className="text-button" onClick={() => setActiveNav('My Library')}>View all <ArrowRight size={15} /></button></div><div className="book-grid">{filteredBooks.map((book) => <button key={book.id} className="book-card" onClick={() => openBook(book)}><div className="book-card-cover"><BookCover book={book} compact /><ProgressRing value={book.progress} /></div><div className="book-card-title">{book.title}</div><div className="book-card-author">{book.author}</div></button>)}</div>{filteredBooks.length === 0 ? <div className="empty-state">No books match “{query}”. Import an EPUB or PDF to start a library.</div> : null}</section>
-
-          <section className="section-block"><div className="section-heading"><div><h2>Learning paths</h2><p>Collections with a purpose, built from your books.</p></div><button className="text-button" onClick={() => setActiveNav('Learning Paths')}>View all <ArrowRight size={15} /></button></div><div className="path-grid">{paths.map(({ title, books: bookCount, progress, icon: Icon, accent }) => <button key={title} className={`path-card ${accent}`} onClick={() => showNotice(`${title} is ready for the path builder.`)}><div className="path-art"><Icon size={25} /><span>NOESIS</span></div><div className="path-card-info"><strong>{title}</strong><span>{bookCount} books · {progress}% complete</span></div><div className="path-arrow"><ArrowRight size={16} /></div></button>)}</div></section>
-
-          <section className="section-block notes-section"><div className="section-heading"><div><h2>My notes</h2><p>Highlights and ideas worth returning to.</p></div><button className="text-button" onClick={() => setBrainOpen(true)}>View all <ArrowRight size={15} /></button></div><div className="note-tabs"><button className="note-tab note-tab-active">Recent</button><button className="note-tab">Highlights</button><button className="note-tab">Ideas</button><button className="note-tab">Questions</button></div><div className="notes-grid">{notes.slice(0, 6).map((note) => <article key={note.id} className={`note-card note-${note.kind}`}><div className="note-icon">{note.kind === 'highlight' ? <Highlighter size={16} /> : note.kind === 'idea' ? <Sparkles size={16} /> : <CircleHelp size={16} />}</div><p>{note.body}</p><span>{note.source}</span><div className="note-footer"><em>{note.title}</em><button className="icon-button tiny" aria-label="More note actions" onClick={() => openNotePanel(note.body)}><MoreVertical size={15} /></button></div></article>)}</div></section>
-        </section>
-
-        <aside className="right-rail">
-          <section className="tutor-card panel-card"><div className="tutor-head"><div className="gayl-orb"><span /></div><div><h2>Ask GAYL</h2><p>Your learning guide</p></div><button className="icon-button" onClick={() => setBrainOpen(true)} aria-label="Open Second Brain"><Brain size={17} /></button></div><div className="tutor-input"><input value={tutorPrompt} onChange={(event) => setTutorPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void askTutor(tutorPrompt) }} placeholder="How can I help you learn?" aria-label="Ask GAYL" /><button onClick={() => void askTutor(tutorPrompt)} aria-label="Send question" disabled={tutorBusy}><ArrowRight size={17} /></button></div><div className="tutor-chips"><button onClick={() => void askTutor('Explain this chapter')}>Explain this chapter</button><button onClick={() => void askTutor('Summarize the key ideas')}>Summarize key ideas</button><button onClick={() => void askTutor('Test my understanding')}>Test my understanding</button><button onClick={() => void askTutor('Connect this to what I am learning')}>Connect this to what I’m learning</button><button onClick={() => void askTutor('Recommend related books')}>Recommend related books</button></div>{tutorBusy ? <div className="tutor-status"><Sparkles size={14} /> GAYL is thinking…</div> : null}{tutorReply ? <div className="tutor-reply"><strong>{tutorPrompt}</strong><p>{tutorReply}</p></div> : null}</section>
-          <section className="rail-card panel-card progress-card"><div className="rail-heading"><h2>Progress</h2><button className="text-button">Details <ArrowRight size={14} /></button></div><div className="progress-summary"><div className="large-ring"><span>27<small>%</small></span><em>Overall</em></div><div className="progress-stats"><span><BookOpen size={15} /> Books <strong>{books.length}</strong></span><span><FileText size={15} /> Pages read <strong>1,842</strong></span><span><Highlighter size={15} /> Notes <strong>{notes.length + 123}</strong></span><span><ListChecks size={15} /> Paths <strong>3</strong></span></div></div></section>
-          <section className="rail-card panel-card streak-card"><div className="rail-heading"><h2>Study streak</h2></div><div className="streak-row"><div className="flame"><Flame size={27} fill="currentColor" /></div><div><strong>12</strong><span>days</span></div><div className="week-dots">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => <span key={`${day}-${index}`} className={index < 5 ? 'week-done' : ''}><em>{day}</em>{index < 5 ? <Check size={11} /> : null}</span>)}</div></div></section>
-          <section className="rail-card panel-card recently-card"><div className="rail-heading"><h2>Recently added</h2><button className="text-button" onClick={() => fileInput.current?.click()}>Add <Plus size={14} /></button></div>{['Building a Second Brain', 'Digital Minimalism', 'Make It Stick'].map((title, index) => <button key={title} className="recent-row" onClick={() => showNotice(`${title} will open in the reader.`)}><div className={`mini-cover mini-${index}`}><BookOpen size={13} /></div><div><strong>{title}</strong><span>{index === 0 ? 'Tiago Forte' : index === 1 ? 'Cal Newport' : 'Brown, Roediger, McDaniel'}</span><small>EPUB · {index === 0 ? '2 days ago' : index === 1 ? '4 days ago' : '1 week ago'}</small></div></button>)}</section>
-        </aside>
-      </div>
-
-      <input ref={fileInput} className="visually-hidden" type="file" accept=".epub,.pdf,application/epub+zip,application/pdf" onChange={handleImport} />
-      {selectionOffer && !brainOpen ? <button className="selection-action" style={{ top: selectionOffer.top, left: selectionOffer.left }} onMouseDown={(event) => event.preventDefault()} onClick={() => { openNotePanel(selectionOffer.text); setSelectionOffer(null) }}><Highlighter size={14} /> Add selection to notes</button> : null}
-      {brainOpen ? <div className="brain-backdrop" onMouseDown={() => setBrainOpen(false)}><section className="brain-panel" data-second-brain-panel onMouseDown={(event) => event.stopPropagation()}><div className="brain-panel-head"><div><p className="eyebrow">Second Brain</p><h2>Keep what matters</h2><p>Save a thought, highlight, or question beside your reading.</p></div><button className="icon-button" onClick={() => setBrainOpen(false)} aria-label="Close Second Brain"><X size={18} /></button></div><form className="brain-form" onSubmit={(event) => void saveNote(event)}><label>Title<input value={noteDraft.title} onChange={(event) => setNoteDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Quick note" /></label><label>Note<textarea value={noteDraft.body} onChange={(event) => setNoteDraft((current) => ({ ...current, body: event.target.value }))} placeholder="Write an idea, question, or highlighted passage…" rows={5} /></label><label>Source<input value={noteDraft.source} onChange={(event) => setNoteDraft((current) => ({ ...current, source: event.target.value }))} placeholder="Book, page, or link" /></label><button className="primary-button" type="submit"><Plus size={16} /> Save to Second Brain</button></form><div className="brain-list"><div className="brain-list-heading"><h3>Recent notes</h3><span>{notes.length}</span></div>{notes.slice(0, 12).map((note) => <article key={note.id} className="brain-list-item"><div><strong>{note.title}</strong><p>{note.body}</p><small>{note.source}</small></div><span className={note.synced ? 'sync-state synced' : 'sync-state'}>{note.synced ? 'Synced' : 'Local'}</span></article>)}</div></section></div> : null}
-      {notice ? <div className="toast-notice"><Sparkles size={15} /> {notice}</div> : null}
-    </main>
-  </div>
+  const [books, setBooks] = useState<LibraryBook[]>(() => readLibraryBooks()); const [notes, setNotes] = useState<Note[]>(() => readLocalNotes()); const [paths, setPaths] = useState<LearningPath[]>(() => readPaths())
+  const [activeNav, setActiveNav] = useState('Home'); const [libraryQuery, setLibraryQuery] = useState(''); const [resourceQuery, setResourceQuery] = useState(''); const [resources, setResources] = useState<Resource[]>([]); const [searching, setSearching] = useState(false); const [selectedBookId, setSelectedBookId] = useState<string | null>(null); const [overlay, setOverlay] = useState<Overlay>(null); const [mobileNavOpen, setMobileNavOpen] = useState(false); const [notice, setNotice] = useState(''); const [tutorPrompt, setTutorPrompt] = useState(''); const [tutorReply, setTutorReply] = useState(''); const [tutorBusy, setTutorBusy] = useState(false); const [selectionOffer, setSelectionOffer] = useState<SelectionOffer | null>(null); const [noteDraft, setNoteDraft] = useState<NoteDraft>({ title: '', body: '', source: '' }); const [pathDraft, setPathDraft] = useState({ title: '', description: '' }); const fileInput = useRef<HTMLInputElement>(null); const backupInput = useRef<HTMLInputElement>(null)
+  const selectedBook = useMemo(() => books.find((book) => book.id === selectedBookId) ?? null, [books, selectedBookId]); const filteredBooks = useMemo(() => { const q = libraryQuery.trim().toLowerCase(); return q ? books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q)) : books }, [books, libraryQuery]); const overallProgress = books.length ? Math.round(books.reduce((sum, book) => sum + book.progress, 0) / books.length) : 0
+  useEffect(() => { let cancelled = false; void hydrateRemoteNotes(notes).then((value) => { if (!cancelled) setNotes(value) }); return () => { cancelled = true } }, [])
+  useEffect(() => { let timer: number | undefined; const update = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { const selection = window.getSelection(); const text = selection?.toString().trim() ?? ''; const node = selection?.anchorNode; const element = node instanceof Element ? node : node?.parentElement; if (!text || text.length < 2 || !element || element.closest('[data-overlay], input, textarea, select, [contenteditable="true"]')) { setSelectionOffer(null); return }; const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null; if (!rect) return; setSelectionOffer({ text: text.slice(0, 20_000), left: Math.min(Math.max(rect.left + rect.width / 2, 110), window.innerWidth - 110), top: rect.bottom + 10 < window.innerHeight - 50 ? rect.bottom + 10 : Math.max(8, rect.top - 52) }) }, 20) }; document.addEventListener('selectionchange', update); document.addEventListener('pointerup', update); document.addEventListener('keyup', update); return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', update); document.removeEventListener('pointerup', update); document.removeEventListener('keyup', update) } }, [])
+  function showNotice(message: string) { setNotice(message); window.setTimeout(() => setNotice(''), 3800) }
+  function selectNav(label: string) { setMobileNavOpen(false); if (label === 'Second Brain') { setOverlay('brain'); return }; if (label === 'Ask Noema') { setOverlay('noema'); return }; setActiveNav(label); setSelectedBookId(label === 'Read' ? selectedBookId : null) }
+  function openNotePanel(seed = '') { setNoteDraft({ title: seed ? 'Saved highlight' : '', body: seed, source: selectedBook ? `${selectedBook.title} · ${selectedBook.chapter}` : 'Noesis' }); setOverlay('brain') }
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; if (!file.name.toLowerCase().endsWith('.epub')) { showNotice('Noesis currently imports EPUB files.'); return }; try { const data = await file.arrayBuffer(); const parsed = await parseEpub(data, file.name); const book = epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed); await saveEpubFile(book.id, data); setBooks(upsertLibraryBook(book)); setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added with its cover and table of contents.`) } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Could not read that EPUB.') } }
+  function updateBookProgress(id: string, progress: number, cfi?: string, href?: string, chapter?: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, progress, cfi: cfi ?? book.cfi, currentHref: href ?? book.currentHref, chapter: chapter ?? book.chapter, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
+  async function saveNote(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const body = noteDraft.body.trim(); if (body.length < 2) { showNotice('Write a note or highlight first.'); return }; const note: Note = { id: `local-${crypto.randomUUID()}`, kind: noteDraft.title.toLowerCase().includes('question') ? 'question' : noteDraft.title.toLowerCase().includes('idea') ? 'idea' : 'note', title: noteDraft.title.trim() || 'Quick note', body, source: noteDraft.source.trim() || 'Noesis', createdAt: new Date().toISOString() }; setNotes((current) => [note, ...current]); setNoteDraft({ title: '', body: '', source: '' }); const destination = await persistNote(note); showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device. It will sync when Supabase is available.') }
+  async function askNoema(prompt: string) { const question = prompt.trim(); if (!question) return; setTutorPrompt(question); setTutorReply(''); setTutorBusy(true); try { const response = await fetch('/api/tutor', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question, book: selectedBook ? `${selectedBook.title} by ${selectedBook.author}\n${selectedBook.chapter}` : '', context: notes.slice(0, 30).map((note) => `${note.title} (${note.source}): ${note.body}`).join('\n\n') }) }); const result = await response.json() as { ok?: boolean; text?: string; error?: string }; if (!response.ok || !result.ok) throw new Error(result.error || 'Noema could not answer right now.'); setTutorReply(result.text ?? 'Noema returned an empty answer.'); showNotice('Noema answered using your current context.') } catch (reason) { const message = reason instanceof Error ? reason.message : 'Noema could not answer right now.'; setTutorReply(message); showNotice(message) } finally { setTutorBusy(false) } }
+  async function searchResources(event?: React.FormEvent) { event?.preventDefault(); const query = resourceQuery.trim(); if (!query) return; setSearching(true); setResources([]); try { const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`); const result = await response.json() as { ok?: boolean; results?: Resource[]; error?: string }; if (!response.ok || !result.ok) throw new Error(result.error || 'Search is unavailable.'); setResources(result.results ?? []); if ((result.results ?? []).length === 0) showNotice('No free resources matched that search.') } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Search is unavailable.') } finally { setSearching(false) } }
+  function addResource(resource: Resource) { const book: LibraryBook = { id: `resource-${resource.id}`, title: resource.title, author: resource.author, progress: 0, chapter: 'External resource', updated: new Date().toISOString(), cover: resource.title, coverUrl: resource.coverUrl, format: 'resource', sourceUrl: resource.sourceUrl, sourceName: resource.source }; setBooks(upsertLibraryBook(book)); showNotice(`${resource.title} was added to your library.`) }
+  function createPath(event: React.FormEvent) { event.preventDefault(); if (!pathDraft.title.trim()) return; const path: LearningPath = { id: `path-${crypto.randomUUID()}`, title: pathDraft.title.trim(), description: pathDraft.description.trim() || 'A personal collection for focused study.', bookIds: [], createdAt: new Date().toISOString() }; const next = [path, ...paths]; setPaths(next); writePaths(next); setPathDraft({ title: '', description: '' }); showNotice('Learning path created.') }
+  function deleteBook(book: LibraryBook) { if (!window.confirm(`Remove ${book.title} from your library?`)) return; setBooks(removeLibraryBook(book.id)); if (selectedBookId === book.id) setSelectedBookId(null); showNotice(`${book.title} was removed.`) }
+  async function restorePayload(payload: Awaited<ReturnType<typeof restoreBackup>>) { setBooks(payload.books); setNotes(payload.notes); const restoredPaths = payload.paths as LearningPath[]; setPaths(restoredPaths); writeLocalNotes(payload.notes); writeLibraryBooks(payload.books); writePaths(restoredPaths); showNotice(`Restored ${payload.books.length} books and ${payload.notes.length} notes.`) }
+  async function handleBackupImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; try { await restorePayload(await restoreBackup(file)) } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Could not restore that backup.') } }
+  async function makeCloudBackup() { try { await uploadCloudBackup(books, notes, paths); showNotice('Cloud backup updated.') } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Cloud backup failed.') } }
+  async function restoreCloud() { try { await restorePayload(await downloadCloudBackup()) } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Cloud restore failed.') } }
+  function homePage() { const current = books[0]; return <><section className="welcome-panel panel-card"><div><p className="eyebrow">Your learning space</p><h2>Study from the things you care about.</h2><p>Import an EPUB, keep useful notes, and let Noema help you make connections.</p><div className="welcome-actions"><button className="primary-button" onClick={() => fileInput.current?.click()}><Upload size={15} /> Import an EPUB</button><button className="secondary-button" onClick={() => selectNav('Explore')}><Search size={15} /> Find free resources</button></div></div><div className="welcome-orbit"><BookOpen size={42} /><span>NOESIS</span></div></section>{current ? <section className="continue-card panel-card"><div className="continue-cover-wrap"><BookCover book={current} /></div><div className="continue-details"><p className="eyebrow">Continue reading</p><h2>{current.title}</h2><p className="muted">{current.author}</p><div className="progress-row"><div className="progress-track"><span style={{ width: `${current.progress}%` }} /></div><strong>{Math.round(current.progress)}%</strong></div><p className="chapter-line"><BookOpen size={14} /> {current.chapter}</p><p className="muted small">Updated {formatDate(current.updated)}</p></div><div className="continue-actions"><button className="primary-button" onClick={() => { setSelectedBookId(current.id); setActiveNav('Read') }}>Resume reading <ArrowRight size={16} /></button><button className="secondary-button" onClick={() => openNotePanel()}><FileText size={16} /> Add a note</button></div></section> : <div className="empty-state">Your library is empty. Import an EPUB or search for a free public-domain book to begin.</div>}<BookSection books={filteredBooks.slice(0, 6)} onOpen={(book) => { setSelectedBookId(book.id); setActiveNav(book.format === 'epub' ? 'Read' : 'Explore') }} onImport={() => fileInput.current?.click()} /><PathSection paths={paths} books={books} onOpen={() => selectNav('Learning Paths')} /><NotesSection notes={notes} onOpen={() => setOverlay('brain')} /></> }
+  function libraryPage() { return <Page title="My library" subtitle={`${books.length} ${books.length === 1 ? 'book' : 'books'} saved on this device.`}><div className="page-toolbar"><div className="field-with-icon"><Search size={15} /><input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search your books" /></div><button className="primary-button" onClick={() => fileInput.current?.click()}><Upload size={15} /> Import EPUB</button></div><BookSection books={filteredBooks} onOpen={(book) => { setSelectedBookId(book.id); setActiveNav(book.format === 'epub' ? 'Read' : 'Explore') }} onImport={() => fileInput.current?.click()} onDelete={deleteBook} /></Page> }
+  function pathsPage() { return <Page title="Learning paths" subtitle="Group books around a question, skill, or long-term goal."><form className="create-form panel-card" onSubmit={createPath}><input value={pathDraft.title} onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })} placeholder="Path name, e.g. Cognitive psychology" /><input value={pathDraft.description} onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })} placeholder="What do you want this path to help you understand?" /><button className="primary-button" type="submit"><Plus size={15} /> Create path</button></form><PathSection paths={paths} books={books} editable onDelete={(id) => { const next = paths.filter((path) => path.id !== id); setPaths(next); writePaths(next) }} /></Page> }
+  function notesPage() { return <Page title="Notes" subtitle="Your highlights, questions, and ideas in one place."><NotesSection notes={notes} expanded onOpen={openNotePanel} /></Page> }
+  function progressPage() { const readCount = books.filter((book) => book.progress > 0).length; return <Page title="Progress" subtitle="A clear view of the reading you have actually done."><div className="metric-grid"><Metric label="Overall progress" value={`${overallProgress}%`} detail="Across your library" /><Metric label="Books started" value={`${readCount}`} detail={`of ${books.length} books`} /><Metric label="Notes saved" value={`${notes.length}`} detail="In your Second Brain" /><Metric label="Learning paths" value={`${paths.length}`} detail="Created by you" /></div><div className="progress-list panel-card"><h3>Reading progress</h3>{books.length === 0 ? <div className="empty-state">Read an imported EPUB to see progress here.</div> : books.map((book) => <div className="progress-book" key={book.id}><BookCover book={book} compact /><div><strong>{book.title}</strong><span>{book.author}</span><div className="progress-track"><span style={{ width: `${book.progress}%` }} /></div></div><b>{Math.round(book.progress)}%</b></div>)}</div></Page> }
+  function explorePage() { const localMatches = resourceQuery.trim() ? books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(resourceQuery.toLowerCase())) : []; return <Page title="Explore" subtitle="Search your library and legal free sources from one place."><form className="explore-search panel-card" onSubmit={searchResources}><Search size={18} /><input value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} placeholder="What do you want to learn?" /><button className="primary-button" type="submit" disabled={searching}>{searching ? 'Searching…' : 'Search'}</button></form>{localMatches.length > 0 ? <section className="resource-section"><div className="section-heading"><div><h2>In your library</h2><p>Books already saved here.</p></div></div><BookSection books={localMatches} onOpen={(book) => { setSelectedBookId(book.id); setActiveNav(book.format === 'epub' ? 'Read' : 'Explore') }} /></section> : null}<section className="resource-section"><div className="section-heading"><div><h2>Free resources</h2><p>Open Library and Project Gutenberg results. Check the source’s terms before downloading.</p></div></div>{resources.length === 0 && !searching ? <div className="empty-state">Search for a topic to find books and public-domain resources.</div> : <div className="resource-grid">{resources.map((resource) => <article className="resource-card panel-card" key={`${resource.source}-${resource.id}`}><div className="resource-cover">{resource.coverUrl ? <img src={resource.coverUrl} alt="" /> : <BookOpen size={22} />}</div><div><span className="resource-source">{resource.source}</span><h3>{resource.title}</h3><p>{resource.author}{resource.year ? ` · ${resource.year}` : ''}</p><div className="resource-actions"><button className="secondary-button" onClick={() => window.open(resource.sourceUrl, '_blank', 'noopener,noreferrer')}>Open source</button><button className="primary-button" onClick={() => addResource(resource)}><Plus size={14} /> Add</button></div></div></article>)}</div>}</section></Page> }
+  function backupPage() { return <Page title="Cloud backup" subtitle="Keep your Noesis library recoverable across devices."><section className="backup-hero panel-card"><div className="backup-icon"><Cloud size={24} /></div><div><h3>Supabase cloud backup</h3><p>Noesis can store a private backup of your EPUB files, covers, notes, and learning paths in the Supabase project already connected to this app.</p><small>Backups are private to your anonymous account. The first upload needs the storage bucket migration described in the setup notes.</small></div></section><div className="backup-actions"><button className="primary-button" onClick={() => void makeCloudBackup()}><Cloud size={15} /> Back up to cloud</button><button className="secondary-button" onClick={() => void restoreCloud()}><RotateCcw size={15} /> Restore from cloud</button><button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}><Download size={15} /> Download backup</button><button className="secondary-button" onClick={() => backupInput.current?.click()}><Upload size={15} /> Restore a file</button></div><div className="backup-note panel-card"><strong>Google Drive, Dropbox, and OneDrive</strong><p>You can upload the downloaded ZIP to any of those services today. Direct provider sync requires an OAuth app for the provider; Supabase backup is the built-in automatic option because it uses the project you already configured.</p></div></Page> }
+  const page = selectedBook && activeNav === 'Read' ? <Reader book={selectedBook} onClose={() => { setSelectedBookId(null); setActiveNav('My Library') }} onProgress={(progress, cfi, href, chapter) => updateBookProgress(selectedBook.id, progress, cfi, href, chapter)} onNote={openNotePanel} /> : activeNav === 'Home' ? homePage() : activeNav === 'My Library' ? libraryPage() : activeNav === 'Learning Paths' ? pathsPage() : activeNav === 'Notes' ? notesPage() : activeNav === 'Progress' ? progressPage() : activeNav === 'Explore' ? explorePage() : activeNav === 'Cloud Backup' ? backupPage() : <div className="empty-state">Choose a book from your library to start reading.</div>
+  return <div className="app-shell"><div className="ambient ambient-top" /><div className="ambient ambient-bottom" /><aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}><div className="brand-row"><div className="brand-mark"><BookOpen size={20} /></div><div><strong>NOESIS</strong><span>Your learning space</span></div><button className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><nav className="main-nav" aria-label="Main navigation">{navItems.map(({ label, icon: Icon }) => <button key={label} className={`nav-item ${activeNav === label ? 'nav-item-active' : ''}`} onClick={() => selectNav(label)}><Icon size={17} /><span>{label}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-search"><Search size={16} /><input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search books…" aria-label="Search books" /></div><p className="eyebrow sidebar-eyebrow">Quick actions</p><button className="quick-action" onClick={() => openNotePanel()}><Plus size={16} /> Add note</button><button className="quick-action" onClick={() => fileInput.current?.click()}><Upload size={16} /> Import EPUB</button><button className="quick-action" onClick={() => selectNav('Learning Paths')}><ListChecks size={16} /> Create learning path</button></div></aside>{mobileNavOpen ? <button className="mobile-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" /> : null}<main className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="greeting"><p className="eyebrow">{activeNav}</p><h1>Good morning, David<span>.</span></h1><p>Continue reading. Keep building what matters.</p></div><button className="noema-top-button" onClick={() => setOverlay('noema')}><Sparkles size={15} /> Ask Noema</button><button className="avatar-button" aria-label="Account">D</button></header><div className="page-content">{page}</div><input ref={fileInput} className="visually-hidden" type="file" accept=".epub,application/epub+zip" onChange={handleImport} /><input ref={backupInput} className="visually-hidden" type="file" accept=".zip,application/zip" onChange={handleBackupImport} />{selectionOffer && !overlay ? <button className="selection-action" style={{ top: selectionOffer.top, left: selectionOffer.left }} onMouseDown={(event) => event.preventDefault()} onClick={() => { openNotePanel(selectionOffer.text); setSelectionOffer(null) }}><Highlighter size={14} /> Add selection to notes</button> : null}{overlay === 'brain' ? <BrainOverlay notes={notes} draft={noteDraft} setDraft={setNoteDraft} onClose={() => setOverlay(null)} onSave={saveNote} /> : null}{overlay === 'noema' ? <NoemaOverlay prompt={tutorPrompt} reply={tutorReply} busy={tutorBusy} setPrompt={setTutorPrompt} onAsk={askNoema} onClose={() => setOverlay(null)} /> : null}{notice ? <div className="toast-notice"><Sparkles size={15} /> {notice}</div> : null}</main></div>
 }
+
+function Page({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <div className="page-view"><div className="page-heading"><div><p className="eyebrow">Noesis</p><h2>{title}</h2><p>{subtitle}</p></div></div>{children}</div> }
+function Metric({ label, value, detail }: { label: string; value: string; detail: string }) { return <article className="metric-card panel-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article> }
+function BookSection({ books, onOpen, onImport, onDelete }: { books: LibraryBook[]; onOpen: (book: LibraryBook) => void; onImport?: () => void; onDelete?: (book: LibraryBook) => void }) { return <section className="section-block library-section"><div className="section-heading"><div><h2>My library</h2><p>Local EPUBs and resources you have saved.</p></div>{onImport ? <button className="text-button" onClick={onImport}>Import <Upload size={14} /></button> : null}</div>{books.length === 0 ? <div className="empty-state">No books here yet. Import an EPUB or search Explore for a free resource.</div> : <div className="book-grid">{books.map((book) => <div className="book-card-wrap" key={book.id}><button className="book-card" onClick={() => onOpen(book)}><div className="book-card-cover"><BookCover book={book} compact /><ProgressRing value={book.progress} /></div><div className="book-card-title">{book.title}</div><div className="book-card-author">{book.author}</div></button>{onDelete ? <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}><Trash2 size={13} /></button> : null}</div>)}</div>}</section> }
+function PathSection({ paths, books, onOpen, editable = false, onDelete }: { paths: LearningPath[]; books: LibraryBook[]; onOpen?: () => void; editable?: boolean; onDelete?: (id: string) => void }) { return <section className="section-block path-section"><div className="section-heading"><div><h2>Learning paths</h2><p>Collections with a purpose, built from your books.</p></div>{onOpen ? <button className="text-button" onClick={onOpen}>View all <ArrowRight size={15} /></button> : null}</div>{paths.length === 0 ? <div className="empty-state">Create a path when you want to connect several books around one goal.</div> : <div className="path-grid">{paths.map((path) => { const pathBooks = books.filter((book) => path.bookIds.includes(book.id)); const progress = pathBooks.length ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length) : 0; return <article className="path-card path-blue" key={path.id}><div className="path-art"><Brain size={23} /><span>{pathBooks.length} BOOKS</span></div><div className="path-card-info"><strong>{path.title}</strong><span>{progress}% complete · {path.description}</span></div>{editable ? <button className="path-delete" onClick={() => onDelete?.(path.id)} aria-label={`Delete ${path.title}`}><Trash2 size={14} /></button> : null}</article> })}</div>}</section> }
+function NotesSection({ notes, expanded = false, onOpen }: { notes: Note[]; expanded?: boolean; onOpen: (seed?: string) => void }) { return <section className="section-block notes-section"><div className="section-heading"><div><h2>My notes</h2><p>Highlights and ideas worth returning to.</p></div><button className="text-button" onClick={() => onOpen()}>Add note <Plus size={14} /></button></div>{notes.length === 0 ? <div className="empty-state">Select text anywhere or add a note to start your Second Brain.</div> : <div className="notes-grid">{notes.slice(0, expanded ? 100 : 6).map((note) => <article key={note.id} className={`note-card note-${note.kind}`}><div className="note-icon">{note.kind === 'highlight' ? <Highlighter size={16} /> : note.kind === 'idea' ? <Sparkles size={16} /> : <CircleHelp size={16} />}</div><p>{note.body}</p><span>{note.source}</span><div className="note-footer"><em>{note.title}</em><button className="icon-button tiny" onClick={() => onOpen(note.body)} aria-label="Open note"><MoreVertical size={15} /></button></div></article>)}</div>}</section> }
+function BrainOverlay({ notes, draft, setDraft, onClose, onSave }: { notes: Note[]; draft: NoteDraft; setDraft: React.Dispatch<React.SetStateAction<NoteDraft>>; onClose: () => void; onSave: (event: React.FormEvent<HTMLFormElement>) => void }) { return <div className="brain-backdrop" data-overlay onMouseDown={onClose}><section className="brain-panel" onMouseDown={(event) => event.stopPropagation()}><div className="brain-panel-head"><div><p className="eyebrow">Second Brain</p><h2>Keep what matters</h2><p>Save a thought, highlight, or question beside your reading.</p></div><button className="icon-button" onClick={onClose} aria-label="Close Second Brain"><X size={18} /></button></div><form className="brain-form" onSubmit={onSave}><label>Title<input value={draft.title} onChange={(event) => setDraft((value) => ({ ...value, title: event.target.value }))} placeholder="Quick note" /></label><label>Note<textarea value={draft.body} onChange={(event) => setDraft((value) => ({ ...value, body: event.target.value }))} placeholder="Write an idea, question, or highlighted passage…" rows={5} /></label><label>Source<input value={draft.source} onChange={(event) => setDraft((value) => ({ ...value, source: event.target.value }))} placeholder="Book, page, or link" /></label><button className="primary-button" type="submit"><Plus size={16} /> Save to Second Brain</button></form><div className="brain-list"><div className="brain-list-heading"><h3>Recent notes</h3><span>{notes.length}</span></div>{notes.slice(0, 20).map((note) => <article className="brain-list-item" key={note.id}><div><strong>{note.title}</strong><p>{note.body}</p><small>{note.source}</small></div><span className={note.synced ? 'sync-state synced' : 'sync-state'}>{note.synced ? 'Synced' : 'Local'}</span></article>)}</div></section></div> }
+function NoemaOverlay({ prompt, reply, busy, setPrompt, onAsk, onClose }: { prompt: string; reply: string; busy: boolean; setPrompt: (value: string) => void; onAsk: (value: string) => void; onClose: () => void }) { return <div className="brain-backdrop" data-overlay onMouseDown={onClose}><section className="noema-panel" onMouseDown={(event) => event.stopPropagation()}><div className="brain-panel-head"><div><p className="eyebrow">Noema</p><h2>Your learning guide</h2><p>Ask about the book you are reading, your notes, or the next step.</p></div><button className="icon-button" onClick={onClose} aria-label="Close Noema"><X size={18} /></button></div><div className="noema-orb"><Sparkles size={24} /></div><div className="tutor-chips"><button onClick={() => onAsk('Explain the main idea of the current book')}>Explain this book</button><button onClick={() => onAsk('Summarize my saved notes')}>Summarize my notes</button><button onClick={() => onAsk('Test my understanding')}>Test my understanding</button><button onClick={() => onAsk('What should I read next?')}>Suggest a next step</button></div><div className="noema-input"><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onAsk(prompt) } }} placeholder="How can I help you learn?" rows={3} /><button className="primary-button" onClick={() => onAsk(prompt)} disabled={busy}>{busy ? 'Thinking…' : 'Ask Noema'}</button></div>{reply ? <div className="tutor-reply"><strong>{prompt}</strong><p>{reply}</p></div> : null}</section></div> }
 
 export default App
