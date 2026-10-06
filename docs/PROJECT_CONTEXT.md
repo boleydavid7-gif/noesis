@@ -41,7 +41,7 @@ The current app is a working reader-first build:
 - Noema is a global tutor popup backed by the Cloudflare Worker `/api/tutor`.
 - Account supports email/password sign-in and can upgrade an anonymous session
   without moving its notes to a new user.
-- Explore searches Project Gutenberg and Open Library through `/api/search`.
+- Explore searches Project Gutenberg, Open Library, OpenAlex, and Internet Archive through `/api/search`; hosted and borrowed items can open their official reader inside Noesis.
 - Cloud Backup exports/restores a complete ZIP and can upload it to a private
   Supabase Storage bucket after the backup migration is applied.
 
