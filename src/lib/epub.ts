@@ -76,3 +76,20 @@ export function epubBookFromParsed(id: string, filename: string, fileSize: numbe
     toc: parsed.toc,
   }
 }
+
+export function pdfBookFromSource(id: string, filename: string, fileSize: number, title: string, author: string, sourceUrl?: string, coverUrl?: string): LibraryBook {
+  return {
+    id,
+    title: title || filename.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim() || 'Imported PDF',
+    author: author || 'Unknown author',
+    progress: 0,
+    chapter: 'Ready to read',
+    updated: new Date().toISOString(),
+    cover: title,
+    coverUrl,
+    format: 'pdf',
+    fileName: filename,
+    fileSize,
+    sourceUrl,
+  }
+}
