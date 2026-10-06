@@ -1,4 +1,4 @@
-export type BookFormat = 'epub' | 'pdf' | 'resource'
+export type BookFormat = 'epub' | 'pdf' | 'resource' | 'web'
 
 export type LibraryBook = {
   id: string
@@ -12,7 +12,9 @@ export type LibraryBook = {
   coverUrl?: string
   format: BookFormat
   sourceUrl?: string
+  readerUrl?: string
   sourceName?: string
+  accessType?: 'public' | 'borrow'
   fileName?: string
   fileSize?: number
   cfi?: string
