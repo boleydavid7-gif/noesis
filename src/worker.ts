@@ -92,6 +92,8 @@ type SearchResult = {
   free: boolean
   format: string
   downloadUrl?: string
+  readerUrl?: string
+  accessType?: 'public' | 'borrow'
   kind: 'book' | 'article'
 }
 
@@ -128,8 +130,31 @@ async function searchFreeResources(request: Request): Promise<Response> {
           source: 'OpenAlex', sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '', downloadUrl: item.primary_location?.pdf_url, free: item.open_access?.is_oa === true, format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article', kind: 'article',
         }))
       }).catch(() => [] as SearchResult[])
-    const [library, gutenbergResults, academicResults] = await Promise.all([openLibrary, gutenberg, academic])
-    return json({ ok: true, results: [...gutenbergResults, ...academicResults, ...library] })
+    const archive = fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as { response?: { docs?: Array<{ identifier?: string; title?: string; creator?: string | string[]; year?: number | string; description?: string; collection?: string | string[] }> } }
+        return (body.response?.docs ?? []).filter((item) => item.identifier && item.title).map((item): SearchResult => {
+          const identifier = item.identifier ?? ''
+          const collections = Array.isArray(item.collection) ? item.collection : [item.collection ?? '']
+          const restricted = collections.some((value) => /inlibrary|lending|printdisabled|borrow/i.test(value))
+          return {
+            id: identifier,
+            title: item.title ?? 'Internet Archive item',
+            author: Array.isArray(item.creator) ? item.creator.slice(0, 2).join(', ') : item.creator || 'Unknown author',
+            year: typeof item.year === 'string' ? Number.parseInt(item.year, 10) || undefined : item.year,
+            source: 'Internet Archive',
+            sourceUrl: `https://archive.org/details/${identifier}`,
+            readerUrl: `https://archive.org/embed/${identifier}`,
+            free: !restricted,
+            format: restricted ? 'Borrowed reader' : 'Internet Archive reader',
+            accessType: restricted ? 'borrow' : 'public',
+            kind: 'book',
+          }
+        })
+      }).catch(() => [] as SearchResult[])
+    const [library, gutenbergResults, academicResults, archiveResults] = await Promise.all([openLibrary, gutenberg, academic, archive])
+    return json({ ok: true, results: [...gutenbergResults, ...academicResults, ...archiveResults, ...library] })
   } catch {
     return json({ ok: false, error: 'Free-resource search is temporarily unavailable.' }, 502)
   }
