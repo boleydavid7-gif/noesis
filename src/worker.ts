@@ -59,7 +59,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
 
   if (!response.ok) {
     if (response.status === 429) return json({ ok: false, error: 'Gemini is busy. Try again in a moment.' }, 429)
-    return json({ ok: false, error: `Gemini request failed (${response.status}).` }, 502)
+    return json({ ok: false, error: `Gemini request failed (${response.status}) using ${model}.` }, 502)
   }
 
   const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
@@ -72,6 +72,18 @@ const worker = {
     const url = new URL(request.url)
     if (url.pathname === '/api/health' && request.method === 'GET') {
       return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
+    }
+    if (url.pathname === '/api/models' && request.method === 'GET') {
+      const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
+      if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured.' }, 503)
+      const response = await fetch(`${GEMINI_BASE}/models?key=${encodeURIComponent(apiKey)}`)
+      const body = (await response.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> }
+      if (!response.ok) return json({ ok: false, error: `Gemini model discovery failed (${response.status}).` }, 502)
+      const models = (body.models ?? [])
+        .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
+        .map((model) => (model.name ?? '').replace(/^models\//, ''))
+        .filter(Boolean)
+      return json({ ok: true, models })
     }
     if (url.pathname === '/api/tutor') {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204 })
