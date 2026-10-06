@@ -40,6 +40,7 @@
 .top-search { display: flex; align-items: center; gap: 9px; width: min(310px, 32vw); margin-top: 4px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--muted); background: rgba(19, 39, 61, .7); }
 .top-search kbd { padding: 2px 5px; border: 1px solid var(--line); border-radius: 5px; color: #6d8baa; font-size: 9px; white-space: nowrap; }
 .avatar-button { display: grid; place-items: center; width: 34px; height: 34px; margin-top: 4px; border: 1px solid rgba(128, 182, 232, .48); border-radius: 50%; color: #eaf4ff; background: linear-gradient(145deg, #407bb3, #1d3454); font-weight: 700; }
+.account-top-button { display: grid; place-items: center; width: 34px; height: 34px; margin-top: 4px; border: 1px solid rgba(128, 182, 232, .48); border-radius: 50%; color: #eaf4ff; background: linear-gradient(145deg, #407bb3, #1d3454); font-size: 12px; font-weight: 700; }
 .icon-button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--muted); background: transparent; transition: .2s ease; }
 .icon-button:hover { color: #fff; background: rgba(104, 159, 214, .15); }
 .sidebar-close, .mobile-menu { display: none; }
@@ -327,6 +328,20 @@
 .backup-note { padding: 17px 19px; }
 .backup-note strong { color: #eaf4ff; font-family: var(--display); font-size: 14px; }
 .backup-note p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.auth-form { display: grid; gap: 14px; max-width: 520px; padding: 21px; }
+.auth-tabs { display: flex; gap: 7px; padding-bottom: 4px; border-bottom: 1px solid rgba(144, 190, 229, .1); }
+.auth-tabs button { padding: 8px 12px; border-radius: 8px; color: var(--muted); background: transparent; font-size: 11px; }
+.auth-tabs .auth-tab-active { color: #fff; background: #377ed5; }
+.auth-form label { display: grid; gap: 6px; color: #a9c0d7; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.auth-form input { width: 100%; padding: 11px 12px; border: 1px solid rgba(140, 190, 231, .16); border-radius: 8px; outline: 0; color: #e9f4ff; background: rgba(2, 15, 27, .58); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.auth-form input:focus { border-color: rgba(98, 178, 255, .65); }
+.auth-callout { display: flex; gap: 8px; padding: 10px; border: 1px solid rgba(110, 185, 255, .2); border-radius: 9px; color: #bddaf4; background: rgba(41, 103, 165, .15); font-size: 11px; line-height: 1.45; }
+.auth-footnote { margin: 0; color: var(--muted-2); font-size: 10px; line-height: 1.5; }
+.account-signed { display: flex; align-items: center; gap: 13px; max-width: 600px; padding: 20px; }
+.account-signed > div:nth-child(2) { min-width: 0; flex: 1; }
+.account-signed h3 { margin: 5px 0; overflow: hidden; color: #edf5ff; font-family: var(--display); font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.account-signed p { margin: 0; color: var(--muted); font-size: 11px; }
+.account-avatar { display: grid; place-items: center; width: 45px; height: 45px; flex: 0 0 45px; border: 1px solid rgba(104, 185, 255, .36); border-radius: 50%; color: #8bcaff; background: rgba(47, 122, 193, .18); }
 
 @media (max-width: 820px) { .metric-grid, .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .create-form { grid-template-columns: 1fr; } .reader-body { grid-template-columns: 1fr; } .reader-toc { max-height: 160px; border-right: 0; border-bottom: 1px solid #d9d7d0; } .reader-frame-wrap, .reader-frame, .pdf-frame { min-height: 540px; } .suggested-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .welcome-panel { align-items: flex-start; padding: 21px; } .welcome-orbit { display: none; } .page-heading h2 { font-size: 26px; } .page-toolbar { align-items: stretch; flex-direction: column; } .field-with-icon { width: 100%; } .resource-grid { grid-template-columns: 1fr; } .reader-toolbar { flex-wrap: wrap; } .reader-title { order: 3; flex-basis: 100%; } .noema-top-button { padding: 8px; font-size: 0; } .noema-top-button svg { width: 17px; height: 17px; } .suggested-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .suggested-cover { height: 136px; } }
