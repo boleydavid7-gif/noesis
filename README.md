@@ -19,12 +19,14 @@ npm install
 npm run dev
 ```
 
-The app imports EPUB files locally, reads their title, author, cover, and table
-of contents, and stores the EPUB in IndexedDB so it can be opened again. The
-reader saves its CFI and percentage as you move through the book. Notes persist
-in the browser and sync to Supabase when the browser-safe Supabase variables and
-anonymous auth are enabled. Explore searches Open Library and Project
-Gutenberg through the Worker. Noesis keeps `GEMINI_API_KEY` on the Worker.
+The app imports EPUB and PDF files locally, reads EPUB title, author, cover, and
+table of contents, and stores local files in IndexedDB so they can be opened
+again. The reader saves its CFI and percentage as you move through a book.
+Explore searches Open Library, Project Gutenberg, OpenAlex, and Internet
+Archive. Downloadable files are imported locally; borrowed or hosted items open
+their official reader inside Noesis with a source-page fallback. Notes persist
+in the browser and sync to Supabase after email sign-in. Noesis keeps
+`GEMINI_API_KEY` on the Worker.
 
 ## Direction
 
