@@ -9,7 +9,7 @@ The product centers on four things:
 
 - Read EPUBs and other study material in a focused reader.
 - Highlight passages, write notes, and connect every note to its source.
-- Ask GAYL about the selected passage, chapter, book, or library.
+- Ask Noema about the selected passage, chapter, book, or library.
 - Group books into learning paths and track real reading and review progress.
 
 ## Development
@@ -19,13 +19,12 @@ npm install
 npm run dev
 ```
 
-The first slice is a responsive dashboard with a working Second Brain capture
-flow and a server-side GAYL tutor endpoint. Notes persist in the browser and
-sync to Supabase when the browser-safe Supabase variables and anonymous auth
-are enabled. Cloudflare serves the static Vite build and keeps `GEMINI_API_KEY`
-on the Worker.
-
-EPUB parsing and the persistent reader are still the next product slices.
+The app imports EPUB files locally, reads their title, author, cover, and table
+of contents, and stores the EPUB in IndexedDB so it can be opened again. The
+reader saves its CFI and percentage as you move through the book. Notes persist
+in the browser and sync to Supabase when the browser-safe Supabase variables and
+anonymous auth are enabled. Explore searches Open Library and Project
+Gutenberg through the Worker. Noesis keeps `GEMINI_API_KEY` on the Worker.
 
 ## Direction
 
@@ -49,6 +48,11 @@ develop without changing the production IT PATH app.
 
 This repository uses a static-assets Worker. Keep the build command as
 `npm run build` and the deploy command as `npx wrangler deploy`. Add the
-`GEMINI_API_KEY` Worker secret before asking GAYL a question. To enable cloud
-note sync, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build
-variables and apply the migration in `supabase/migrations/`.
+`GEMINI_API_KEY` Worker secret before asking Noema a question. Set
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build variables and
+enable anonymous sign-in in Supabase. Apply both migrations in
+`supabase/migrations/` to enable note sync and the private `noesis-backups`
+storage bucket. Cloud Backup can then upload and restore the complete EPUB,
+notes, covers, and learning-path ZIP. The downloaded ZIP can also be stored in
+Google Drive, Dropbox, or OneDrive; direct provider OAuth sync requires an app
+registration with that provider.
