@@ -33,7 +33,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
 
   const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
+  const models = [...new Set([configuredModel, 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
     'You are GAYL, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
