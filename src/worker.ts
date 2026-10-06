@@ -119,7 +119,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, downloadUrl: item.formats?.['application/epub+zip'] || item.formats?.['application/pdf'], free: item.copyright === false, format: item.formats?.['application/epub+zip'] ? 'EPUB' : 'Public domain', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
-    const academic = fetch(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12`, { headers: { accept: 'application/json' } })
+    const academic = fetch(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12&mailto=noesis@proairetos.com`, { headers: { accept: 'application/json', 'user-agent': 'Noesis/1.0 (reader learning app)' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { results?: Array<{ id?: string; title?: string; publication_year?: number; authorships?: Array<{ author?: { display_name?: string } }>; doi?: string; primary_location?: { landing_page_url?: string; pdf_url?: string; source?: { display_name?: string } }; open_access?: { is_oa?: boolean } }> }
