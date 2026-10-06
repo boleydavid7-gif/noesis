@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 
 export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note'
 
@@ -45,10 +46,8 @@ export function writeLocalNotes(notes: BrainNote[]): void {
 }
 
 function getSupabase(): SupabaseClient | null {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, storage: getStorage() ?? undefined },
   })
 }
