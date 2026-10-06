@@ -243,8 +243,9 @@ function App() {
       setTutorReply(result.text || 'GAYL returned an empty answer.')
       showNotice('GAYL answered using your current context.')
     } catch (error) {
-      setTutorReply(error instanceof Error ? error.message : 'GAYL could not answer right now.')
-      showNotice('GAYL needs the Cloudflare AI endpoint and GEMINI_API_KEY to be configured.')
+      const message = error instanceof Error ? error.message : 'GAYL could not answer right now.'
+      setTutorReply(message)
+      showNotice(message)
     } finally {
       setTutorBusy(false)
     }
