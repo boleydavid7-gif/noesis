@@ -45,9 +45,15 @@ dashboard prototype and README. It currently demonstrates:
 - A GAYL context panel and responsive navigation.
 - Local EPUB/PDF import into prototype library state.
 - A reader-preview panel that marks the next implementation boundary.
+- A Second Brain panel with manual notes, text-selection capture, local
+  persistence, and optional Supabase anonymous sync.
+- A Cloudflare Worker `/api/tutor` route that sends the active book and saved
+  notes to Gemini without exposing the API key to the browser.
 
 The import action currently adds a placeholder book. It does not parse EPUB
-contents or persist data yet.
+contents yet. Notes use local storage until Supabase variables and anonymous
+auth are available; the migration in `supabase/migrations/` is idempotent for
+an existing `knowledge_items` table.
 
 ## Installed foundation
 
@@ -70,8 +76,9 @@ Supabase key names, Gemini key names, and `DATABASE_URL`.
    locations.
 3. Build the persistent reader with resume position, chapter navigation,
    search, appearance controls, highlights, and notes.
-4. Port Second Brain storage and let GAYL answer in four scopes: selection,
-   chapter, book, and library. Answers should cite source locations.
+4. Expand the Second Brain and let GAYL answer in four scopes: selection,
+   chapter, book, and library. Answers should cite source locations. The
+   current first slice already supports note capture and book/note context.
 5. Add learning paths as user-curated book collections with goal, order, and
    progress. AI suggestions require user approval.
 6. Add source-grounded practice and review prompts. Subject-specific applied
