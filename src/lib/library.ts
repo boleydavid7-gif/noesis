@@ -1,4 +1,4 @@
-export type BookFormat = 'epub' | 'resource'
+export type BookFormat = 'epub' | 'pdf' | 'resource'
 
 export type LibraryBook = {
   id: string
