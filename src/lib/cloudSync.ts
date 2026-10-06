@@ -50,16 +50,21 @@ async function readManifest(connection: CloudConnection): Promise<CloudManifest 
 }
 
 async function restoreRemoteBooks(connection: CloudConnection, books: LibraryBook[]): Promise<void> {
-  for (const book of books.filter((item) => item.format === 'epub')) {
-    const bytes = await readCloudFile(connection, `books/${book.id}.epub`)
+  for (const book of books.filter((item) => item.format === 'epub' || item.format === 'pdf')) {
+    const extension = book.format === 'pdf' ? 'pdf' : 'epub'
+    const bytes = await readCloudFile(connection, `books/${book.id}.${extension}`)
     if (bytes) await saveEpubFile(book.id, bytes)
   }
 }
 
 async function uploadLocalBooks(connection: CloudConnection, books: LibraryBook[]): Promise<void> {
-  for (const book of books.filter((item) => item.format === 'epub')) {
+  for (const book of books.filter((item) => item.format === 'epub' || item.format === 'pdf')) {
     const bytes = await loadEpubFile(book.id).catch(() => null)
-    if (bytes) await writeCloudFile(connection, `books/${book.id}.epub`, new Blob([bytes], { type: 'application/epub+zip' }), 'application/epub+zip')
+    if (bytes) {
+      const extension = book.format === 'pdf' ? 'pdf' : 'epub'
+      const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
+      await writeCloudFile(connection, `books/${book.id}.${extension}`, new Blob([bytes], { type: contentType }), contentType)
+    }
   }
 }
 
