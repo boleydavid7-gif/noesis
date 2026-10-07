@@ -63,9 +63,8 @@ function relevantExcerpt(text: string, question: string, limit = 30_000): string
   return `${start > 0 ? '…' : ''}${text.slice(start, start + limit)}${start + limit < text.length ? '…' : ''}`
 }
 function BookCover({ book, compact = false }: { book: LibraryBook; compact?: boolean }) {
-  const title = book.title.split(/\s+/).slice(0, compact ? 5 : 10).join(' ')
   const image = book.coverDataUrl || book.coverUrl
-  return <div className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`} aria-label={book.title} style={image ? { backgroundImage: `linear-gradient(180deg, rgba(3,10,16,.22), rgba(3,10,16,.78)), url(${image})` } : undefined}>{!image ? <><div className="book-cover-mark">N</div><strong>{title}</strong><small>{book.author}</small></> : null}</div>
+  return <div className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`} aria-label={book.title} style={image ? { backgroundImage: `linear-gradient(180deg, rgba(3,10,16,.22), rgba(3,10,16,.78)), url(${image})` } : undefined}>{!image ? <div className="book-cover-mark">N</div> : null}</div>
 }
 function ProgressRing({ value }: { value: number }) { return <div className="progress-ring" style={{ '--progress': `${Math.max(0, Math.min(100, value)) * 3.6}deg` } as React.CSSProperties}><span>{Math.round(value)}%</span></div> }
 
