@@ -1,4 +1,5 @@
-import { loadEpubFile, saveEpubFile, type LibraryBook } from './library'
+import { loadEpubFile, saveBookText, saveEpubFile, type LibraryBook } from './library'
+import { parseEpub } from './epub'
 import type { BrainNote } from './knowledge'
 import { readCloudFile, writeCloudFile, type CloudConnection } from './cloudProviders'
 
@@ -53,7 +54,17 @@ async function restoreRemoteBooks(connection: CloudConnection, books: LibraryBoo
   for (const book of books.filter((item) => item.format === 'epub' || item.format === 'pdf')) {
     const extension = book.format === 'pdf' ? 'pdf' : 'epub'
     const bytes = await readCloudFile(connection, `books/${book.id}.${extension}`)
-    if (bytes) await saveEpubFile(book.id, bytes)
+    if (bytes) {
+      await saveEpubFile(book.id, bytes)
+      if (book.format === 'epub') {
+        try {
+          const parsed = await parseEpub(bytes, book.fileName || `${book.title}.epub`)
+          if (parsed.text) await saveBookText(book.id, parsed.text)
+        } catch {
+          // The EPUB itself remains readable even if text indexing fails.
+        }
+      }
+    }
   }
 }
 
