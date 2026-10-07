@@ -252,7 +252,28 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
         instance.on('rendered', attachView)
         instance.on('selected', (_cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (text) saveHighlight(`Highlight from ${currentBook.title}: ${text}`) })
         const firstChapter = chapters[initialIndex]?.href
-        await instance.display(currentBook.cfi || currentBook.currentHref || firstChapter || undefined)
+        const savedLocation = currentBook.cfi || currentBook.currentHref
+        let opened = false
+        if (firstChapter) {
+          try {
+            // Open through the same chapter href used by the chapter menu. This
+            // gives new books a reliable first view before restoring a saved spot.
+            await instance.display(firstChapter)
+            opened = true
+          } catch {
+            // A malformed first navigation entry can still be recoverable through
+            // the saved location or the first spine entry below.
+          }
+        }
+        if (savedLocation && savedLocation !== firstChapter) {
+          try {
+            await instance.display(savedLocation)
+            opened = true
+          } catch {
+            // Keep the already opened chapter when an old CFI or href is stale.
+          }
+        }
+        if (!opened) throw new Error('This EPUB has no readable opening chapter.')
         const iframe = frame.current?.querySelector('iframe')
         if (iframe?.contentDocument) attachView(undefined, { contents: { document: iframe.contentDocument } })
         const initialLocation = instance.currentLocation() as ReaderLocation | Promise<ReaderLocation> | undefined
