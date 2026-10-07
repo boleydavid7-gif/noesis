@@ -213,6 +213,8 @@
 .brain-form label { display: grid; gap: 6px; color: #a9c0d7; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .brain-form input, .brain-form textarea { width: 100%; border: 1px solid rgba(140, 190, 231, .16); border-radius: 8px; outline: 0; padding: 10px 11px; color: #e9f4ff; background: rgba(2, 15, 27, .58); font: inherit; font-size: 12px; letter-spacing: 0; text-transform: none; resize: vertical; }
 .brain-form input:focus, .brain-form textarea:focus { border-color: rgba(98, 178, 255, .65); box-shadow: 0 0 0 3px rgba(55, 143, 223, .12); }
+.brain-form input[readonly] { color: #d8bd84; border-color: rgba(220, 194, 142, .18); background: rgba(90, 67, 29, .14); }
+.brain-source-hint { margin: -4px 0 0; color: #8298ab; font-size: 9px; line-height: 1.45; }
 .brain-form .primary-button { justify-content: center; margin-top: 2px; }
 .brain-list { display: grid; gap: 9px; }
 .brain-list-heading { display: flex; align-items: center; justify-content: space-between; }
