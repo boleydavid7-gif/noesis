@@ -14,6 +14,7 @@ export type LibraryBook = {
   sourceUrl?: string
   readerUrl?: string
   sourceName?: string
+  description?: string
   accessType?: 'public' | 'borrow'
   fileName?: string
   fileSize?: number
