@@ -645,3 +645,18 @@ body { background: #060d14; }
 .bookshelf-row { border-bottom: 5px solid rgba(164, 124, 61, .52); }
 .bookshelf-row::after { display: none; }
 
+
+.book-cover-image { background-color: transparent; background-blend-mode: normal; }
+.book-cover-image::after { background: rgba(0, 0, 0, .06); }
+
+
+.book-cover-image { background-color: transparent; background-blend-mode: normal; }
+.book-cover-image::after { display: none; }
+.shelf-book { padding: 7px 7px 10px; border: 1px solid rgba(220, 194, 142, .18); border-radius: 7px; background: #0d1b26; box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
+.shelf-book:hover { border-color: rgba(220, 194, 142, .42); background: #102131; }
+.shelf-cover { height: 202px; }
+.shelf-cover .book-cover { height: 100%; }
+@media (max-width: 620px) {
+  .shelf-cover { height: 176px; }
+}
+
