@@ -223,6 +223,12 @@
 .brain-list-item strong { display: block; margin-bottom: 4px; color: #e7f2ff; font-size: 11px; }
 .brain-list-item p { margin: 0 0 6px; color: #b3c6d9; font-size: 11px; line-height: 1.45; }
 .brain-list-item small { color: #718ba5; font-size: 9px; }
+.brain-filter-row { display: flex; gap: 5px; overflow-x: auto; padding: 2px 0 5px; }
+.brain-filter-row button { flex: 0 0 auto; padding: 6px 9px; border: 1px solid rgba(140, 190, 231, .14); border-radius: 999px; color: #8fa9bd; background: rgba(7, 24, 40, .62); font-size: 9px; }
+.brain-filter-row button:hover, .brain-filter-row button.brain-filter-active { border-color: rgba(220, 194, 142, .45); color: #f0d18a; background: rgba(173, 127, 55, .16); }
+.brain-list-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.brain-open-note, .reader-note-open { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid rgba(220, 194, 142, .2); border-radius: 5px; color: #ddb873; background: rgba(173, 127, 55, .1); font-size: 9px; }
+.brain-open-note:hover, .reader-note-open:hover { border-color: rgba(220, 194, 142, .52); color: #f6dc9f; background: rgba(173, 127, 55, .2); }
 .sync-state { flex: 0 0 auto; color: #8ba3ba; font-size: 9px; }
 .sync-state.synced { color: #69d5a1; }
 .toast-notice { position: fixed; right: 24px; bottom: 22px; z-index: 20; display: flex; align-items: center; gap: 8px; max-width: min(360px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid rgba(111, 183, 252, .36); border-radius: 10px; color: #d9edff; background: rgba(9, 28, 47, .95); box-shadow: 0 12px 30px rgba(0, 0, 0, .3); font-size: 11px; }
