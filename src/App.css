@@ -324,22 +324,26 @@
 .reader-frame-epub > .reader-toc { grid-column: 1; grid-row: 1; }
 .reader-frame-epub > .reader-frame, .reader-frame-epub > .reader-overlay { grid-column: 2; grid-row: 1; }
 .reader-frame { width: 100%; height: 100%; min-height: 620px; }
-.reader-wide-topbar { display: flex; min-height: 42px; align-items: center; justify-content: flex-end; }
-.reader-wide-actions { display: flex; gap: 8px; }
-.reader-wide-actions .icon-button { width: 38px; height: 38px; border: 1px solid rgba(145, 201, 247, .28); border-radius: 11px; color: #d8edff; background: rgba(10, 31, 51, .72); box-shadow: 0 8px 20px rgba(0, 0, 0, .2); }
+.reader-wide-topbar { display: flex; min-width: 0; min-height: 42px; align-items: center; justify-content: flex-end; }
+.reader-wide-actions { display: flex; width: max-content; flex: 0 0 auto; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 8px; margin-left: auto; }
+.reader-wide-actions .icon-button { display: grid; flex: 0 0 38px; width: 38px; height: 38px; border: 1px solid rgba(145, 201, 247, .28); border-radius: 11px; color: #d8edff; background: rgba(10, 31, 51, .72); box-shadow: 0 8px 20px rgba(0, 0, 0, .2); }
 .reader-wide-actions .icon-button:hover { border-color: #70baff; background: rgba(46, 105, 165, .58); }
-.reader-wide-footer { display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; align-items: center; gap: 18px; min-height: 67px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(145, 201, 247, .16); color: #a9c5dd; background: rgba(4, 17, 30, .84); }
-.reader-wide-footer > span { overflow: hidden; color: #cfe5f7; font-size: 11px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-.reader-page-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(145, 201, 247, .28); border-radius: 50%; color: #d8edff; background: rgba(14, 45, 73, .74); transition: .2s ease; }
+.reader-wide-footer { display: grid; grid-template-columns: minmax(46px, 1fr) minmax(150px, 1.5fr) minmax(46px, 1fr); align-items: center; gap: 14px; min-height: 74px; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(145, 201, 247, .16); color: #a9c5dd; background: linear-gradient(180deg, rgba(8, 28, 47, .82), rgba(4, 17, 30, .96)); }
+.reader-wide-footer .reader-page-button:first-child { justify-self: start; }
+.reader-wide-footer .reader-page-button:last-child { justify-self: end; }
+.reader-wide-location { display: grid; min-width: 0; justify-items: center; gap: 3px; padding: 8px 16px; border: 1px solid rgba(145, 201, 247, .18); border-radius: 14px; background: linear-gradient(135deg, rgba(29, 70, 107, .52), rgba(10, 31, 51, .72)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 8px 24px rgba(0, 0, 0, .18); }
+.reader-wide-location span { color: #7fa5c5; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.reader-wide-location strong { overflow: hidden; max-width: 100%; color: #eef7ff; font-family: var(--display); font-size: 12px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.reader-page-button { display: grid; place-items: center; width: 46px; height: 46px; border: 1px solid rgba(145, 201, 247, .34); border-radius: 50%; color: #e4f4ff; background: linear-gradient(145deg, rgba(41, 111, 176, .72), rgba(14, 45, 73, .9)); box-shadow: 0 6px 18px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .12); transition: .2s ease; }
 .reader-page-button:hover:not(:disabled) { border-color: #70baff; background: rgba(47, 111, 175, .65); transform: translateY(-1px); }
 .reader-page-button:disabled { cursor: not-allowed; opacity: .35; }
 .reader-page-wide { position: fixed; z-index: 80; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0; width: 100vw; height: 100dvh; min-height: 100dvh; overflow: hidden; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); border: 0; border-radius: 0; background: #071421; box-shadow: none; }
-.reader-page-wide .reader-body { min-height: 0; height: 100%; border: 0; border-radius: 0; background: #f6f2e9; }
-.reader-page-wide .reader-frame-wrap, .reader-page-wide .reader-frame-epub { min-height: 0; height: 100%; }
+.reader-page-wide .reader-body { display: block; min-height: 0; height: 100%; border: 0; border-radius: 0; background: #f6f2e9; }
+.reader-page-wide .reader-frame-wrap, .reader-page-wide .reader-frame-wrap.reader-frame-epub { display: block; width: 100%; min-height: 0; height: 100%; }
 .reader-page-wide .reader-frame-epub { grid-template-columns: 1fr; }
 .reader-page-wide .reader-frame-epub > .reader-toc { display: none; }
 .reader-page-wide .reader-frame-epub > .reader-frame, .reader-page-wide .reader-frame-epub > .reader-overlay { grid-column: 1; }
-.reader-page-wide .reader-frame { min-height: 0; height: 100%; }
+.reader-page-wide .reader-frame { display: block; width: 100%; min-height: 0; height: 100%; }
 .reader-page-wide .reader-overlay { background: rgba(245, 244, 238, .92); }
 .reader-page-turn-next .reader-frame { animation: reader-turn-next .34s ease both; }
 .reader-page-turn-previous .reader-frame { animation: reader-turn-previous .34s ease both; }
@@ -474,7 +478,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .reader-page:not(.reader-page-wide) .reader-body { min-height: calc(100svh - 285px); height: calc(100svh - 285px); }
   .reader-page:not(.reader-page-wide) .reader-frame-wrap, .reader-page:not(.reader-page-wide) .reader-frame-epub, .reader-page:not(.reader-page-wide) .reader-frame { min-height: 0; height: 100%; }
   .reader-page-wide { padding-inline: 8px; }
-  .reader-wide-footer { min-height: 72px; }
+  .reader-wide-footer { grid-template-columns: minmax(46px, 1fr) minmax(120px, 2fr) minmax(46px, 1fr); min-height: 78px; gap: 8px; padding-inline: 8px; }
+  .reader-wide-location { padding-inline: 10px; }
   .reader-copy h3 { font-size: 18px; }
   .note-tabs { overflow-x: auto; }
   .note-tab { padding-inline: 12px; white-space: nowrap; }
