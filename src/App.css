@@ -13,17 +13,19 @@
 .ambient-top { inset: 0 0 auto 27%; height: 245px; background: linear-gradient(180deg, rgba(67, 120, 176, .25), transparent); }
 .ambient-bottom { right: -15%; bottom: -35%; width: 60%; height: 65%; border-radius: 50%; background: radial-gradient(circle, rgba(25, 87, 135, .19), transparent 70%); }
 
-.sidebar { position: relative; z-index: 5; display: flex; width: 214px; flex: 0 0 214px; flex-direction: column; border-right: 1px solid var(--line); background: linear-gradient(180deg, rgba(2, 12, 24, .9), rgba(3, 13, 25, .96)), url('/noesis-hero.jpg') center / cover; backdrop-filter: blur(22px); }
-.brand-row { display: flex; align-items: center; gap: 10px; padding: 23px 20px 24px; border-bottom: 1px solid rgba(150, 190, 229, .08); }
+.sidebar { position: relative; z-index: 5; display: flex; width: 214px; flex: 0 0 214px; flex-direction: column; overflow: hidden; isolation: isolate; border-right: 1px solid rgba(150, 190, 229, .18); background: #06101d; backdrop-filter: blur(22px); }
+.sidebar::after { position: absolute; z-index: 0; inset: 0; background: linear-gradient(180deg, rgba(2, 12, 24, .18), rgba(3, 13, 25, .56) 42%, rgba(3, 13, 25, .95) 100%); content: ''; pointer-events: none; }
+.sidebar > :not(.sidebar-image) { position: relative; z-index: 1; }
+.brand-row { display: flex; align-items: center; gap: 10px; padding: 23px 20px 24px; border-bottom: 1px solid rgba(150, 190, 229, .12); background: linear-gradient(90deg, rgba(3, 14, 27, .5), transparent); }
 .brand-row strong { display: block; font-family: var(--display); font-size: 19px; letter-spacing: .08em; }
 .brand-row span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
 .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid rgba(142, 203, 255, .52); border-radius: 10px; color: #c8e4ff; background: linear-gradient(145deg, rgba(78, 155, 255, .34), rgba(26, 65, 106, .32)); box-shadow: 0 0 24px rgba(67, 151, 239, .24); }
 .main-nav { display: grid; gap: 4px; padding: 22px 10px; }
-.nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; text-align: left; transition: .2s ease; }
+.nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 1px solid transparent; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; letter-spacing: .01em; text-align: left; transition: .2s ease; }
 .nav-item:hover { color: #e6f1ff; background: rgba(90, 145, 205, .1); }
 .nav-item-active { color: #edf6ff; background: linear-gradient(100deg, rgba(37, 108, 199, .5), rgba(45, 88, 143, .16)); box-shadow: inset 3px 0 0 #4d9bff, 0 6px 22px rgba(0, 0, 0, .12); }
-.sidebar-image { height: 145px; flex: 0 0 145px; margin: auto 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(180deg, rgba(3, 13, 25, .12), rgba(3, 13, 25, .8)), url('/noesis-hero.jpg') center bottom / cover; box-shadow: inset 0 0 26px rgba(0, 0, 0, .28), 0 10px 30px rgba(0, 0, 0, .18); }
-.sidebar-bottom { margin-top: 0; padding: 12px 12px 18px; }
+.sidebar-image { position: absolute; z-index: 0; inset: 0; height: auto; flex: none; margin: 0; border: 0; border-radius: 0; background: url('/noesis-hero.jpg') center / cover no-repeat; box-shadow: inset 0 0 40px rgba(0, 0, 0, .32); opacity: .96; pointer-events: none; }
+.sidebar-bottom { margin-top: auto; padding: 12px 12px 18px; background: linear-gradient(180deg, transparent, rgba(3, 13, 25, .46) 18%, rgba(3, 13, 25, .72)); }
 .sidebar-search { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(12, 28, 46, .72); }
 .sidebar-search input, .top-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: #eaf4ff; background: transparent; font-size: 12px; }
 .sidebar-search input::placeholder, .top-search input::placeholder { color: #728aa4; }
@@ -36,7 +38,7 @@
 .quick-action:hover { border-color: var(--line-strong); color: #fff; background: rgba(48, 107, 172, .3); }
 
 .main-column { position: relative; z-index: 1; width: min(100%, 1510px); min-width: 0; margin: 0 auto; padding: 23px clamp(18px, 3vw, 46px) 52px; }
-.topbar { display: flex; align-items: flex-start; gap: 18px; min-height: 80px; }
+.topbar { display: flex; align-items: center; gap: 18px; min-height: 80px; }
 .greeting { flex: 1; min-width: 240px; }
 .greeting h1 { margin: 5px 0 1px; color: #f5f9ff; font-family: var(--display); font-size: clamp(27px, 3vw, 37px); letter-spacing: -.045em; line-height: 1.1; }
 .greeting h1 span { color: #6db4ff; }
@@ -55,7 +57,7 @@
 .content-column, .right-rail { min-width: 0; }
 .content-column { display: grid; gap: 30px; }
 .right-rail { display: grid; align-content: start; gap: 16px; }
-.panel-card, .rail-card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(140deg, rgba(24, 47, 72, .8), rgba(8, 24, 40, .7)); box-shadow: 0 18px 55px rgba(0, 0, 0, .14); }
+.panel-card, .rail-card { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(140deg, rgba(24, 47, 72, .8), rgba(8, 24, 40, .7)); box-shadow: 0 18px 55px rgba(0, 0, 0, .14); backdrop-filter: blur(16px); }
 .continue-card { display: grid; grid-template-columns: 115px minmax(0, 1fr) 225px; align-items: center; gap: 20px; min-height: 190px; padding: 20px; background: radial-gradient(circle at 74% 18%, rgba(73, 144, 215, .18), transparent 36%), linear-gradient(125deg, rgba(8, 25, 44, .83), rgba(8, 26, 44, .78)), url('/noesis-hero.jpg') center 42% / cover; }
 .continue-cover-wrap { display: flex; justify-content: center; }
 .book-cover { position: relative; display: flex; width: 112px; height: 150px; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 14px 12px 12px; border: 1px solid rgba(255, 255, 255, .34); border-radius: 8px; color: #f8f5e9; box-shadow: 7px 10px 19px rgba(0, 0, 0, .27); text-align: left; }
@@ -236,6 +238,7 @@
 .reader-landing .primary-button { min-height: 35px; }
 .welcome-panel { display: flex; align-items: center; justify-content: space-between; min-height: 180px; padding: 27px 30px; overflow: hidden; background: radial-gradient(circle at 75% 30%, rgba(68, 136, 206, .24), transparent 35%), linear-gradient(120deg, rgba(8, 29, 49, .93), rgba(10, 27, 46, .72)), url('/noesis-hero.jpg') center 48% / cover; }
 .welcome-panel h2 { max-width: 530px; margin: 6px 0 7px; color: #f3f8ff; font-family: var(--display); font-size: 29px; letter-spacing: -.04em; }
+.welcome-panel h2 span { color: #6db4ff; }
 .welcome-panel p:not(.eyebrow) { max-width: 510px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .welcome-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
 .welcome-orbit { display: grid; place-items: center; width: 120px; height: 120px; flex: 0 0 120px; border: 1px solid rgba(112, 190, 255, .42); border-radius: 50%; color: #b7e3ff; background: radial-gradient(circle, rgba(83, 157, 224, .3), rgba(9, 26, 45, .1) 62%); box-shadow: 0 0 42px rgba(55, 145, 232, .23); }
@@ -369,6 +372,8 @@
 .account-signed h3 { margin: 5px 0; overflow: hidden; color: #edf5ff; font-family: var(--display); font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
 .account-signed p { margin: 0; color: var(--muted); font-size: 11px; }
 .account-avatar { display: grid; place-items: center; width: 45px; height: 45px; flex: 0 0 45px; border: 1px solid rgba(104, 185, 255, .36); border-radius: 50%; color: #8bcaff; background: rgba(47, 122, 193, .18); }
+
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgba(112, 190, 255, .9); outline-offset: 2px; }
 
 @media (max-width: 820px) { .metric-grid, .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cloud-provider-grid { grid-template-columns: 1fr; } .create-form { grid-template-columns: 1fr; } .reader-body { grid-template-columns: 1fr; } .reader-toc { max-height: 160px; border-right: 0; border-bottom: 1px solid #d9d7d0; } .reader-frame-wrap, .reader-frame, .pdf-frame, .web-frame { min-height: 540px; } .suggested-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .welcome-panel { align-items: flex-start; padding: 21px; } .welcome-orbit { display: none; } .page-heading h2 { font-size: 26px; } .page-toolbar { align-items: stretch; flex-direction: column; } .field-with-icon { width: 100%; } .resource-grid { grid-template-columns: 1fr; } .reader-toolbar { flex-wrap: wrap; } .reader-title { order: 3; flex-basis: 100%; } .noema-top-button { padding: 8px; font-size: 0; } .noema-top-button svg { width: 17px; height: 17px; } .suggested-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .suggested-cover { height: 136px; } }
