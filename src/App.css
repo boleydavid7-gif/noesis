@@ -22,7 +22,8 @@
 .nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; text-align: left; transition: .2s ease; }
 .nav-item:hover { color: #e6f1ff; background: rgba(90, 145, 205, .1); }
 .nav-item-active { color: #edf6ff; background: linear-gradient(100deg, rgba(37, 108, 199, .5), rgba(45, 88, 143, .16)); box-shadow: inset 3px 0 0 #4d9bff, 0 6px 22px rgba(0, 0, 0, .12); }
-.sidebar-bottom { margin-top: auto; padding: 12px 12px 18px; }
+.sidebar-image { height: 145px; flex: 0 0 145px; margin: auto 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: linear-gradient(180deg, rgba(3, 13, 25, .12), rgba(3, 13, 25, .8)), url('/noesis-hero.jpg') center bottom / cover; box-shadow: inset 0 0 26px rgba(0, 0, 0, .28), 0 10px 30px rgba(0, 0, 0, .18); }
+.sidebar-bottom { margin-top: 0; padding: 12px 12px 18px; }
 .sidebar-search { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(12, 28, 46, .72); }
 .sidebar-search input, .top-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: #eaf4ff; background: transparent; font-size: 12px; }
 .sidebar-search input::placeholder, .top-search input::placeholder { color: #728aa4; }
@@ -310,6 +311,9 @@
 .reader-footer { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 10px; }
 .reader-footer-actions { display: flex; align-items: center; gap: 8px; }
 .reader-footer .secondary-button { min-height: 33px; }
+.reader-manual-progress { display: flex; align-items: center; gap: 8px; min-width: 190px; color: var(--muted); font-size: 10px; }
+.reader-manual-progress input { width: 115px; accent-color: #4aa8ff; }
+.reader-manual-progress b { color: #dcecff; font-size: 10px; }
 .noema-top-button { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 9px 12px; border: 1px solid rgba(122, 185, 238, .26); border-radius: 9px; color: #c9e5ff; background: rgba(25, 61, 95, .55); font-size: 11px; font-weight: 700; }
 .noema-top-button:hover { border-color: #6bb9ff; background: rgba(47, 107, 164, .6); }
 .noema-panel { display: flex; width: min(100%, 440px); height: max-content; max-height: calc(100vh - 44px); flex-direction: column; gap: 17px; overflow-y: auto; margin: 22px; padding: 25px 22px 28px; border: 1px solid rgba(132, 190, 238, .2); border-radius: 16px; background: linear-gradient(165deg, #0b2035, #071321 72%); box-shadow: 0 18px 65px rgba(0, 0, 0, .45); }
@@ -410,6 +414,8 @@
   .right-rail { grid-template-columns: 1fr; }
   .tutor-card { grid-column: auto; }
   .reader-preview-body { align-items: flex-start; flex-direction: column; padding: 15px; }
+  .reader-manual-progress { min-width: 150px; }
+  .reader-manual-progress input { width: 85px; }
   .reader-copy h3 { font-size: 18px; }
   .note-tabs { overflow-x: auto; }
   .note-tab { padding-inline: 12px; white-space: nowrap; }
