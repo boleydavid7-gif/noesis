@@ -20,13 +20,15 @@ export type LibraryBook = {
   fileSize?: number
   cfi?: string
   currentHref?: string
+  bookmarked?: boolean
   toc?: Array<{ label: string; href: string }>
 }
 
 const BOOKS_KEY = 'noesis:library:v2'
 const DB_NAME = 'noesis-library'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const FILE_STORE = 'epub-files'
+const TEXT_STORE = 'book-text'
 
 function storage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage
@@ -73,6 +75,7 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(FILE_STORE)) request.result.createObjectStore(FILE_STORE)
+      if (!request.result.objectStoreNames.contains(TEXT_STORE)) request.result.createObjectStore(TEXT_STORE)
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('Could not open local book storage.'))
@@ -109,8 +112,9 @@ export async function deleteEpubFile(id: string): Promise<void> {
   try {
     const db = await openDatabase()
     await new Promise<void>((resolve) => {
-      const transaction = db.transaction(FILE_STORE, 'readwrite')
+      const transaction = db.transaction([FILE_STORE, TEXT_STORE], 'readwrite')
       transaction.objectStore(FILE_STORE).delete(id)
+      transaction.objectStore(TEXT_STORE).delete(id)
       transaction.oncomplete = () => resolve()
       transaction.onerror = () => resolve()
     })
@@ -118,4 +122,25 @@ export async function deleteEpubFile(id: string): Promise<void> {
   } catch {
     // Metadata can still be removed when IndexedDB is unavailable.
   }
+}
+
+export async function saveBookText(id: string, value: string): Promise<void> {
+  if (!value.trim()) return
+  const db = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(TEXT_STORE, 'readwrite')
+    transaction.objectStore(TEXT_STORE).put(value, id)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error ?? new Error('Could not save the book text.'))
+  })
+  db.close()
+}
+
+export async function loadBookText(id: string): Promise<string | null> {
+  const db = await openDatabase()
+  return new Promise<string | null>((resolve, reject) => {
+    const request = db.transaction(TEXT_STORE, 'readonly').objectStore(TEXT_STORE).get(id)
+    request.onsuccess = () => { db.close(); resolve(typeof request.result === 'string' ? request.result : null) }
+    request.onerror = () => { db.close(); reject(request.error ?? new Error('Could not load the book text.')) }
+  })
 }
