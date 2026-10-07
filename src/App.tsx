@@ -47,6 +47,11 @@ function displayNameFor(user: User | null): string {
   const name = [metadata?.full_name, metadata?.name, metadata?.display_name].find((value): value is string => typeof value === 'string' && value.trim().length > 0)
   return name?.trim() || user.email?.split('@')[0] || ''
 }
+function friendlyBookError(reason: unknown, fallback: string): string {
+  const message = reason instanceof Error ? reason.message : ''
+  if (/zip|slice|central directory|corrupt|invalid/i.test(message)) return 'Noesis could not open this EPUB. Make sure it is a complete, DRM-free .epub file, not a preview page.'
+  return message || fallback
+}
 function relevantExcerpt(text: string, question: string, limit = 30_000): string {
   if (text.length <= limit) return text
   const terms = question.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3)
@@ -107,7 +112,7 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
         instance.on('relocated', (location: { start?: { percentage?: number; cfi?: string; href?: string } }) => { const startLocation = location.start; if (!startLocation) return; const progress = Math.round(Math.max(0, Math.min(1, startLocation.percentage ?? 0)) * 100); const found = (currentBook.toc ?? []).find((item) => startLocation.href?.includes(item.href.split('#')[0])); setChapter(found?.label ?? currentBook.chapter); reportProgress(progress, startLocation.cfi, startLocation.href, found?.label) })
         instance.on('selected', (_cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (text) saveHighlight(`Highlight from ${currentBook.title}: ${text}`) })
         await instance.display(currentBook.cfi || undefined)
-      } catch (reason) { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not open this EPUB.') } finally { if (!cancelled) setLoading(false) }
+      } catch (reason) { if (!cancelled) setError(friendlyBookError(reason, 'Could not open this EPUB.')) } finally { if (!cancelled) setLoading(false) }
     }
     void start(); return () => { cancelled = true; rendition.current?.destroy(); epubRef.current?.destroy(); rendition.current = null; epubRef.current = null }
   }, [book.id, bookRef, readerCallbacksRef])
@@ -155,7 +160,7 @@ function App() {
   function selectNav(label: string) { setMobileNavOpen(false); if (label === 'Second Brain') { setOverlay('brain'); return }; if (label === 'Ask Noema') { setOverlay('noema'); return }; setActiveNav(label); setSelectedBookId(label === 'Read' ? selectedBookId : null) }
   function openNotePanel(seed = '') { setNoteDraft({ title: seed ? 'Saved highlight' : '', body: seed, source: selectedBook ? `${selectedBook.title} · ${selectedBook.chapter}` : 'Noesis' }); setOverlay('brain') }
   function openNoemaPanel(seed = '') { setTutorPrompt(seed); setTutorReply(''); setOverlay('noema') }
-  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; const isEpub = file.name.toLowerCase().endsWith('.epub'); const isPdf = file.name.toLowerCase().endsWith('.pdf'); if (!isEpub && !isPdf) { showNotice('Noesis imports EPUB and PDF files.'); return }; try { const data = await file.arrayBuffer(); const parsed = isEpub ? await parseEpub(data, file.name) : null; const book = parsed ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed) : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, file.name, file.size, file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '), 'Imported PDF'); await saveEpubFile(book.id, data); if (parsed?.text) await saveBookText(book.id, parsed.text); setBooks(upsertLibraryBook(book)); setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added to your library.`) } catch (reason) { showNotice(reason instanceof Error ? reason.message : 'Could not read that file.') } }
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; const isEpub = file.name.toLowerCase().endsWith('.epub'); const isPdf = file.name.toLowerCase().endsWith('.pdf'); if (!isEpub && !isPdf) { showNotice('Noesis imports EPUB and PDF files.'); return }; try { const data = await file.arrayBuffer(); const parsed = isEpub ? await parseEpub(data, file.name) : null; const book = parsed ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed) : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, file.name, file.size, file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '), 'Imported PDF'); await saveEpubFile(book.id, data); if (parsed?.text) await saveBookText(book.id, parsed.text); setBooks(upsertLibraryBook(book)); setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added to your library.`) } catch (reason) { showNotice(friendlyBookError(reason, 'Could not read that file.')) } }
   function updateBookProgress(id: string, progress: number, cfi?: string, href?: string, chapter?: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, progress, cfi: cfi ?? book.cfi, currentHref: href ?? book.currentHref, chapter: chapter ?? book.chapter, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   function toggleBookmark(id: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, bookmarked: !book.bookmarked, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   async function saveNote(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const body = noteDraft.body.trim(); if (body.length < 2) { showNotice('Write a note or highlight first.'); return }; const note: Note = { id: `local-${crypto.randomUUID()}`, kind: noteDraft.title.toLowerCase().includes('question') ? 'question' : noteDraft.title.toLowerCase().includes('idea') ? 'idea' : 'note', title: noteDraft.title.trim() || 'Quick note', body, source: noteDraft.source.trim() || 'Noesis', createdAt: new Date().toISOString() }; setNotes((current) => [note, ...current]); setNoteDraft({ title: '', body: '', source: '' }); const destination = await persistNote(note); showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device. It will sync when Supabase is available.') }
@@ -205,7 +210,7 @@ function App() {
         showNotice(`${resource.title} was imported into your library.`)
         return
       } catch (reason) {
-        showNotice(reason instanceof Error ? `${reason.message} You can still open the source page.` : 'The download failed. You can still open the source page.')
+        showNotice(`${friendlyBookError(reason, 'The download failed.')} You can still open the source page.`)
       }
     }
     const book: LibraryBook = {
