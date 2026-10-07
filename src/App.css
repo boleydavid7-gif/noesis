@@ -310,6 +310,7 @@
 .reader-settings label span { color: var(--muted-2); }
 .reader-settings input { width: 86px; accent-color: #5baaf0; }
 .reader-settings select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; color: #c9e4f9; background: rgba(12, 33, 53, .8); font-size: 10px; }
+.reader-settings .reader-mode-select { min-width: 92px; }
 .reader-settings .secondary-button { min-height: 28px; padding: 5px 9px; font-size: 10px; }
 .reader-progress { height: 4px; overflow: hidden; border-radius: 4px; background: rgba(123, 169, 211, .16); }
 .reader-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4c9cff, #55d7c5); transition: width .3s ease; }
@@ -349,6 +350,8 @@
 .reader-page-wide .reader-frame-epub > .reader-frame, .reader-page-wide .reader-frame-epub > .reader-overlay { grid-column: 1; }
 .reader-page-wide .reader-frame { display: block; width: 100%; min-height: 0; height: 100%; }
 .reader-page-wide .reader-overlay { background: rgba(245, 244, 238, .92); }
+.reader-page-scroll .reader-frame { overflow: auto; }
+.reader-page-scroll .reader-frame .epub-container { min-height: 100%; }
 .reader-page-turn-next .reader-frame { animation: reader-turn-next .34s ease both; }
 .reader-page-turn-previous .reader-frame { animation: reader-turn-previous .34s ease both; }
 @keyframes reader-turn-next { from { opacity: .35; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
@@ -430,7 +433,7 @@
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgba(112, 190, 255, .9); outline-offset: 2px; }
 
 @media (max-width: 820px) { .metric-grid, .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cloud-provider-grid { grid-template-columns: 1fr; } .create-form { grid-template-columns: 1fr; } .reader-frame-wrap, .reader-frame, .pdf-frame, .web-frame { min-height: 540px; } .reader-page-control, .reader-inline-page-button { display: grid; } .suggested-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 620px) { .welcome-panel { align-items: flex-start; padding: 21px; } .welcome-orbit { display: none; } .page-heading h2 { font-size: 26px; } .page-toolbar { align-items: stretch; flex-direction: column; } .field-with-icon { width: 100%; } .resource-grid { grid-template-columns: 1fr; } .reader-toolbar { flex-wrap: wrap; gap: 9px; } .reader-toolbar > .secondary-button { flex: 0 0 auto; } .reader-title { order: 3; flex-basis: 100%; } .reader-controls { min-width: 0; margin-left: auto; } .reader-contents-select { width: 112px; max-width: 112px; } .reader-page-control { display: none; } .noema-top-button { padding: 8px; font-size: 0; } .noema-top-button svg { width: 17px; height: 17px; } .suggested-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .suggested-cover { height: 136px; } }
+@media (max-width: 620px) { .welcome-panel { align-items: flex-start; padding: 21px; } .welcome-orbit { display: none; } .page-heading h2 { font-size: 26px; } .page-toolbar { align-items: stretch; flex-direction: column; } .field-with-icon { width: 100%; } .resource-grid { grid-template-columns: 1fr; } .reader-toolbar { flex-wrap: wrap; gap: 9px; } .reader-toolbar > .secondary-button { flex: 0 0 auto; } .reader-title { order: 3; flex-basis: 100%; } .reader-controls { min-width: 0; margin-left: auto; } .reader-contents-select { width: 112px; max-width: 112px; } .reader-settings { flex-wrap: wrap; } .reader-page-control { display: none; } .noema-top-button { padding: 8px; font-size: 0; } .noema-top-button svg { width: 17px; height: 17px; } .suggested-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .suggested-cover { height: 136px; } }
 
 @media (max-width: 1180px) {
   .dashboard-grid { grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; }
@@ -479,7 +482,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .reader-preview-body { align-items: flex-start; flex-direction: column; padding: 15px; }
   .reader-manual-progress { min-width: 150px; }
   .reader-manual-progress input { width: 85px; }
-  .reader-page:not(.reader-page-wide) .reader-footer { position: fixed; z-index: 31; right: 20px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 20px; min-height: 42px; padding: 5px 9px; border: 1px solid rgba(130, 190, 238, .22); border-radius: 12px; background: rgba(6, 24, 41, .94); box-shadow: 0 12px 28px rgba(0, 0, 0, .3); backdrop-filter: blur(16px); }
+  .reader-page:not(.reader-page-wide) .reader-footer { position: fixed; z-index: 31; right: 20px; bottom: calc(104px + env(safe-area-inset-bottom)); left: 20px; min-height: 42px; padding: 5px 9px; border: 1px solid rgba(130, 190, 238, .22); border-radius: 12px; background: rgba(6, 24, 41, .94); box-shadow: 0 12px 28px rgba(0, 0, 0, .3); backdrop-filter: blur(16px); }
   .reader-page:not(.reader-page-wide) .reader-body { min-height: calc(100svh - 285px); height: calc(100svh - 285px); }
   .reader-page:not(.reader-page-wide) .reader-frame-wrap, .reader-page:not(.reader-page-wide) .reader-frame-epub, .reader-page:not(.reader-page-wide) .reader-frame { min-height: 0; height: 100%; }
   .reader-page-wide { padding-inline: 8px; }
