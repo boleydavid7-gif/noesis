@@ -74,23 +74,23 @@ function useLatest<T>(value: T): React.MutableRefObject<T> {
 }
 
 type ReaderTheme = 'paper' | 'sepia' | 'night'
-type ReaderMode = 'swipe' | 'scroll'
 type PageDirection = 'next' | 'previous'
+type ReaderChapter = { label: string; href: string }
+type ReaderLocation = { start?: { index?: number; percentage?: number; cfi?: string; href?: string; displayed?: { page?: number; total?: number } } }
 
-function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book: LibraryBook; onClose: () => void; onProgress: (progress: number, cfi?: string, href?: string, chapter?: string) => void; onNote: (text: string) => void; onAsk: (prompt: string) => void; onBookmark: () => void }) {
+function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book: LibraryBook; onClose: () => void; onProgress: (progress: number, cfi?: string, href?: string, chapter?: string, chapterIndex?: number, chapterProgress?: number) => void; onNote: (text: string) => void; onAsk: (prompt: string) => void; onBookmark: () => void }) {
   const frame = useRef<HTMLDivElement>(null)
   const rendition = useRef<Awaited<ReturnType<typeof openEpub>>['renderTo'] extends (...args: never[]) => infer R ? R : never>(null)
   const epubRef = useRef<Awaited<ReturnType<typeof openEpub>> | null>(null)
   const external = book.format === 'web' || book.format === 'resource'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [toc, setToc] = useState(book.toc ?? [])
-  const [chapter, setChapter] = useState(book.chapter)
-  const [chapterHref, setChapterHref] = useState(book.currentHref ?? book.toc?.[0]?.href ?? '')
+  const [toc, setToc] = useState<ReaderChapter[]>(book.toc?.filter((item) => item.href.trim()) ?? [])
+  const [chapterIndex, setChapterIndex] = useState(Math.max(0, book.chapterIndex ?? 0))
+  const [chapterProgress, setChapterProgress] = useState(Math.max(0, Math.min(1, book.chapterProgress ?? 0)))
   const [pdfUrl, setPdfUrl] = useState('')
   const [fontSize, setFontSize] = useState(100)
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>('paper')
-  const [readerMode, setReaderMode] = useState<ReaderMode>(() => typeof window !== 'undefined' && window.localStorage.getItem('noesis:reader-mode') === 'scroll' ? 'scroll' : 'swipe')
   const [wideLayout, setWideLayout] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -98,13 +98,25 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
   const [pageTurn, setPageTurn] = useState<PageDirection | null>(null)
   const bookRef = useLatest(book)
   const readerCallbacksRef = useLatest({ onProgress, onNote })
-  const turnPage = (direction: PageDirection) => {
-    if (book.format !== 'epub' || !rendition.current) return
-    setPageTurn(direction)
-    void (direction === 'next' ? rendition.current.next() : rendition.current.prev())
+  const chaptersRef = useLatest(toc)
+  const currentChapter = toc[chapterIndex] ?? { label: book.chapter || 'Opening', href: book.currentHref ?? '' }
+  const chapterCount = toc.length
+  const clampFraction = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
+  const overallProgress = (index: number, fraction: number, count = chapterCount) => count > 0 ? Math.round(((Math.max(0, Math.min(index, count - 1)) + clampFraction(fraction)) / count) * 100) : Math.round(clampFraction(fraction) * 100)
+  const visibleProgress = chapterCount > 0 ? overallProgress(chapterIndex, chapterProgress) : Math.round(book.progress)
+  const goToChapter = (targetIndex: number) => {
+    const chapters = chaptersRef.current
+    const target = chapters[targetIndex]
+    if (!target || !rendition.current || targetIndex < 0 || targetIndex >= chapters.length) return
+    setChapterIndex(targetIndex)
+    setChapterProgress(0)
+    setPageTurn(targetIndex > chapterIndex ? 'next' : 'previous')
+    const progress = overallProgress(targetIndex, 0, chapters.length)
+    readerCallbacksRef.current.onProgress(progress, undefined, target.href, target.label, targetIndex, 0)
+    void rendition.current.display(target.href)
     window.setTimeout(() => setPageTurn(null), 360)
   }
-  const turnPageRef = useLatest(turnPage)
+  const goToChapterRef = useLatest(goToChapter)
   const searchCount = useMemo(() => { const query = searchTerm.trim().toLowerCase(); if (!query || !bookText) return 0; return bookText.toLowerCase().split(query).length - 1 }, [bookText, searchTerm])
   const searchSnippet = useMemo(() => { const query = searchTerm.trim().toLowerCase(); const index = query && bookText ? bookText.toLowerCase().indexOf(query) : -1; return index >= 0 ? `${index > 90 ? '…' : ''}${bookText.slice(Math.max(0, index - 90), index + query.length + 170)}…` : '' }, [bookText, searchTerm])
   useEffect(() => {
@@ -129,15 +141,11 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
     observer?.observe(element)
     window.addEventListener('resize', resize)
     resize()
-    return () => {
-      window.cancelAnimationFrame(firstFrame)
-      window.cancelAnimationFrame(secondFrame)
-      observer?.disconnect()
-      window.removeEventListener('resize', resize)
-    }
+    return () => { window.cancelAnimationFrame(firstFrame); window.cancelAnimationFrame(secondFrame); observer?.disconnect(); window.removeEventListener('resize', resize) }
   }, [book.format, wideLayout, loading])
   useEffect(() => {
     let cancelled = false
+    let cleanupReading = () => undefined
     const currentBook = bookRef.current
     const { onProgress: reportProgress, onNote: saveHighlight } = readerCallbacksRef.current
     const isExternal = currentBook.format === 'web' || currentBook.format === 'resource'
@@ -145,47 +153,101 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
       setLoading(true); setError('')
       try {
         if (isExternal) { setLoading(false); return }
-        const data = await loadEpubFile(currentBook.id); if (!data) throw new Error('This EPUB is no longer stored on this device. Import it again to continue reading.')
-        if (currentBook.format === 'pdf') { const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); if (!cancelled) { setPdfUrl(url); setLoading(false) }; return () => URL.revokeObjectURL(url) }
-        const epub = await openEpub(data); if (cancelled || !frame.current) { epub.destroy(); return }; epubRef.current = epub
-        const navigation = await epub.loaded.navigation; setToc(navigation.toc?.map((item) => ({ label: item.label, href: item.href })) ?? currentBook.toc ?? [])
-        const instance = epub.renderTo(frame.current, { width: '100%', height: '100%', flow: readerMode === 'scroll' ? 'scrolled-doc' : 'paginated', spread: 'none' }); rendition.current = instance
-        instance.on('relocated', (location: { start?: { percentage?: number; cfi?: string; href?: string } }) => { const startLocation = location.start; if (!startLocation) return; const progress = Math.round(Math.max(0, Math.min(1, startLocation.percentage ?? 0)) * 100); const found = (currentBook.toc ?? []).find((item) => startLocation.href?.includes(item.href.split('#')[0])); setChapter(found?.label ?? currentBook.chapter); setChapterHref(found?.href ?? startLocation.href ?? currentBook.currentHref ?? ''); reportProgress(progress, startLocation.cfi, startLocation.href, found?.label) })
-        instance.on('selected', (_cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (text) saveHighlight(`Highlight from ${currentBook.title}: ${text}`) })
-        const swipeDocuments = new Set<Document>()
-        let swipeStartX: number | null = null
-        const pointX = (event: TouchEvent | PointerEvent) => 'changedTouches' in event ? event.changedTouches[0]?.clientX ?? null : event.clientX
-        const onSwipeStart = (event: TouchEvent | PointerEvent) => { swipeStartX = pointX(event) }
-        const onSwipeEnd = (event: TouchEvent | PointerEvent) => { if (swipeStartX === null) return; const endX = pointX(event) ?? swipeStartX; const distance = endX - swipeStartX; swipeStartX = null; if (readerMode === 'swipe' && Math.abs(distance) >= 45) turnPageRef.current(distance < 0 ? 'next' : 'previous') }
-        const attachSwipe = (document: Document) => {
-          if (readerMode !== 'swipe' || swipeDocuments.has(document)) return
-          swipeDocuments.add(document)
-          if ('PointerEvent' in window) {
-            document.addEventListener('pointerdown', onSwipeStart as EventListener, { passive: true })
-            document.addEventListener('pointerup', onSwipeEnd as EventListener, { passive: true })
-          } else {
-            document.addEventListener('touchstart', onSwipeStart as EventListener, { passive: true })
-            document.addEventListener('touchend', onSwipeEnd as EventListener, { passive: true })
-          }
+        const data = await loadEpubFile(currentBook.id)
+        if (!data) throw new Error('This EPUB is no longer stored on this device. Import it again to continue reading.')
+        if (currentBook.format === 'pdf') { const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' })); if (!cancelled) { setPdfUrl(url); setLoading(false) }; return }
+        const epub = await openEpub(data)
+        if (cancelled || !frame.current) { epub.destroy(); return }
+        epubRef.current = epub
+        const navigation = await epub.loaded.navigation
+        const navigationChapters = (navigation.toc ?? []).map((item) => ({ label: typeof item.label === 'string' && item.label.trim() ? item.label.trim() : 'Untitled chapter', href: typeof item.href === 'string' ? item.href.trim() : '' })).filter((item) => item.href)
+        const spineItems = await epub.loaded.spine
+        const spineChapters = spineItems.map((item, index) => ({ label: `Chapter ${index + 1}`, href: item.href?.trim() || item.url?.trim() || '' })).filter((item) => item.href)
+        const savedChapters = currentBook.toc?.filter((item) => item.href.trim()).map((item) => ({ label: item.label || 'Untitled chapter', href: item.href })) ?? []
+        const chapters = savedChapters.length > 0 ? savedChapters : navigationChapters.length > 0 ? navigationChapters : spineChapters
+        const initialIndexByHref = currentBook.currentHref ? chapters.findIndex((item) => currentBook.currentHref?.includes(item.href.split('#')[0])) : -1
+        const initialIndex = Math.max(0, Math.min(chapters.length - 1, currentBook.chapterIndex ?? (initialIndexByHref >= 0 ? initialIndexByHref : 0)))
+        const initialChapterProgress = clampFraction(currentBook.chapterProgress ?? (chapters.length > 0 ? ((currentBook.progress / 100) * chapters.length) - initialIndex : currentBook.progress / 100))
+        setToc(chapters); setChapterIndex(initialIndex); setChapterProgress(initialChapterProgress)
+        const instance = epub.renderTo(frame.current, { width: '100%', height: '100%', flow: 'scrolled-doc', spread: 'none' }); rendition.current = instance
+        let activeChapterIndex = initialIndex
+        let scrollTimer: number | undefined
+        const scrollTargets = new Set<EventTarget>()
+        const scrollFraction = (target: EventTarget | null): number | undefined => {
+          const element = target instanceof Document ? target.scrollingElement ?? target.documentElement : target instanceof HTMLElement ? target : null
+          if (!element) return undefined
+          const max = element.scrollHeight - element.clientHeight
+          return max > 0 ? clampFraction(element.scrollTop / max) : undefined
         }
-        instance.on('rendered', (_section: unknown, view: { contents?: { document?: Document } }) => { const document = view?.contents?.document; if (document) attachSwipe(document) })
-        await instance.display(currentBook.cfi || undefined)
+        const activeFraction = () => {
+          const iframe = frame.current?.querySelector('iframe')
+          const contentDocument = iframe?.contentDocument
+          const targets: EventTarget[] = [contentDocument?.scrollingElement, contentDocument?.documentElement, contentDocument?.body, frame.current?.querySelector('.epub-container')].filter(Boolean) as EventTarget[]
+          const values = targets.map((target) => scrollFraction(target)).filter((value): value is number => value !== undefined)
+          return values.length > 0 ? values.sort((a, b) => b - a)[0] : undefined
+        }
+        const chapterFromLocation = (location: ReaderLocation) => {
+          const href = location.start?.href
+          const found = chapters.findIndex((item) => href?.includes(item.href.split('#')[0]))
+          if (found >= 0) return found
+          const index = location.start?.index
+          return typeof index === 'number' ? Math.max(0, Math.min(chapters.length - 1, index)) : activeChapterIndex
+        }
+        const reportLocation = (location: ReaderLocation | undefined, fractionOverride?: number) => {
+          if (!location?.start) return
+          const nextIndex = chapterFromLocation(location)
+          activeChapterIndex = nextIndex
+          const displayed = location.start.displayed
+          const displayedFraction = displayed?.total && displayed.total > 0 ? ((displayed.page ?? 1) - 1) / displayed.total : undefined
+          const fraction = clampFraction(fractionOverride ?? activeFraction() ?? displayedFraction ?? location.start.percentage ?? 0)
+          const label = chapters[nextIndex]?.label ?? currentBook.chapter
+          const progress = overallProgress(nextIndex, fraction, chapters.length)
+          setChapterIndex(nextIndex); setChapterProgress(fraction)
+          reportProgress(progress, location.start.cfi, location.start.href ?? chapters[nextIndex]?.href, label, nextIndex, fraction)
+        }
+        const handleScroll = (event: Event) => {
+          if (scrollTimer) return
+          scrollTimer = window.setTimeout(() => {
+            scrollTimer = undefined
+            const location = instance.currentLocation() as ReaderLocation | Promise<ReaderLocation> | undefined
+            void Promise.resolve(location).then((value) => reportLocation(value, scrollFraction(event.target)))
+          }, 120)
+        }
+        const attachScroll = (target: EventTarget | null) => {
+          if (!target || scrollTargets.has(target)) return
+          scrollTargets.add(target)
+          target.addEventListener('scroll', handleScroll, { passive: true } as AddEventListenerOptions)
+        }
+        const attachView = (_section: unknown, view: { contents?: { document?: Document } }) => {
+          const contentDocument = view?.contents?.document
+          if (!contentDocument) return
+          attachScroll(contentDocument); attachScroll(contentDocument.scrollingElement); attachScroll(contentDocument.documentElement); attachScroll(contentDocument.body)
+        }
+        instance.on('relocated', (location: ReaderLocation) => reportLocation(location))
+        instance.on('rendered', attachView)
+        instance.on('selected', (_cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (text) saveHighlight(`Highlight from ${currentBook.title}: ${text}`) })
+        const firstChapter = chapters[initialIndex]?.href
+        await instance.display(currentBook.cfi || currentBook.currentHref || firstChapter || undefined)
         const iframe = frame.current?.querySelector('iframe')
-        if (iframe?.contentDocument) attachSwipe(iframe.contentDocument)
-        const cleanupSwipe = () => { swipeDocuments.forEach((document) => { if ('PointerEvent' in window) { document.removeEventListener('pointerdown', onSwipeStart as EventListener); document.removeEventListener('pointerup', onSwipeEnd as EventListener) } else { document.removeEventListener('touchstart', onSwipeStart as EventListener); document.removeEventListener('touchend', onSwipeEnd as EventListener) } }); swipeDocuments.clear() }
-        ;(instance as unknown as { __noesisCleanupSwipe?: () => void }).__noesisCleanupSwipe = cleanupSwipe
+        if (iframe?.contentDocument) attachView(undefined, { contents: { document: iframe.contentDocument } })
+        const initialLocation = instance.currentLocation() as ReaderLocation | Promise<ReaderLocation> | undefined
+        void Promise.resolve(initialLocation).then((location) => reportLocation(location, initialChapterProgress))
+        cleanupReading = () => { if (scrollTimer) window.clearTimeout(scrollTimer); scrollTargets.forEach((target) => target.removeEventListener('scroll', handleScroll)); scrollTargets.clear() }
       } catch (reason) { if (!cancelled) setError(friendlyBookError(reason, 'Could not open this EPUB.')) } finally { if (!cancelled) setLoading(false) }
     }
-    void start(); return () => { cancelled = true; const activeRendition = rendition.current as (typeof rendition.current & { __noesisCleanupSwipe?: () => void }) | null; activeRendition?.__noesisCleanupSwipe?.(); activeRendition?.destroy(); epubRef.current?.destroy(); rendition.current = null; epubRef.current = null }
-  }, [book.id, bookRef, readerCallbacksRef, readerMode, turnPageRef])
+    void start()
+    return () => { cancelled = true; cleanupReading(); rendition.current?.destroy(); epubRef.current?.destroy(); rendition.current = null; epubRef.current = null }
+  }, [book.id, bookRef, readerCallbacksRef])
   useEffect(() => { if (book.format !== 'epub') return; let active = true; void loadBookText(book.id).then((value) => { if (active) setBookText(value ?? '') }).catch(() => undefined); return () => { active = false } }, [book.id, book.format])
   useEffect(() => { const current = rendition.current; if (!current || book.format !== 'epub') return; const colors = readerTheme === 'night' ? { background: '#111a22', color: '#dce8f2' } : readerTheme === 'sepia' ? { background: '#f1e6d0', color: '#4b3b2c' } : { background: '#f6f2e9', color: '#233a4e' }; current.themes.fontSize(`${fontSize}%`); current.themes.override('background-color', colors.background, true); current.themes.override('color', colors.color, true); current.themes.override('line-height', '1.65', true) }, [book.format, fontSize, readerTheme])
-  return <section className={'reader-page panel-card ' + (wideLayout ? 'reader-page-wide' : '') + (readerMode === 'scroll' ? ' reader-page-scroll' : '') + (pageTurn ? ' reader-page-turn-' + pageTurn : '')}>
-    {wideLayout ? <div className="reader-wide-topbar" aria-label="Focus reader controls"><div className="reader-wide-actions"><button className="icon-button" onClick={() => onNote('')} aria-label="Open Second Brain" title="Second Brain"><Brain size={18} /></button><button className="icon-button" onClick={() => onAsk('Explain the current page or chapter')} aria-label="Ask Noema" title="Ask Noema"><Sparkles size={18} /></button><button className="icon-button" onClick={() => setWideLayout(false)} aria-label="Exit focus reader" title="Exit focus reader"><Minimize2 size={18} /></button></div></div> : <div className="reader-toolbar"><button className="secondary-button" onClick={onClose}><ArrowLeft size={15} /> Library</button><div className="reader-title"><strong>{book.title}</strong><span>{book.format === 'pdf' ? 'PDF document' : external ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source' : chapter}</span></div><div className="reader-controls">{book.format === 'epub' ? <select className="reader-contents-select" value={chapterHref} onChange={(event) => { setChapterHref(event.target.value); void rendition.current?.display(event.target.value) }} aria-label="Contents">{toc.length === 0 ? <option value="">Contents</option> : toc.map((item) => <option key={item.href + '-' + item.label} value={item.href}>{item.label}</option>)}</select> : null}<button className={'icon-button' + (book.bookmarked ? ' reader-bookmarked' : '')} onClick={onBookmark} aria-label={book.bookmarked ? 'Remove bookmark' : 'Bookmark this location'} aria-pressed={Boolean(book.bookmarked)}><Bookmark size={16} fill={book.bookmarked ? 'currentColor' : 'none'} /></button>{book.format === 'epub' ? <><button className="icon-button" onClick={() => setSearchOpen((value) => !value)} aria-label="Search this book" aria-pressed={searchOpen}><Search size={17} /></button><button className="icon-button reader-page-control" onClick={() => turnPage('previous')} aria-label="Previous page"><ArrowLeft size={17} /></button><button className="icon-button reader-page-control" onClick={() => turnPage('next')} aria-label="Next page"><ArrowRight size={17} /></button></> : null}</div></div>}
+  const handleChapterSelect = (href: string) => { const index = toc.findIndex((item) => item.href === href); if (index >= 0) goToChapterRef.current(index) }
+  const chapterLabel = chapterCount > 0 ? `${chapterIndex + 1} of ${chapterCount}` : 'Opening'
+  return <section className={'reader-page panel-card ' + (wideLayout ? 'reader-page-wide' : '') + (pageTurn ? ' reader-page-turn-' + pageTurn : '')}>
+    {wideLayout ? <div className="reader-wide-topbar" aria-label="Focus reader controls"><div className="reader-wide-actions"><button className="icon-button" onClick={() => onNote('')} aria-label="Open Second Brain" title="Second Brain"><Brain size={18} /></button><button className="icon-button" onClick={() => onAsk('Explain the current page or chapter')} aria-label="Ask Noema" title="Ask Noema"><Sparkles size={18} /></button><button className="icon-button" onClick={() => setWideLayout(false)} aria-label="Exit focus reader" title="Exit focus reader"><Minimize2 size={18} /></button></div></div> : <div className="reader-toolbar"><button className="secondary-button" onClick={onClose}><ArrowLeft size={15} /> Library</button><div className="reader-title"><strong>{book.title}</strong><span>{book.format === 'pdf' ? 'PDF document' : external ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source' : currentChapter.label}</span></div><div className="reader-controls">{book.format === 'epub' ? <select className="reader-contents-select" value={currentChapter.href} onChange={(event) => handleChapterSelect(event.target.value)} aria-label="Contents">{toc.length === 0 ? <option value="">Contents</option> : toc.map((item) => <option key={item.href + '-' + item.label} value={item.href}>{item.label}</option>)}</select> : null}<button className={'icon-button' + (book.bookmarked ? ' reader-bookmarked' : '')} onClick={onBookmark} aria-label={book.bookmarked ? 'Remove bookmark' : 'Bookmark this location'} aria-pressed={Boolean(book.bookmarked)}><Bookmark size={16} fill={book.bookmarked ? 'currentColor' : 'none'} /></button>{book.format === 'epub' ? <button className="icon-button" onClick={() => setSearchOpen((value) => !value)} aria-label="Search this book" aria-pressed={searchOpen}><Search size={17} /></button> : null}</div></div>}
     {!wideLayout && book.format === 'epub' && searchOpen ? <div className="reader-search"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search this book" autoFocus /><span>{searchTerm.trim() ? (bookText ? searchCount + ' ' + (searchCount === 1 ? 'match' : 'matches') : 'Preparing search…') : 'Searches the imported text'}</span></div> : null}
     {!wideLayout && book.format === 'epub' && searchOpen && searchSnippet ? <div className="reader-search-result">{searchSnippet}</div> : null}
-    {!wideLayout && book.format === 'epub' ? <div className="reader-settings"><label><Type size={14} /><span>Text</span><input type="range" min="85" max="125" step="5" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} aria-label="Text size" /></label><select value={readerTheme} onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)} aria-label="Reader theme"><option value="paper">Paper</option><option value="sepia">Sepia</option><option value="night">Night</option></select><select className="reader-mode-select" value={readerMode} onChange={(event) => { const value = event.target.value as ReaderMode; setReaderMode(value); window.localStorage.setItem('noesis:reader-mode', value) }} aria-label="Page navigation mode"><option value="swipe">Swipe pages</option><option value="scroll">Scroll</option></select><button className="secondary-button" onClick={() => setWideLayout(true)}><Maximize2 size={14} /> Wide</button></div> : null}
-    {!wideLayout ? <div className="reader-progress"><span style={{ width: String(book.progress) + '%' }} /></div> : null}
+    {!wideLayout && book.format === 'epub' ? <div className="reader-settings"><label><Type size={14} /><span>Text</span><input type="range" min="85" max="125" step="5" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} aria-label="Text size" /></label><select value={readerTheme} onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)} aria-label="Reader theme"><option value="paper">Paper</option><option value="sepia">Sepia</option><option value="night">Night</option></select><button className="secondary-button" onClick={() => setWideLayout(true)}><Maximize2 size={14} /> Wide</button></div> : null}
+    {!wideLayout && book.format === 'epub' ? <div className="reader-progress-row"><span>Progress</span><div className="reader-progress"><span style={{ width: String(visibleProgress) + '%' }} /></div><strong>{visibleProgress}%</strong></div> : null}
     <div className={'reader-body ' + (book.format === 'pdf' ? 'reader-body-pdf' : '') + (external ? ' reader-body-web' : '') + (readerTheme === 'night' ? ' reader-theme-night' : readerTheme === 'sepia' ? ' reader-theme-sepia' : '')}>
       <div className={'reader-frame-wrap ' + (book.format === 'epub' ? 'reader-frame-epub' : '')}>
         {book.format === 'pdf' ? <iframe className="pdf-frame" src={pdfUrl} title={'Reading ' + book.title} /> : external ? <iframe className="web-frame" src={book.readerUrl || book.sourceUrl} title={'Reading ' + book.title} allow="fullscreen" /> : <div ref={frame} className="reader-frame" />}
@@ -193,10 +255,9 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
         {error ? <div className="reader-overlay reader-error"><CircleHelp size={18} /><p>{error}</p></div> : null}
       </div>
     </div>
-    {wideLayout ? <div className="reader-wide-footer"><button className="reader-page-button" onClick={() => turnPage('previous')} disabled={book.format !== 'epub' || readerMode === 'scroll'} aria-label="Previous page"><ArrowLeft size={22} /></button><div className="reader-wide-location"><span>{readerMode === 'scroll' ? 'Scroll mode' : 'Current chapter'}</span><strong>{chapter}</strong></div><button className="reader-page-button" onClick={() => turnPage('next')} disabled={book.format !== 'epub' || readerMode === 'scroll'} aria-label="Next page"><ArrowRight size={22} /></button></div> : <div className="reader-footer">{external ? <label className="reader-manual-progress"><span>Progress</span><input type="range" min="0" max="100" step="1" value={Math.round(book.progress)} onChange={(event) => onProgress(Number(event.target.value), undefined, undefined, book.chapter)} aria-label="Reading progress" /><b>{Math.round(book.progress)}%</b></label> : <span>{book.format === 'pdf' ? 'PDF document' : Math.round(book.progress) + '% complete'}</span>}<div className="reader-footer-actions">{external ? <button className="secondary-button" onClick={() => onAsk('Explain ' + (book.accessType === 'borrow' ? 'this borrowed book' : 'this external reading') + ' and tell me what passage I should provide for a precise explanation.')}><Sparkles size={15} /> Ask Noema</button> : null}{external && book.sourceUrl ? <a className="secondary-button" href={book.sourceUrl} target="_blank" rel="noreferrer">Open source</a> : null}<button className="secondary-button" onClick={() => onNote('Reading note from ' + book.title + ': ')}><Highlighter size={15} /> Add a note</button>{!external && book.format === 'epub' && readerMode === 'swipe' ? <><button className="reader-inline-page-button" onClick={() => turnPage('previous')} aria-label="Previous page"><ArrowLeft size={18} /></button><button className="reader-inline-page-button" onClick={() => turnPage('next')} aria-label="Next page"><ArrowRight size={18} /></button></> : null}</div></div>}
+    {wideLayout ? <div className="reader-wide-footer"><button className="reader-page-button" onClick={() => goToChapterRef.current(chapterIndex - 1)} disabled={book.format !== 'epub' || chapterIndex <= 0} aria-label="Previous chapter"><ArrowLeft size={22} /></button><div className="reader-wide-location"><span>Select chapter</span><select className="reader-wide-chapter-select" value={currentChapter.href} onChange={(event) => handleChapterSelect(event.target.value)} disabled={chapterCount === 0} aria-label="Select chapter">{chapterCount === 0 ? <option value="">Opening</option> : toc.map((item) => <option key={item.href + '-' + item.label} value={item.href}>{item.label}</option>)}</select><small>{chapterLabel}</small></div><button className="reader-page-button" onClick={() => goToChapterRef.current(chapterIndex + 1)} disabled={book.format !== 'epub' || chapterIndex >= chapterCount - 1} aria-label="Next chapter"><ArrowRight size={22} /></button></div> : null}
   </section>
 }
-
 function App() {
   const [books, setBooks] = useState<LibraryBook[]>(() => readLibraryBooks()); const [notes, setNotes] = useState<Note[]>(() => readLocalNotes()); const [paths, setPaths] = useState<LearningPath[]>(() => readPaths())
   const [now, setNow] = useState(() => new Date())
@@ -231,13 +292,13 @@ function App() {
     const timer = window.setTimeout(() => void run(), 1400)
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [authUserId, authUserRef, cloudConnection, books, notes, paths])
-  useEffect(() => { let timer: number | undefined; const update = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { const selection = window.getSelection(); const text = selection?.toString().trim() ?? ''; const node = selection?.anchorNode; const element = node instanceof Element ? node : node?.parentElement; if (!text || text.length < 2 || !element || element.closest('[data-overlay], input, textarea, select, [contenteditable="true"]')) { setSelectionOffer(null); return }; const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null; if (!rect) return; setSelectionOffer({ text: text.slice(0, 20_000), left: Math.min(Math.max(rect.left + rect.width / 2, 110), window.innerWidth - 110), top: rect.bottom + 10 < window.innerHeight - 50 ? rect.bottom + 10 : Math.max(8, rect.top - 52) }) }, 20) }; document.addEventListener('selectionchange', update); document.addEventListener('pointerup', update); document.addEventListener('keyup', update); return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', update); document.removeEventListener('pointerup', update); document.removeEventListener('keyup', update) } }, [])
+  useEffect(() => { let timer: number | undefined; const update = () => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { const selection = window.getSelection(); const text = selection?.toString().trim() ?? ''; const node = selection?.anchorNode; const element = node instanceof Element ? node : node?.parentElement; if (!text || text.length < 2 || !element || element.closest('[data-overlay], input, textarea, select, [contenteditable="true"]')) { setSelectionOffer(null); return }; const rect = selection?.rangeCount ? selection.getRangeAt(0).getBoundingClientRect() : null; if (!rect) return; setSelectionOffer({ text: text.slice(0, 20_000), left: Math.min(Math.max(rect.left + rect.width / 2, 110), window.innerWidth - 110), top: rect.bottom + 10 < window.innerHeight - 50 ? rect.bottom + 10 : Math.max(8, rect.top - 52) }) }, 20) }; document.addEventListener('selectionchange', update); document.addEventListener('keyup', update); return () => { if (timer) window.clearTimeout(timer); document.removeEventListener('selectionchange', update); document.removeEventListener('keyup', update) } }, [])
   function showNotice(message: string) { setNotice(message); window.setTimeout(() => setNotice(''), 3800) }
   function selectNav(label: string) { setMobileNavOpen(false); if (label === 'Second Brain') { setOverlay('brain'); return }; if (label === 'Ask Noema') { setOverlay('noema'); return }; setActiveNav(label); setSelectedBookId(label === 'Read' ? selectedBookId : null) }
   function openNotePanel(seed = '') { setNoteDraft({ title: seed ? 'Saved highlight' : '', body: seed, source: selectedBook ? `${selectedBook.title} · ${selectedBook.chapter}` : 'Noesis' }); setOverlay('brain') }
   function openNoemaPanel(seed = '') { setTutorPrompt(seed); setTutorReply(''); setOverlay('noema') }
   async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; const isEpub = file.name.toLowerCase().endsWith('.epub'); const isPdf = file.name.toLowerCase().endsWith('.pdf'); if (!isEpub && !isPdf) { showNotice('Noesis imports EPUB and PDF files.'); return }; try { const data = await file.arrayBuffer(); const parsed = isEpub ? await parseEpub(data, file.name) : null; const book = parsed ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed) : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, file.name, file.size, file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '), 'Imported PDF'); await saveEpubFile(book.id, data); if (parsed?.text) await saveBookText(book.id, parsed.text); setBooks(upsertLibraryBook(book)); setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added to your library.`) } catch (reason) { showNotice(friendlyBookError(reason, 'Could not read that file.')) } }
-  function updateBookProgress(id: string, progress: number, cfi?: string, href?: string, chapter?: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, progress, cfi: cfi ?? book.cfi, currentHref: href ?? book.currentHref, chapter: chapter ?? book.chapter, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
+  function updateBookProgress(id: string, progress: number, cfi?: string, href?: string, chapter?: string, chapterIndex?: number, chapterProgress?: number) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, progress, cfi: cfi ?? book.cfi, currentHref: href ?? book.currentHref, chapter: chapter ?? book.chapter, chapterIndex: chapterIndex ?? book.chapterIndex, chapterProgress: chapterProgress ?? book.chapterProgress, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   function toggleBookmark(id: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, bookmarked: !book.bookmarked, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   async function saveNote(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const body = noteDraft.body.trim(); if (body.length < 2) { showNotice('Write a note or highlight first.'); return }; const note: Note = { id: `local-${crypto.randomUUID()}`, kind: noteDraft.title.toLowerCase().includes('question') ? 'question' : noteDraft.title.toLowerCase().includes('idea') ? 'idea' : 'note', title: noteDraft.title.trim() || 'Quick note', body, source: noteDraft.source.trim() || 'Noesis', createdAt: new Date().toISOString() }; setNotes((current) => [note, ...current]); setNoteDraft({ title: '', body: '', source: '' }); const destination = await persistNote(note); showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device. It will sync when Supabase is available.') }
   async function askNoema(prompt: string) { const question = prompt.trim(); if (!question) return; setTutorPrompt(question); setTutorReply(''); setTutorBusy(true); let bookText = ''; if (selectedBook?.format === 'epub') bookText = await loadBookText(selectedBook.id).catch(() => '') || ''; const contextText = notes.slice(0, 30).map((note) => `${note.title} (${note.source}): ${note.body}`).join('\n\n'); const bookContext = selectedBook ? [`Title: ${selectedBook.title}`, `Author: ${selectedBook.author}`, `Current location: ${selectedBook.chapter}`, `Format: ${selectedBook.format}`, selectedBook.description ? `Catalog description: ${selectedBook.description}` : '', selectedBook.accessType ? `Access: ${selectedBook.accessType === 'borrow' ? 'borrowed from an external library' : 'public hosted reader'}` : '', selectedBook.sourceName ? `Provider: ${selectedBook.sourceName}` : '', selectedBook.sourceUrl ? `Source: ${selectedBook.sourceUrl}` : '', selectedBook.format === 'epub' && bookText ? `Relevant book text:\n${relevantExcerpt(bookText, question)}` : '', selectedBook.format === 'web' || selectedBook.format === 'resource' ? 'The full text may be inside a cross-origin or protected reader. Use only supplied notes or pasted passages and do not claim to have read unavailable text.' : ''].filter(Boolean).join('\n') : ''; try { const response = await fetch('/api/tutor', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question, book: bookContext, context: contextText }) }); const result = await response.json() as { ok?: boolean; text?: string; error?: string }; if (!response.ok || !result.ok) throw new Error(result.error || 'Noema could not answer right now.'); setTutorReply(result.text ?? 'Noema returned an empty answer.'); showNotice('Noema answered using your current context.') } catch (reason) { const message = reason instanceof Error ? reason.message : 'Noema could not answer right now.'; setTutorReply(message); showNotice(message) } finally { setTutorBusy(false) } }
@@ -334,7 +395,7 @@ function App() {
     </Page>
   }
   function accountPage() { const anonymous = isAnonymousUser(authUser); return <Page title="Account" subtitle="Use one account to keep notes and backups connected.">{authUser && !anonymous ? <section className="account-signed panel-card"><div className="account-avatar"><UserRound size={22} /></div><div><span className="eyebrow">Signed in</span><h3>{displayName || authUser.email}</h3><p>{authUser.email} · Your Second Brain and cloud backup use this account.</p></div><button className="secondary-button" onClick={() => void handleSignOut()}>Sign out</button></section> : <form className="auth-form panel-card" onSubmit={handleAuth}><div className="auth-tabs"><button type="button" className={authMode === 'sign-in' ? 'auth-tab-active' : ''} onClick={() => setAuthMode('sign-in')}>Sign in</button><button type="button" className={authMode === 'sign-up' ? 'auth-tab-active' : ''} onClick={() => setAuthMode('sign-up')}>Create account</button></div>{anonymous ? <div className="auth-callout"><Sparkles size={15} /> Create an account to preserve this anonymous session’s notes and use the same library on another device.</div> : null}{authMode === 'sign-up' ? <label>Name<input autoComplete="name" value={authName} onChange={(event) => setAuthName(event.target.value)} placeholder="Your name" /></label> : null}<label>Email<input type="email" autoComplete="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="you@example.com" /></label><label>Password<input type="password" autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'} value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="At least 6 characters" /></label><button className="primary-button" type="submit" disabled={authBusy}>{authBusy ? 'Working…' : authMode === 'sign-in' ? 'Sign in' : anonymous ? 'Save this account' : 'Create account'}</button>{authMode === 'sign-in' ? <button type="button" className="text-button auth-reset" onClick={() => void handleResetPassword()}>Forgot password?</button> : null}<p className="auth-footnote">Your library stays available locally. Sign in when you want notes and cloud sync on another device.</p></form>}</Page> }
-  const page = selectedBook && activeNav === 'Read' ? <Reader book={selectedBook} onClose={() => { setSelectedBookId(null); setActiveNav('My Library') }} onProgress={(progress, cfi, href, chapter) => updateBookProgress(selectedBook.id, progress, cfi, href, chapter)} onNote={openNotePanel} onAsk={openNoemaPanel} onBookmark={() => toggleBookmark(selectedBook.id)} /> : activeNav === 'Home' ? homePage() : activeNav === 'My Library' ? libraryPage() : activeNav === 'Learning Paths' ? pathsPage() : activeNav === 'Read' ? readPage() : activeNav === 'Notes' ? notesPage() : activeNav === 'Progress' ? progressPage() : activeNav === 'Explore' ? explorePage() : activeNav === 'Cloud Backup' ? backupPage() : activeNav === 'Account' ? accountPage() : <div className="empty-state">Choose a page from the navigation.</div>
+  const page = selectedBook && activeNav === 'Read' ? <Reader book={selectedBook} onClose={() => { setSelectedBookId(null); setActiveNav('My Library') }} onProgress={(progress, cfi, href, chapter, chapterIndex, chapterProgress) => updateBookProgress(selectedBook.id, progress, cfi, href, chapter, chapterIndex, chapterProgress)} onNote={openNotePanel} onAsk={openNoemaPanel} onBookmark={() => toggleBookmark(selectedBook.id)} /> : activeNav === 'Home' ? homePage() : activeNav === 'My Library' ? libraryPage() : activeNav === 'Learning Paths' ? pathsPage() : activeNav === 'Read' ? readPage() : activeNav === 'Notes' ? notesPage() : activeNav === 'Progress' ? progressPage() : activeNav === 'Explore' ? explorePage() : activeNav === 'Cloud Backup' ? backupPage() : activeNav === 'Account' ? accountPage() : <div className="empty-state">Choose a page from the navigation.</div>
   return <div className="app-shell"><div className="ambient ambient-top" /><div className="ambient ambient-bottom" /><aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}><div className="brand-row"><div className="brand-mark"><BookOpen size={20} /></div><div><strong>NOESIS</strong><span>by Proairetos</span></div><button className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><nav className="main-nav" aria-label="Main navigation">{navItems.map(({ label, text, icon: Icon }) => <button key={label} className={`nav-item ${activeNav === label ? 'nav-item-active' : ''}`} onClick={() => selectNav(label)} title={text}><Icon size={17} /><span>{text}</span></button>)}</nav><div className="sidebar-image" aria-hidden="true" /><div className="sidebar-bottom"><div className="sidebar-search"><Search size={16} /><input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search…" aria-label="Search your library" /></div><div className="quick-icon-row"><button className="quick-icon" onClick={() => openNotePanel()} aria-label="Open Second Brain" title="Second Brain"><Brain size={16} /></button><button className="quick-icon" onClick={() => fileInput.current?.click()} aria-label="Add EPUB or PDF" title="Add book"><Plus size={16} /></button><button className="quick-icon" onClick={() => selectNav('Learning Paths')} aria-label="Create learning path" title="Create path"><ListChecks size={16} /></button></div></div></aside>{mobileNavOpen ? <button className="mobile-scrim" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" /> : null}<main className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="greeting"><p className="eyebrow">{navItems.find((item) => item.label === activeNav)?.text ?? activeNav}</p><h1>{activeNav === 'Home' ? 'Noesis' : navItems.find((item) => item.label === activeNav)?.text ?? activeNav}</h1></div><button className="icon-button compact-tool-button" onClick={() => setOverlay('brain')} aria-label="Open Second Brain" title="Second Brain"><Brain size={17} /></button><button className="icon-button compact-tool-button" onClick={() => openNoemaPanel()} aria-label="Ask Noema" title="Ask Noema"><Sparkles size={17} /></button><button className="account-top-button" onClick={() => selectNav('Account')} aria-label="Open account">{displayName?.slice(0, 1).toUpperCase() || <UserRound size={16} />}</button></header><div className="page-content">{page}</div><nav className="mobile-bottom-nav" aria-label="Mobile navigation"><button className={activeNav === 'Home' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Home')}><Home size={17} /><span>Home</span></button><button className={activeNav === 'My Library' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('My Library')}><Library size={17} /><span>Library</span></button><button className={activeNav === 'Learning Paths' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Learning Paths')}><ListChecks size={17} /><span>Paths</span></button><button className={activeNav === 'Notes' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Notes')}><FileText size={17} /><span>Notes</span></button><button onClick={() => openNoemaPanel()}><Sparkles size={17} /><span>Noema</span></button></nav><input ref={fileInput} className="visually-hidden" type="file" accept=".epub,.pdf,application/epub+zip,application/pdf" onChange={handleImport} /><input ref={backupInput} className="visually-hidden" type="file" accept=".zip,application/zip" onChange={handleBackupImport} />{selectionOffer && !overlay ? <button className="selection-action" style={{ top: selectionOffer.top, left: selectionOffer.left }} onMouseDown={(event) => event.preventDefault()} onClick={() => { openNotePanel(selectionOffer.text); setSelectionOffer(null) }}><Highlighter size={14} /> Add selection to notes</button> : null}{overlay === 'brain' ? <BrainOverlay notes={notes} draft={noteDraft} setDraft={setNoteDraft} onClose={() => setOverlay(null)} onSave={saveNote} /> : null}{overlay === 'noema' ? <NoemaOverlay prompt={tutorPrompt} reply={tutorReply} busy={tutorBusy} setPrompt={setTutorPrompt} onAsk={askNoema} onClose={() => setOverlay(null)} /> : null}{notice ? <div className="toast-notice"><Sparkles size={15} /> {notice}</div> : null}</main></div>
 }
 
