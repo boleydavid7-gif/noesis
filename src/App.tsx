@@ -64,7 +64,7 @@ function relevantExcerpt(text: string, question: string, limit = 30_000): string
 }
 function BookCover({ book, compact = false }: { book: LibraryBook; compact?: boolean }) {
   const image = book.coverDataUrl || book.coverUrl
-  return <div className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`} aria-label={book.title} style={image ? { backgroundImage: `linear-gradient(180deg, rgba(3,10,16,.03), rgba(3,10,16,.28)), url(${image})` } : undefined}>{!image ? <div className="book-cover-mark">N</div> : null}</div>
+  return <div className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`} aria-label={book.title} style={image ? { backgroundImage: `url(${image})` } : undefined}>{!image ? <div className="book-cover-mark">N</div> : null}</div>
 }
 function ProgressRing({ value }: { value: number }) { return <div className="progress-ring" style={{ '--progress': `${Math.max(0, Math.min(100, value)) * 3.6}deg` } as React.CSSProperties}><span>{Math.round(value)}%</span></div> }
 
