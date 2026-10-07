@@ -36,6 +36,15 @@ export async function upgradeAnonymousAccount(email: string, password: string, d
   return (await getCurrentSession()) ?? (result.data.user ? null : null)
 }
 
+export async function updateProfileName(firstName: string): Promise<User> {
+  const value = firstName.trim()
+  const result = await getAuthClient().auth.updateUser({
+    data: { first_name: value || null, given_name: value || null, full_name: value || null, name: value || null },
+  })
+  if (result.error || !result.data.user) throw new Error(result.error?.message ?? 'Could not save your name.')
+  return result.data.user
+}
+
 export async function sendPasswordReset(email: string): Promise<void> {
   const result = await getAuthClient().auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/` })
   if (result.error) throw new Error(result.error.message)
