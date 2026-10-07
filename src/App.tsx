@@ -270,7 +270,10 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
             await instance.display(savedLocation)
             opened = true
           } catch {
-            // Keep the already opened chapter when an old CFI or href is stale.
+            // Reopen the known chapter if an old CFI or href cleared the view.
+            if (firstChapter) {
+              try { await instance.display(firstChapter) } catch { /* surface the original opening error below */ }
+            }
           }
         }
         if (!opened) throw new Error('This EPUB has no readable opening chapter.')
