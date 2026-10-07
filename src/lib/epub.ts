@@ -1,4 +1,4 @@
-import ePub, { type Book, type NavItem } from 'epubjs'
+import type { Book, NavItem } from 'epubjs'
 import type { LibraryBook } from './library'
 
 function asText(value: unknown, fallback: string): string {
@@ -33,15 +33,31 @@ export type ParsedEpub = {
   metadata: { title: string; author: string }
   coverDataUrl?: string
   toc: Array<{ label: string; href: string }>
+  text: string
 }
 
 export async function parseEpub(file: ArrayBuffer, filename: string): Promise<ParsedEpub> {
+  const { default: ePub } = await import('epubjs')
   const book = ePub()
   await book.open(file)
   const metadata = await book.loaded.metadata
   const navigation = await book.loaded.navigation
   const coverUrl = await book.coverUrl()
   const coverDataUrl = coverUrl ? await blobToDataUrl(coverUrl) : undefined
+  const spineItems = await book.loaded.spine
+  const textParts: string[] = []
+  for (const item of spineItems.slice(0, 120)) {
+    try {
+      const section = book.spine.get(item.index)
+      const document = await (section.load(book.load.bind(book)) as unknown as Promise<Document>)
+      const text = document.body?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+      if (text) textParts.push(text)
+      section.unload()
+      if (textParts.join(' ').length >= 250_000) break
+    } catch {
+      // A malformed chapter should not prevent the book from importing.
+    }
+  }
   const fallbackTitle = filename.replace(/\.epub$/i, '').replace(/[-_]+/g, ' ').trim() || 'Untitled EPUB'
   return {
     metadata: {
@@ -50,10 +66,12 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
     },
     coverDataUrl,
     toc: flattenNavigation(navigation.toc ?? []),
+    text: textParts.join('\n\n').slice(0, 250_000),
   }
 }
 
 export async function openEpub(file: ArrayBuffer): Promise<Book> {
+  const { default: ePub } = await import('epubjs')
   const book = ePub()
   await book.open(file)
   return book
