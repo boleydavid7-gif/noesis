@@ -324,6 +324,28 @@
 .reader-frame-epub > .reader-toc { grid-column: 1; grid-row: 1; }
 .reader-frame-epub > .reader-frame, .reader-frame-epub > .reader-overlay { grid-column: 2; grid-row: 1; }
 .reader-frame { width: 100%; height: 100%; min-height: 620px; }
+.reader-wide-topbar { display: flex; min-height: 42px; align-items: center; justify-content: flex-end; }
+.reader-wide-actions { display: flex; gap: 8px; }
+.reader-wide-actions .icon-button { width: 38px; height: 38px; border: 1px solid rgba(145, 201, 247, .28); border-radius: 11px; color: #d8edff; background: rgba(10, 31, 51, .72); box-shadow: 0 8px 20px rgba(0, 0, 0, .2); }
+.reader-wide-actions .icon-button:hover { border-color: #70baff; background: rgba(46, 105, 165, .58); }
+.reader-wide-footer { display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px; align-items: center; gap: 18px; min-height: 67px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(145, 201, 247, .16); color: #a9c5dd; background: rgba(4, 17, 30, .84); }
+.reader-wide-footer > span { overflow: hidden; color: #cfe5f7; font-size: 11px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.reader-page-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(145, 201, 247, .28); border-radius: 50%; color: #d8edff; background: rgba(14, 45, 73, .74); transition: .2s ease; }
+.reader-page-button:hover:not(:disabled) { border-color: #70baff; background: rgba(47, 111, 175, .65); transform: translateY(-1px); }
+.reader-page-button:disabled { cursor: not-allowed; opacity: .35; }
+.reader-page-wide { position: fixed; z-index: 80; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0; width: 100vw; height: 100dvh; min-height: 100dvh; overflow: hidden; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); border: 0; border-radius: 0; background: #071421; box-shadow: none; }
+.reader-page-wide .reader-body { min-height: 0; height: 100%; border: 0; border-radius: 0; background: #f6f2e9; }
+.reader-page-wide .reader-frame-wrap, .reader-page-wide .reader-frame-epub { min-height: 0; height: 100%; }
+.reader-page-wide .reader-frame-epub { grid-template-columns: 1fr; }
+.reader-page-wide .reader-frame-epub > .reader-toc { display: none; }
+.reader-page-wide .reader-frame-epub > .reader-frame, .reader-page-wide .reader-frame-epub > .reader-overlay { grid-column: 1; }
+.reader-page-wide .reader-frame { min-height: 0; height: 100%; }
+.reader-page-wide .reader-overlay { background: rgba(245, 244, 238, .92); }
+.reader-page-turn-next .reader-frame { animation: reader-turn-next .34s ease both; }
+.reader-page-turn-previous .reader-frame { animation: reader-turn-previous .34s ease both; }
+@keyframes reader-turn-next { from { opacity: .35; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes reader-turn-previous { from { opacity: .35; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .reader-page-turn-next .reader-frame, .reader-page-turn-previous .reader-frame { animation: none; } }
 .reader-frame iframe { border: 0; }
 .reader-body-pdf { display: block; background: #17283b; }
 .pdf-frame { display: block; width: 100%; height: 100%; min-height: 620px; border: 0; background: #fff; }
@@ -449,6 +471,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .reader-preview-body { align-items: flex-start; flex-direction: column; padding: 15px; }
   .reader-manual-progress { min-width: 150px; }
   .reader-manual-progress input { width: 85px; }
+  .reader-page:not(.reader-page-wide) .reader-body { min-height: calc(100svh - 285px); height: calc(100svh - 285px); }
+  .reader-page:not(.reader-page-wide) .reader-frame-wrap, .reader-page:not(.reader-page-wide) .reader-frame-epub, .reader-page:not(.reader-page-wide) .reader-frame { min-height: 0; height: 100%; }
+  .reader-page-wide { padding-inline: 8px; }
+  .reader-wide-footer { min-height: 72px; }
   .reader-copy h3 { font-size: 18px; }
   .note-tabs { overflow-x: auto; }
   .note-tab { padding-inline: 12px; white-space: nowrap; }
