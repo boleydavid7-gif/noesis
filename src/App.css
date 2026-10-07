@@ -660,3 +660,9 @@ body { background: #060d14; }
   .shelf-cover { height: 176px; }
 }
 
+
+/* Cinematic imagery */
+.sidebar-image { background-image: url('/noesis-sidebar.webp'); background-position: center bottom; background-size: cover; opacity: .9; filter: saturate(.86) contrast(1.04); }
+.sidebar::after { background: linear-gradient(180deg, rgba(3, 9, 16, .12) 0%, rgba(3, 9, 16, .18) 38%, rgba(3, 9, 16, .64) 73%, rgba(3, 9, 16, .98) 100%); }
+.home-reading-hero { background-image: linear-gradient(90deg, rgba(5, 14, 22, .9) 0%, rgba(7, 19, 29, .58) 46%, rgba(7, 20, 30, .2) 100%), url('/noesis-header.webp'); background-position: center; background-size: cover; }
+
