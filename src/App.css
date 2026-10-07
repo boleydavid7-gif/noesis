@@ -318,7 +318,9 @@
 .reader-toc button:hover { color: #173958; background: #dce7ec; }
 .reader-toc p { padding: 0 6px; color: #75858d; font-size: 10px; line-height: 1.4; }
 .reader-frame-wrap { position: relative; min-width: 0; min-height: 620px; }
+.reader-body > .reader-frame-wrap { grid-column: 1 / -1; }
 .reader-frame-epub { display: grid; grid-template-columns: 190px minmax(0, 1fr); }
+.reader-frame-wrap.reader-frame-epub { height: clamp(620px, 72vh, 880px); }
 .reader-frame-epub > .reader-toc { grid-column: 1; grid-row: 1; }
 .reader-frame-epub > .reader-frame, .reader-frame-epub > .reader-overlay { grid-column: 2; grid-row: 1; }
 .reader-frame { width: 100%; height: 100%; min-height: 620px; }
