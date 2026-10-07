@@ -20,6 +20,8 @@ export type LibraryBook = {
   fileSize?: number
   cfi?: string
   currentHref?: string
+  chapterIndex?: number
+  chapterProgress?: number
   bookmarked?: boolean
   toc?: Array<{ label: string; href: string }>
 }
