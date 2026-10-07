@@ -39,8 +39,8 @@
 
 .main-column { position: relative; z-index: 1; width: min(100%, 1510px); min-width: 0; margin: 0 auto; padding: 23px clamp(18px, 3vw, 46px) 52px; }
 .topbar { display: flex; align-items: center; gap: 18px; min-height: 80px; }
-.greeting { flex: 1; min-width: 240px; }
-.greeting h1 { margin: 5px 0 1px; color: #f5f9ff; font-family: var(--display); font-size: clamp(27px, 3vw, 37px); letter-spacing: -.045em; line-height: 1.1; }
+.greeting { min-width: 0; flex: 1; }
+.greeting h1 { overflow: hidden; margin: 5px 0 1px; color: #f5f9ff; font-family: var(--display); font-size: clamp(27px, 3vw, 37px); letter-spacing: -.045em; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
 .greeting h1 span { color: #6db4ff; }
 .greeting > p:last-child { color: var(--muted); font-size: 13px; }
 .top-search { display: flex; align-items: center; gap: 9px; width: min(310px, 32vw); margin-top: 4px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--muted); background: rgba(19, 39, 61, .7); }
