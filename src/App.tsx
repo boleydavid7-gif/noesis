@@ -138,6 +138,7 @@ function Reader({ book, notes, onClose, onProgress, onNote, onOpenNote, onAsk, o
   const locationRef = useRef<{ page?: number; href?: string; cfi?: string }>({})
   const bookRef = useLatest(book)
   const readerCallbacksRef = useLatest({ onProgress, onNote })
+  const wideLayoutRef = useLatest(wideLayout)
   const wideCaptureKindRef = useLatest(wideCaptureKind)
   const chaptersRef = useLatest(toc)
   const currentChapter = toc[chapterIndex] ?? { label: book.chapter || 'Opening', href: book.currentHref ?? '' }
@@ -291,7 +292,7 @@ function Reader({ book, notes, onClose, onProgress, onNote, onOpenNote, onAsk, o
         }
         instance.on('relocated', (location: ReaderLocation) => reportLocation(location))
         instance.on('rendered', attachView)
-        instance.on('selected', (cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (!text) return; const selectionLocation = cfiRange && generatedLocationCount > 0 ? epub.locations.locationFromCfi(cfiRange) as unknown as number : -1; const selectionPage = locationRef.current.page ?? (Number.isFinite(selectionLocation) && selectionLocation >= 0 ? selectionLocation + 1 : undefined); const selectionKind = wideCaptureKindRef.current; saveHighlight(text, selectionKind, { bookId: currentBook.id, bookTitle: currentBook.title, author: currentBook.author, chapter: chapters[activeChapterIndex]?.label ?? currentBook.chapter, chapterIndex: activeChapterIndex, page: selectionPage, href: locationRef.current.href ?? chapters[activeChapterIndex]?.href, cfi: cfiRange }) })
+        instance.on('selected', (cfiRange: string, contents: { window?: Window }) => { const text = contents.window?.getSelection()?.toString().trim() ?? ''; if (!text) return; const selectionLocation = cfiRange && generatedLocationCount > 0 ? epub.locations.locationFromCfi(cfiRange) as unknown as number : -1; const selectionPage = locationRef.current.page ?? (Number.isFinite(selectionLocation) && selectionLocation >= 0 ? selectionLocation + 1 : undefined); const selectionKind = wideLayoutRef.current ? wideCaptureKindRef.current : 'highlight'; saveHighlight(text, selectionKind, { bookId: currentBook.id, bookTitle: currentBook.title, author: currentBook.author, chapter: chapters[activeChapterIndex]?.label ?? currentBook.chapter, chapterIndex: activeChapterIndex, page: selectionPage, href: locationRef.current.href ?? chapters[activeChapterIndex]?.href, cfi: cfiRange }) })
         const firstChapter = chapters[initialIndex]?.href
         const savedLocation = targetLocation?.cfi || targetLocation?.href || currentBook.cfi || currentBook.currentHref
         let opened = false
@@ -327,7 +328,7 @@ function Reader({ book, notes, onClose, onProgress, onNote, onOpenNote, onAsk, o
     }
     void start()
     return () => { cancelled = true; cleanupReading(); rendition.current?.destroy(); epubRef.current?.destroy(); rendition.current = null; epubRef.current = null }
-  }, [book.id, bookRef, readerCallbacksRef, wideCaptureKindRef, jumpLocation])
+  }, [book.id, bookRef, readerCallbacksRef, wideLayoutRef, wideCaptureKindRef, jumpLocation])
   useEffect(() => { if (book.format !== 'epub') return; let active = true; void loadBookText(book.id).then((value) => { if (active) setBookText(value ?? '') }).catch(() => undefined); return () => { active = false } }, [book.id, book.format])
   useEffect(() => { const current = rendition.current; if (!current || book.format !== 'epub') return; const colors = readerTheme === 'night' ? { background: '#111a22', color: '#dce8f2' } : readerTheme === 'sepia' ? { background: '#f1e6d0', color: '#4b3b2c' } : { background: '#f6f2e9', color: '#233a4e' }; current.themes.fontSize(`${fontSize}%`); current.themes.override('background-color', colors.background, true); current.themes.override('color', colors.color, true); current.themes.override('line-height', '1.65', true) }, [book.format, fontSize, readerTheme])
   const handleChapterSelect = (href: string) => { const index = toc.findIndex((item) => item.href === href); if (index >= 0) goToChapterRef.current(index) }
