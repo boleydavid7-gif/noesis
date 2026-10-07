@@ -7,6 +7,7 @@ type Env = {
 
 const MAX_QUESTION_LENGTH = 2_000
 const MAX_CONTEXT_LENGTH = 32_000
+const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const MAX_SEARCH_LENGTH = 160
 
@@ -36,7 +37,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   if (question.length < 2) return json({ ok: false, error: 'Ask Noema a question first.' }, 400)
 
   const context = typeof input.context === 'string' ? input.context.slice(0, MAX_CONTEXT_LENGTH) : ''
-  const book = typeof input.book === 'string' ? input.book.slice(0, 2_000) : ''
+  const book = typeof input.book === 'string' ? input.book.slice(0, MAX_BOOK_LENGTH) : ''
   const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
   if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
 
@@ -48,6 +49,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     'When the context does not contain enough evidence, say that clearly and offer a useful next step.',
     'Do not invent quotations or pretend to have read a book that is not in the supplied context.',
     'For borrowed or hosted books, distinguish metadata from the actual text. Explain exact passages only when the learner supplies the passage or notes. Never claim access to protected reader contents; ask the learner to paste a passage when needed.',
+    'When relevant text is supplied, explain it from that text and mention the current chapter or location when available.',
     'Keep the answer focused unless the learner asks for a deep explanation.',
   ].join(' ')
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
