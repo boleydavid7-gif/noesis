@@ -23,10 +23,19 @@ async function blobToDataUrl(url: string): Promise<string | undefined> {
 
 function flattenNavigation(items: NavItem[], output: Array<{ label: string; href: string }> = []): Array<{ label: string; href: string }> {
   for (const item of items) {
+    if (!item || typeof item.label !== 'string' || typeof item.href !== 'string') continue
     output.push({ label: item.label, href: item.href })
-    if (item.subitems) flattenNavigation(item.subitems, output)
+    if (Array.isArray(item.subitems)) flattenNavigation(item.subitems, output)
   }
   return output
+}
+
+function normalizeEpubData(file: ArrayBuffer): ArrayBuffer {
+  const copy = file.slice(0)
+  const bytes = new Uint8Array(copy.slice(0, 4))
+  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07) && (bytes[3] === 0x04 || bytes[3] === 0x06 || bytes[3] === 0x08)
+  if (!isZip) throw new Error('This is not a valid EPUB archive. Download the .epub file itself, not a web page or preview.')
+  return copy
 }
 
 export type ParsedEpub = {
@@ -39,24 +48,39 @@ export type ParsedEpub = {
 export async function parseEpub(file: ArrayBuffer, filename: string): Promise<ParsedEpub> {
   const { default: ePub } = await import('epubjs')
   const book = ePub()
-  await book.open(file)
+  const input = normalizeEpubData(file)
+  await book.open(input, 'binary')
   const metadata = await book.loaded.metadata
-  const navigation = await book.loaded.navigation
-  const coverUrl = await book.coverUrl()
-  const coverDataUrl = coverUrl ? await blobToDataUrl(coverUrl) : undefined
-  const spineItems = await book.loaded.spine
+  let navigation: NavItem[] = []
+  try {
+    navigation = (await book.loaded.navigation).toc ?? []
+  } catch {
+    // Some older EPUBs have malformed navigation documents but readable chapters.
+  }
+  let coverDataUrl: string | undefined
+  try {
+    const coverUrl = await book.coverUrl()
+    coverDataUrl = coverUrl ? await blobToDataUrl(coverUrl) : undefined
+  } catch {
+    // A missing or malformed cover should not prevent importing the book.
+  }
   const textParts: string[] = []
-  for (const item of spineItems.slice(0, 120)) {
-    try {
-      const section = book.spine.get(item.index)
-      const document = await (section.load(book.load.bind(book)) as unknown as Promise<Document>)
-      const text = document.body?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
-      if (text) textParts.push(text)
-      section.unload()
-      if (textParts.join(' ').length >= 250_000) break
-    } catch {
-      // A malformed chapter should not prevent the book from importing.
+  try {
+    const spineItems = await book.loaded.spine
+    for (const item of spineItems.slice(0, 120)) {
+      try {
+        const section = book.spine.get(item.index)
+        const document = await (section.load(book.load.bind(book)) as unknown as Promise<Document>)
+        const text = document.body?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+        if (text) textParts.push(text)
+        section.unload()
+        if (textParts.join(' ').length >= 250_000) break
+      } catch {
+        // A malformed chapter should not prevent the book from importing.
+      }
     }
+  } catch {
+    // Text indexing is an enhancement; the EPUB can still be read normally.
   }
   const fallbackTitle = filename.replace(/\.epub$/i, '').replace(/[-_]+/g, ' ').trim() || 'Untitled EPUB'
   return {
@@ -65,7 +89,7 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
       author: asText(metadata.creator, 'Unknown author'),
     },
     coverDataUrl,
-    toc: flattenNavigation(navigation.toc ?? []),
+    toc: flattenNavigation(navigation),
     text: textParts.join('\n\n').slice(0, 250_000),
   }
 }
@@ -73,7 +97,7 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
 export async function openEpub(file: ArrayBuffer): Promise<Book> {
   const { default: ePub } = await import('epubjs')
   const book = ePub()
-  await book.open(file)
+  await book.open(normalizeEpubData(file), 'binary')
   return book
 }
 
