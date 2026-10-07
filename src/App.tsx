@@ -177,10 +177,12 @@ function App() {
         const type = response.headers.get('content-type') || ''
         const isPdf = type.includes('pdf') || resource.downloadUrl.toLowerCase().includes('.pdf')
         const filename = `${resource.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.${isPdf ? 'pdf' : 'epub'}`
-        const book = isPdf
-          ? pdfBookFromSource(`pdf-${crypto.randomUUID()}`, filename, data.byteLength, resource.title, resource.author, resource.sourceUrl, resource.coverUrl)
-          : epubBookFromParsed(`epub-${crypto.randomUUID()}`, filename, data.byteLength, await parseEpub(data, filename))
+        const parsed = isPdf ? null : await parseEpub(data, filename)
+        const book = parsed
+          ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, filename, data.byteLength, parsed)
+          : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, filename, data.byteLength, resource.title, resource.author, resource.sourceUrl, resource.coverUrl)
         await saveEpubFile(book.id, data)
+        if (parsed?.text) await saveBookText(book.id, parsed.text)
         setBooks(upsertLibraryBook(book))
         setSelectedBookId(book.id)
         setActiveNav('Read')
