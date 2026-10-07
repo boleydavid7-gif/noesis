@@ -111,6 +111,29 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
     return () => { document.body.style.overflow = previousOverflow }
   }, [wideLayout])
   useEffect(() => {
+    if (book.format !== 'epub') return
+    const element = frame.current
+    const current = rendition.current
+    if (!element || !current) return
+    const resize = () => {
+      const bounds = element.getBoundingClientRect()
+      if (bounds.width < 1 || bounds.height < 1) return
+      current.resize(Math.floor(bounds.width), Math.floor(bounds.height))
+    }
+    const firstFrame = window.requestAnimationFrame(resize)
+    const secondFrame = window.requestAnimationFrame(() => window.requestAnimationFrame(resize))
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null
+    observer?.observe(element)
+    window.addEventListener('resize', resize)
+    resize()
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      window.cancelAnimationFrame(secondFrame)
+      observer?.disconnect()
+      window.removeEventListener('resize', resize)
+    }
+  }, [book.format, wideLayout, loading])
+  useEffect(() => {
     let cancelled = false
     const currentBook = bookRef.current
     const { onProgress: reportProgress, onNote: saveHighlight } = readerCallbacksRef.current
@@ -150,7 +173,7 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
         {error ? <div className="reader-overlay reader-error"><CircleHelp size={18} /><p>{error}</p></div> : null}
       </div>
     </div>
-    {wideLayout ? <div className="reader-wide-footer"><button className="reader-page-button" onClick={() => turnPage('previous')} disabled={book.format !== 'epub'} aria-label="Previous page"><ArrowLeft size={22} /></button><span>{chapter}</span><button className="reader-page-button" onClick={() => turnPage('next')} disabled={book.format !== 'epub'} aria-label="Next page"><ArrowRight size={22} /></button></div> : <div className="reader-footer">{external ? <label className="reader-manual-progress"><span>Progress</span><input type="range" min="0" max="100" step="1" value={Math.round(book.progress)} onChange={(event) => onProgress(Number(event.target.value), undefined, undefined, book.chapter)} aria-label="Reading progress" /><b>{Math.round(book.progress)}%</b></label> : <span>{book.format === 'pdf' ? 'PDF document' : Math.round(book.progress) + '% complete'}</span>}<div className="reader-footer-actions">{external ? <button className="secondary-button" onClick={() => onAsk('Explain ' + (book.accessType === 'borrow' ? 'this borrowed book' : 'this external reading') + ' and tell me what passage I should provide for a precise explanation.')}><Sparkles size={15} /> Ask Noema</button> : null}{external && book.sourceUrl ? <a className="secondary-button" href={book.sourceUrl} target="_blank" rel="noreferrer">Open source</a> : null}<button className="secondary-button" onClick={() => onNote('Reading note from ' + book.title + ': ')}><Highlighter size={15} /> Add a note</button></div></div>}
+    {wideLayout ? <div className="reader-wide-footer"><button className="reader-page-button" onClick={() => turnPage('previous')} disabled={book.format !== 'epub'} aria-label="Previous page"><ArrowLeft size={22} /></button><div className="reader-wide-location"><span>Current chapter</span><strong>{chapter}</strong></div><button className="reader-page-button" onClick={() => turnPage('next')} disabled={book.format !== 'epub'} aria-label="Next page"><ArrowRight size={22} /></button></div> : <div className="reader-footer">{external ? <label className="reader-manual-progress"><span>Progress</span><input type="range" min="0" max="100" step="1" value={Math.round(book.progress)} onChange={(event) => onProgress(Number(event.target.value), undefined, undefined, book.chapter)} aria-label="Reading progress" /><b>{Math.round(book.progress)}%</b></label> : <span>{book.format === 'pdf' ? 'PDF document' : Math.round(book.progress) + '% complete'}</span>}<div className="reader-footer-actions">{external ? <button className="secondary-button" onClick={() => onAsk('Explain ' + (book.accessType === 'borrow' ? 'this borrowed book' : 'this external reading') + ' and tell me what passage I should provide for a precise explanation.')}><Sparkles size={15} /> Ask Noema</button> : null}{external && book.sourceUrl ? <a className="secondary-button" href={book.sourceUrl} target="_blank" rel="noreferrer">Open source</a> : null}<button className="secondary-button" onClick={() => onNote('Reading note from ' + book.title + ': ')}><Highlighter size={15} /> Add a note</button></div></div>}
   </section>
 }
 
