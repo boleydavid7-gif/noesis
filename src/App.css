@@ -26,6 +26,9 @@
 .sidebar-search { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(12, 28, 46, .72); }
 .sidebar-search input, .top-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: #eaf4ff; background: transparent; font-size: 12px; }
 .sidebar-search input::placeholder, .top-search input::placeholder { color: #728aa4; }
+.quick-icon-row { display: flex; gap: 7px; margin-top: 12px; }
+.quick-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 9px; color: #9bc8ef; background: rgba(28, 60, 91, .5); transition: .2s ease; }
+.quick-icon:hover { border-color: var(--line-strong); color: #fff; background: rgba(48, 107, 172, .4); }
 .eyebrow { margin: 0; color: #7eb6ed; font-size: 10px; font-weight: 700; letter-spacing: .14em; line-height: 1.4; text-transform: uppercase; }
 .sidebar-eyebrow { padding: 0 3px 8px; color: #617e9f; }
 .quick-action { display: flex; align-items: center; gap: 9px; width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; color: #b5c8dc; background: rgba(31, 59, 87, .38); font-size: 11px; text-align: left; transition: .2s ease; }
@@ -41,6 +44,8 @@
 .top-search kbd { padding: 2px 5px; border: 1px solid var(--line); border-radius: 5px; color: #6d8baa; font-size: 9px; white-space: nowrap; }
 .avatar-button { display: grid; place-items: center; width: 34px; height: 34px; margin-top: 4px; border: 1px solid rgba(128, 182, 232, .48); border-radius: 50%; color: #eaf4ff; background: linear-gradient(145deg, #407bb3, #1d3454); font-weight: 700; }
 .account-top-button { display: grid; place-items: center; width: 34px; height: 34px; margin-top: 4px; border: 1px solid rgba(128, 182, 232, .48); border-radius: 50%; color: #eaf4ff; background: linear-gradient(145deg, #407bb3, #1d3454); font-size: 12px; font-weight: 700; }
+.compact-tool-button { width: 34px; height: 34px; margin-top: 4px; border: 1px solid var(--line); color: #a8d1f4; background: rgba(15, 43, 70, .62); }
+.compact-tool-button:hover { border-color: var(--line-strong); color: #fff; background: rgba(48, 107, 172, .45); }
 .icon-button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--muted); background: transparent; transition: .2s ease; }
 .icon-button:hover { color: #fff; background: rgba(104, 159, 214, .15); }
 .sidebar-close, .mobile-menu { display: none; }
@@ -225,6 +230,9 @@
 .page-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .page-heading h2 { margin: 5px 0 4px; color: #f4f8ff; font-family: var(--display); font-size: 30px; letter-spacing: -.04em; }
 .page-heading > div > p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+.reader-landing { display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 18px; color: #9cc9ef; }
+.reader-landing strong { flex: 1; color: #eff7ff; font-family: var(--display); font-size: 15px; }
+.reader-landing .primary-button { min-height: 35px; }
 .welcome-panel { display: flex; align-items: center; justify-content: space-between; min-height: 180px; padding: 27px 30px; overflow: hidden; background: radial-gradient(circle at 75% 30%, rgba(68, 136, 206, .24), transparent 35%), linear-gradient(120deg, rgba(8, 29, 49, .93), rgba(10, 27, 46, .72)), url('/noesis-hero.jpg') center 48% / cover; }
 .welcome-panel h2 { max-width: 530px; margin: 6px 0 7px; color: #f3f8ff; font-family: var(--display); font-size: 29px; letter-spacing: -.04em; }
 .welcome-panel p:not(.eyebrow) { max-width: 510px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
