@@ -78,6 +78,26 @@ type PageDirection = 'next' | 'previous'
 type ReaderChapter = { label: string; href: string }
 type ReaderLocation = { start?: { index?: number; percentage?: number; cfi?: string; href?: string; displayed?: { page?: number; total?: number } } }
 
+function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+  const record = value as { items?: unknown; spineItems?: unknown }
+  if (Array.isArray(record.items)) return record.items
+  if (Array.isArray(record.spineItems)) return record.spineItems
+  return []
+}
+
+function chapterEntries(value: unknown): ReaderChapter[] {
+  return asArray(value).flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const record = entry as { label?: unknown; href?: unknown }
+    const href = typeof record.href === 'string' ? record.href.trim() : ''
+    if (!href) return []
+    const label = typeof record.label === 'string' && record.label.trim() ? record.label.trim() : 'Untitled chapter'
+    return [{ label, href }]
+  })
+}
+
 function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book: LibraryBook; onClose: () => void; onProgress: (progress: number, cfi?: string, href?: string, chapter?: string, chapterIndex?: number, chapterProgress?: number) => void; onNote: (text: string) => void; onAsk: (prompt: string) => void; onBookmark: () => void }) {
   const frame = useRef<HTMLDivElement>(null)
   const rendition = useRef<Awaited<ReturnType<typeof openEpub>>['renderTo'] extends (...args: never[]) => infer R ? R : never>(null)
@@ -85,7 +105,7 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
   const external = book.format === 'web' || book.format === 'resource'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [toc, setToc] = useState<ReaderChapter[]>(book.toc?.filter((item) => item.href.trim()) ?? [])
+  const [toc, setToc] = useState<ReaderChapter[]>(chapterEntries(book.toc))
   const [chapterIndex, setChapterIndex] = useState(Math.max(0, book.chapterIndex ?? 0))
   const [chapterProgress, setChapterProgress] = useState(Math.max(0, Math.min(1, book.chapterProgress ?? 0)))
   const [pdfUrl, setPdfUrl] = useState('')
@@ -160,10 +180,15 @@ function Reader({ book, onClose, onProgress, onNote, onAsk, onBookmark }: { book
         if (cancelled || !frame.current) { epub.destroy(); return }
         epubRef.current = epub
         const navigation = await epub.loaded.navigation
-        const navigationChapters = (navigation.toc ?? []).map((item) => ({ label: typeof item.label === 'string' && item.label.trim() ? item.label.trim() : 'Untitled chapter', href: typeof item.href === 'string' ? item.href.trim() : '' })).filter((item) => item.href)
+        const navigationChapters = chapterEntries(navigation.toc)
         const spineItems = await epub.loaded.spine
-        const spineChapters = spineItems.map((item, index) => ({ label: `Chapter ${index + 1}`, href: item.href?.trim() || item.url?.trim() || '' })).filter((item) => item.href)
-        const savedChapters = currentBook.toc?.filter((item) => item.href.trim()).map((item) => ({ label: item.label || 'Untitled chapter', href: item.href })) ?? []
+        const spineChapters = asArray(spineItems).flatMap((entry, index) => {
+          if (!entry || typeof entry !== 'object') return []
+          const record = entry as { href?: unknown; url?: unknown }
+          const href = typeof record.href === 'string' ? record.href.trim() : typeof record.url === 'string' ? record.url.trim() : ''
+          return href ? [{ label: `Chapter ${index + 1}`, href }] : []
+        })
+        const savedChapters = chapterEntries(currentBook.toc)
         const chapters = savedChapters.length > 0 ? savedChapters : navigationChapters.length > 0 ? navigationChapters : spineChapters
         const initialIndexByHref = currentBook.currentHref ? chapters.findIndex((item) => currentBook.currentHref?.includes(item.href.split('#')[0])) : -1
         const initialIndex = Math.max(0, Math.min(chapters.length - 1, currentBook.chapterIndex ?? (initialIndexByHref >= 0 ? initialIndexByHref : 0)))
