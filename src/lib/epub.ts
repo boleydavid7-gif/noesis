@@ -53,7 +53,8 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
   const metadata = await book.loaded.metadata
   let navigation: NavItem[] = []
   try {
-    navigation = (await book.loaded.navigation).toc ?? []
+    const toc = (await book.loaded.navigation).toc
+    navigation = Array.isArray(toc) ? toc : []
   } catch {
     // Some older EPUBs have malformed navigation documents but readable chapters.
   }
