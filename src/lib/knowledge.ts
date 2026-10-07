@@ -1,7 +1,18 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 
-export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note'
+export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note' | 'connection'
+
+export type BrainNoteLocation = {
+  bookId?: string
+  bookTitle?: string
+  author?: string
+  chapter?: string
+  chapterIndex?: number
+  page?: number
+  href?: string
+  cfi?: string
+}
 
 export type BrainNote = {
   id: string
@@ -11,6 +22,15 @@ export type BrainNote = {
   source: string
   createdAt: string
   synced?: boolean
+  bookId?: string
+  bookTitle?: string
+  author?: string
+  chapter?: string
+  chapterIndex?: number
+  page?: number
+  href?: string
+  cfi?: string
+  tags?: string[]
 }
 
 const STORAGE_KEY = 'noesis:second-brain:v1'
@@ -74,14 +94,33 @@ async function getAuthenticatedSupabase(): Promise<SupabaseClient | null> {
 }
 
 function fromRemote(row: Record<string, unknown>): BrainNote {
+  const rawContent = typeof row.content === 'string' ? row.content : ''
+  let saved: Partial<BrainNote> = {}
+  try {
+    const parsed = JSON.parse(rawContent) as unknown
+    if (parsed && typeof parsed === 'object' && (parsed as { __noesisBrainNote?: unknown }).__noesisBrainNote === 1) saved = parsed as Partial<BrainNote>
+  } catch {
+    // Older notes stored plain text in content.
+  }
+  const rawKind = row.kind ?? saved.kind
+  const kind: BrainNoteKind = rawKind === 'highlight' || rawKind === 'idea' || rawKind === 'question' || rawKind === 'connection' ? rawKind : 'note'
   return {
     id: String(row.id),
-    kind: (row.kind as BrainNoteKind) ?? 'note',
-    title: String(row.title ?? 'Quick note'),
-    body: String(row.notes ?? row.content ?? ''),
-    source: String(row.source_url ?? 'Noesis'),
+    kind,
+    title: String(row.title ?? saved.title ?? 'Quick note'),
+    body: String(row.notes ?? saved.body ?? (rawContent.startsWith('{') ? '' : rawContent)),
+    source: String(row.source_url ?? saved.source ?? 'Noesis'),
     createdAt: String(row.created_at ?? new Date().toISOString()),
     synced: true,
+    bookId: typeof saved.bookId === 'string' ? saved.bookId : undefined,
+    bookTitle: typeof saved.bookTitle === 'string' ? saved.bookTitle : undefined,
+    author: typeof saved.author === 'string' ? saved.author : undefined,
+    chapter: typeof saved.chapter === 'string' ? saved.chapter : undefined,
+    chapterIndex: typeof saved.chapterIndex === 'number' ? saved.chapterIndex : undefined,
+    page: typeof saved.page === 'number' ? saved.page : undefined,
+    href: typeof saved.href === 'string' ? saved.href : undefined,
+    cfi: typeof saved.cfi === 'string' ? saved.cfi : undefined,
+    tags: Array.isArray(saved.tags) ? saved.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
   }
 }
 
@@ -91,7 +130,7 @@ export async function hydrateRemoteNotes(local: BrainNote[]): Promise<BrainNote[
   const result = await client
     .from('knowledge_items')
     .select('id, kind, title, notes, content, source_url, created_at')
-    .eq('kind', 'note')
+    .in('kind', ['note', 'highlight', 'idea', 'question', 'connection'])
     .order('created_at', { ascending: false })
     .limit(300)
   if (result.error || !result.data) return sortNotes(local)
@@ -120,11 +159,11 @@ export async function persistNote(note: BrainNote): Promise<'remote' | 'local'> 
     .from('knowledge_items')
     .insert({
       user_id: user.data.user.id,
-      kind: 'note',
+      kind: note.kind,
       title: note.title || 'Quick note',
       source_url: note.source || null,
       notes: note.body,
-      content: note.body,
+      content: JSON.stringify({ __noesisBrainNote: 1, ...note, synced: undefined }),
       status: 'ready',
     })
     .select('id, kind, title, notes, content, source_url, created_at')
