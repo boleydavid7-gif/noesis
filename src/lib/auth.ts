@@ -24,16 +24,21 @@ export async function signInWithPassword(email: string, password: string): Promi
   return result.data.session
 }
 
-export async function signUpWithPassword(email: string, password: string): Promise<{ session: Session | null; user: User | null }> {
-  const result = await getAuthClient().auth.signUp({ email, password })
+export async function signUpWithPassword(email: string, password: string, displayName = ''): Promise<{ session: Session | null; user: User | null }> {
+  const result = await getAuthClient().auth.signUp({ email, password, options: displayName.trim() ? { data: { full_name: displayName.trim() } } : undefined })
   if (result.error) throw new Error(result.error.message)
   return { session: result.data.session, user: result.data.user }
 }
 
-export async function upgradeAnonymousAccount(email: string, password: string): Promise<Session | null> {
-  const result = await getAuthClient().auth.updateUser({ email, password })
+export async function upgradeAnonymousAccount(email: string, password: string, displayName = ''): Promise<Session | null> {
+  const result = await getAuthClient().auth.updateUser({ email, password, data: displayName.trim() ? { full_name: displayName.trim() } : undefined })
   if (result.error) throw new Error(result.error.message)
   return (await getCurrentSession()) ?? (result.data.user ? null : null)
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const result = await getAuthClient().auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/` })
+  if (result.error) throw new Error(result.error.message)
 }
 
 export async function signOut(): Promise<void> {
