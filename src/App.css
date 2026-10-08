@@ -3070,7 +3070,6 @@ select:focus-visible {
     background: transparent;
     font-size: 9px;
   }
-  .mobile-bottom-nav button:hover,
   .mobile-bottom-nav .mobile-bottom-active {
     color: #e8f4ff;
     background: rgba(57, 133, 211, 0.35);
@@ -8029,4 +8028,53 @@ body {
   color: var(--gold-warm, #c7a36a);
   font-size: 11.5px;
   font-style: normal;
+}
+
+/* Phones: a tapped tab shouldn't stay lit like a hovered one */
+@media (hover: hover) {
+  .mobile-bottom-nav button:hover {
+    color: #e8f4ff;
+    background: rgba(57, 133, 211, 0.35);
+  }
+}
+
+/* Covers keep a book's own proportions on the Home shelf */
+.bookshelf-row {
+  grid-auto-columns: minmax(132px, 156px);
+}
+.shelf-cover {
+  height: auto;
+  aspect-ratio: 2 / 3;
+}
+.shelf-add-frame {
+  min-height: 0;
+  aspect-ratio: 2 / 3;
+}
+.shelf-add-book {
+  min-height: 0;
+}
+@media (max-width: 620px) {
+  .bookshelf-row {
+    grid-auto-columns: 150px;
+    gap: 14px;
+  }
+  .shelf-cover {
+    height: auto;
+  }
+  .shelf-book strong {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .hero-continue-actions {
+    flex-wrap: wrap;
+  }
+  .hero-continue-actions .primary-button,
+  .hero-continue-actions .secondary-button {
+    padding-inline: 14px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
 }
