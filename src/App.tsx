@@ -1518,6 +1518,10 @@ function App() {
             setPaths(next)
             writePaths(next)
           }}
+          onAsk={(prompt) => {
+            openNoemaPanel(prompt)
+            void askNoema(prompt)
+          }}
           onUpdate={(updated) => {
             const next = paths.map((path) => (path.id === updated.id ? updated : path))
             setPaths(next)
@@ -2469,6 +2473,7 @@ function PathSection({
   onDelete,
   onAssign,
   onUpdate,
+  onAsk,
 }: {
   paths: LearningPath[]
   books: LibraryBook[]
@@ -2477,6 +2482,7 @@ function PathSection({
   onDelete?: (id: string) => void
   onAssign?: (pathId: string, bookId: string) => void
   onUpdate?: (path: LearningPath) => void
+  onAsk?: (prompt: string) => void
 }) {
   const [openPlan, setOpenPlan] = useState<string | null>(null)
   return (
@@ -2534,7 +2540,7 @@ function PathSection({
                     </button>
                   ) : null}
                   {path.plan && openPlan === path.id && onUpdate ? (
-                    <PathPlanDetail path={path} onChange={onUpdate} />
+                    <PathPlanDetail path={path} onChange={onUpdate} onAsk={onAsk} />
                   ) : null}
                   {editable && books.length > 0 ? (
                     <select

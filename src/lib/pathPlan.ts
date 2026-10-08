@@ -3,7 +3,15 @@
 // up the real books and checks the links, and drops anything it cannot find.
 
 export type PlanTopic = { id: string; label: string; done: boolean }
-export type PlanMilestone = { id: string; title: string; topics: PlanTopic[] }
+export type PlanMilestone = {
+  id: string
+  title: string
+  topics: PlanTopic[]
+  timeframe?: string // e.g. "Week 1" or "Weeks 2–3"
+  outcome?: string // what the learner can do once the stage is finished
+  resourceTitles?: string[] // titles from the plan's resource list to study with
+  bookTitles?: string[] // titles from the plan's book list to study with
+}
 
 export type PlanResource = { title: string; publisher: string; url: string; kind: string; note?: string }
 
@@ -115,7 +123,24 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
           .map((topic) => clip(topic, 100))
           .filter(Boolean)
           .map((topic) => ({ id: uid('topic'), label: topic, done: false }))
-        return label && topics.length ? [{ id: uid('milestone'), title: label, topics }] : []
+        const titles = (value: unknown) =>
+          (Array.isArray(value) ? value : [])
+            .map((entry) => clip(entry, 140))
+            .filter(Boolean)
+            .slice(0, 3)
+        return label && topics.length
+          ? [
+              {
+                id: uid('milestone'),
+                title: label,
+                topics,
+                timeframe: clip(milestone.timeframe, 24) || undefined,
+                outcome: clip(milestone.outcome, 180) || undefined,
+                resourceTitles: titles(milestone.resources),
+                bookTitles: titles(milestone.books),
+              },
+            ]
+          : []
       })
     if (!title || milestones.length < 2) return []
     return [
@@ -178,6 +203,36 @@ export function planProgress(plan: Pick<PathPlan, 'milestones'>): { done: number
 
 export function milestoneDone(milestone: PlanMilestone): boolean {
   return milestone.topics.length > 0 && milestone.topics.every((topic) => topic.done)
+}
+
+// The first topic that is not done yet, in path order, with where it sits.
+export function nextTopic(
+  plan: Pick<PathPlan, 'milestones'>,
+): { milestoneIndex: number; milestone: PlanMilestone; topic: PlanTopic } | null {
+  for (const [milestoneIndex, milestone] of plan.milestones.entries()) {
+    const topic = milestone.topics.find((item) => !item.done)
+    if (topic) return { milestoneIndex, milestone, topic }
+  }
+  return null
+}
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+// The books and free resources the plan says to use for one stage. Titles that
+// did not survive the checks (a dropped link, a book with no match) are skipped.
+export function milestoneGuide(
+  plan: Pick<PathPlan, 'books' | 'resources'>,
+  milestone: Pick<PlanMilestone, 'resourceTitles' | 'bookTitles'>,
+): { resources: PlanResource[]; books: ResolvedBook[] } {
+  const resources = plan.resources.filter((resource) =>
+    (milestone.resourceTitles ?? []).some((wanted) => sameName(wanted, resource.title)),
+  )
+  const books = plan.books.filter((book) =>
+    (milestone.bookTitles ?? []).some(
+      (wanted) => matchScore({ title: book.title, authors: book.authors }, wanted, '') > 0,
+    ),
+  )
+  return { resources, books }
 }
 
 export function toggleTopic(plan: PathPlan, topicId: string): PathPlan {
