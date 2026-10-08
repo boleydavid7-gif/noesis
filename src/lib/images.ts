@@ -6,7 +6,7 @@ export type ImageChoice = { slot: ImageSlot; value: string } // a preset name, o
 const KEY = 'noesis:images:v1'
 
 // Pictures kept with the app: a wide one for the banner and a tall one for the sidebar.
-export const SCENES: Array<{ id: string; label: string; banner: string; sidebar: string }> = [
+export const SCENES: Array<{ id: string; label: string; banner?: string; sidebar: string; fadeTop?: boolean }> = [
   {
     id: 'city-night',
     label: 'City at night',
@@ -14,6 +14,19 @@ export const SCENES: Array<{ id: string; label: string; banner: string; sidebar:
     sidebar: '/scenes/city-night-tall.webp',
   },
   { id: 'cabin', label: 'Cabin at sunrise', banner: '/scenes/cabin-wide.webp', sidebar: '/scenes/cabin-tall.webp' },
+  {
+    id: 'winter-fire',
+    label: 'Winter fire',
+    banner: '/scenes/winter-fire-wide.webp',
+    sidebar: '/scenes/winter-fire-tall.webp',
+  },
+  {
+    id: 'city-sunset',
+    label: 'City at sunset',
+    banner: '/scenes/city-sunset-wide.webp',
+    sidebar: '/scenes/city-sunset-tall.webp',
+  },
+  { id: 'reef', label: 'Coral reef', fadeTop: true, sidebar: '/scenes/reef-tall.webp' },
   { id: 'forest', label: 'Forest stream', banner: '/scenes/forest-wide.webp', sidebar: '/scenes/forest-tall.webp' },
 ]
 
@@ -44,7 +57,10 @@ export function readImages(): SavedImages {
 export function cssForImage(value: string, slot: ImageSlot = 'banner'): string | undefined {
   if (value.startsWith('data:image/')) return `url("${value}")`
   const scene = SCENES.find((item) => item.id === value)
-  if (scene) return `url("${slot === 'sidebar' ? scene.sidebar : scene.banner}")`
+  if (scene) {
+    const source = slot === 'sidebar' ? scene.sidebar : scene.banner
+    return source ? `url("${source}")` : undefined
+  }
   return IMAGE_PRESETS.find((preset) => preset.id === value)?.css
 }
 
@@ -71,6 +87,11 @@ export function applyImages(root: HTMLElement = document.documentElement): void 
     if (css) root.style.setProperty(variable, css)
     else root.style.removeProperty(variable)
   }
+  // A picture with a pale top fades into the app's own colour instead of showing as a white block.
+  const fade = SCENES.some((scene) => scene.fadeTop && scene.id === saved.sidebar)
+  if (fade)
+    root.style.setProperty('--sidebar-mask', 'linear-gradient(180deg, transparent 0%, transparent 22%, #000 62%)')
+  else root.style.removeProperty('--sidebar-mask')
 }
 
 // Shrinks a chosen photo so it fits in local storage.

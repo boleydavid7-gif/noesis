@@ -343,14 +343,14 @@ function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
           >
             Original
           </button>
-          {SCENES.map((scene) => (
+          {SCENES.filter((scene) => slot === 'sidebar' || scene.banner).map((scene) => (
             <button
               key={scene.id}
               type="button"
               aria-label={scene.label}
               title={scene.label}
               className={current === scene.id ? 'image-option image-option-on' : 'image-option'}
-              style={{ background: `center / cover url("${scene.banner}")`, minWidth: 64 }}
+              style={{ background: `center / cover url("${scene.banner ?? scene.sidebar}")`, minWidth: 64 }}
               onClick={() => choose(scene.id)}
             />
           ))}

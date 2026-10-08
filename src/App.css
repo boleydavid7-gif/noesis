@@ -4548,6 +4548,8 @@ body {
 /* Cinematic imagery */
 .sidebar-image {
   background-image: var(--img-sidebar, url('/noesis-sidebar.webp'));
+  -webkit-mask-image: var(--sidebar-mask, none);
+  mask-image: var(--sidebar-mask, none);
   background-position: center bottom;
   background-size: cover;
   opacity: 0.9;
