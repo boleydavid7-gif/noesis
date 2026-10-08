@@ -439,7 +439,10 @@ function App() {
         const restored = await syncAccountLibrary(readLibraryBooks())
         if (!cancelled) setBooks((current) => JSON.stringify(current) === JSON.stringify(restored) ? current : (writeLibraryBooks(restored), restored))
       } catch (reason) {
-        if (!cancelled) showNotice(reason instanceof Error ? reason.message : 'Your book files could not be synced yet. Notes are still connected.')
+        if (!cancelled) {
+          const message = reason instanceof Error ? reason.message : ''
+          showNotice(/Bucket not found|NoSuchBucket/i.test(message) ? 'Notes are connected. Run the Noesis storage migration in Supabase to sync uploaded books.' : message || 'Your book files could not be synced yet. Notes are still connected.')
+        }
       }
     }
     void restore()
