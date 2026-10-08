@@ -18,6 +18,7 @@ export type ReviewCard = {
   ease: number
   reps: number
   lapses: number
+  updated?: string
 }
 
 export type DraftCard = { question: string; answer: string }
@@ -45,6 +46,7 @@ export function newCard(
     ease: 2.5,
     reps: 0,
     lapses: 0,
+    updated: now.toISOString(),
   }
 }
 
@@ -70,7 +72,7 @@ export function gradeCard(card: ReviewCard, rating: ReviewRating, now = new Date
     reps += 1
     dueAt = now.getTime() + intervalDays * DAY
   }
-  return { ...card, intervalDays, ease, reps, lapses, dueAt: new Date(dueAt).toISOString() }
+  return { ...card, intervalDays, ease, reps, lapses, dueAt: new Date(dueAt).toISOString(), updated: now.toISOString() }
 }
 
 export function dueCards(cards: ReviewCard[], now = new Date()): ReviewCard[] {

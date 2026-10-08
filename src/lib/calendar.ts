@@ -32,6 +32,7 @@ export type CalendarEvent = {
   repeat: Repeat
   until?: string // YYYY-MM-DD, last day a repeating event happens
   doneDates: string[]
+  updated?: string // ISO time of the last change, used to merge edits from other devices
 }
 
 export type Occurrence = { event: CalendarEvent; date: string; done: boolean }
@@ -112,6 +113,7 @@ export function toggleDone(event: CalendarEvent, key: string): CalendarEvent {
   return {
     ...event,
     doneDates: event.doneDates.includes(key) ? event.doneDates.filter((day) => day !== key) : [...event.doneDates, key],
+    updated: new Date().toISOString(),
   }
 }
 
@@ -139,6 +141,7 @@ export function newEvent(input: Partial<CalendarEvent> & { title: string; date: 
     repeat: input.repeat ?? 'none',
     until: input.until && DATE.test(input.until) ? input.until : undefined,
     doneDates: input.doneDates ?? [],
+    updated: new Date().toISOString(),
   }
 }
 
@@ -162,6 +165,7 @@ export function sanitizeEvents(value: unknown): CalendarEvent[] {
         notes: typeof row.notes === 'string' && row.notes.trim() ? row.notes : undefined,
         repeat: (typeof row.repeat === 'string' && repeats.includes(row.repeat) ? row.repeat : 'none') as Repeat,
         until: typeof row.until === 'string' && DATE.test(row.until) ? row.until : undefined,
+        updated: typeof row.updated === 'string' && !Number.isNaN(Date.parse(row.updated)) ? row.updated : undefined,
         doneDates: Array.isArray(row.doneDates)
           ? row.doneDates.filter((day): day is string => typeof day === 'string' && DATE.test(day))
           : [],

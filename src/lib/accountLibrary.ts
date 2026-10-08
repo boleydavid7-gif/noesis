@@ -8,6 +8,7 @@ import {
   type LibraryBook,
 } from './library'
 import { parseEpub } from './epub'
+import { mergeBundles, sanitizeBundle, type SyncBundle } from './syncData'
 import {
   applyTombstones,
   mergeTombstones,
@@ -20,6 +21,7 @@ import {
 
 const BUCKET = 'noesis-backups'
 const MANIFEST_NAME = 'library/manifest.json'
+const DATA_NAME = 'data/state.json'
 
 type AccountLibraryManifest = {
   version: 1
@@ -145,4 +147,48 @@ export async function syncAccountLibrary(localBooks: LibraryBook[]): Promise<Lib
   for (const book of books) await restoreRemoteBook(user.id, book)
   writeLibraryBooks(books)
   return books
+}
+
+type AccountDataFile = { version: 1; updatedAt: string; bundle: SyncBundle; tombstones?: Tombstones }
+
+/**
+ * Syncs the calendar, focus steps and review cards through the signed-in
+ * account's private storage. Newer edits win per item, and deletions recorded
+ * on any device are applied everywhere. Returns what this device should now show.
+ */
+export async function syncAccountBundle(local: SyncBundle): Promise<SyncBundle> {
+  const user = await signedInUser()
+  if (!user) return local
+  const storage = getAuthClient().storage.from(BUCKET)
+  const path = `${user.id}/${DATA_NAME}`
+  const download = await storage.download(path)
+  let remote: AccountDataFile | null = null
+  if (download.error) {
+    if (!isMissingFile(download.error))
+      throw new Error(`Supabase could not read your synced data: ${download.error.message}`)
+  } else {
+    try {
+      const parsed = JSON.parse(await download.data.text()) as Partial<AccountDataFile>
+      const bundle = parsed.version === 1 ? sanitizeBundle(parsed.bundle) : undefined
+      if (bundle)
+        remote = {
+          version: 1,
+          updatedAt: String(parsed.updatedAt ?? ''),
+          bundle,
+          tombstones: sanitizeTombstones(parsed.tombstones),
+        }
+    } catch {
+      remote = null
+    }
+  }
+  const tombstones = pruneTombstones(mergeTombstones(readTombstones(), remote?.tombstones ?? {}))
+  const merged = mergeBundles(local, remote?.bundle, tombstones)
+  writeTombstones(tombstones)
+  const body: AccountDataFile = { version: 1, updatedAt: new Date().toISOString(), bundle: merged, tombstones }
+  const upload = await storage.upload(path, new Blob([JSON.stringify(body)], { type: 'application/json' }), {
+    upsert: true,
+    contentType: 'application/json',
+  })
+  if (upload.error) throw new Error(`Supabase could not save your synced data: ${upload.error.message}`)
+  return merged
 }
