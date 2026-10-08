@@ -53,11 +53,18 @@ with `npm install` or `bun install`. Never commit `.env` or secret values.
 
 ## Next build order
 
-1. Add chapter text indexing, in-reader search, stable source locations, and
-   more precise Noema answers and highlights.
-2. Add appearance controls, richer annotations, and review prompts.
-3. Add deletion tombstones and richer conflict history to cloud sync.
-4. Add source-grounded practice and subject-specific activity adapters.
+Done recently: whole-book search with jump-to-result, BM25 passage retrieval
+for Noema (answers cite `(Section N)`), deletion tombstones in both sync
+manifests, and review prompts with a spaced-repetition queue.
+
+1. Sync review cards (they are local to the browser today) and include them in
+   backups and tombstones.
+2. Map book sections to table-of-contents labels so retrieval citations can say
+   "Chapter 3" instead of "Section 3", and add stable source locations.
+3. Merge learning-path edits by timestamp (paths currently merge by creation
+   time only) and add richer conflict history to cloud sync.
+4. Add appearance controls and richer annotations.
+5. Add source-grounded practice and subject-specific activity adapters.
 
 ## Boundaries
 

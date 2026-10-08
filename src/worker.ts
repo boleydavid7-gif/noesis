@@ -3,6 +3,12 @@ type Env = {
   GEMINI_API_KEY?: string
   GOOGLE_API_KEY?: string
   GEMINI_TUTOR_MODEL?: string
+  VITE_SUPABASE_URL?: string
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string
+  // Set to "true" to require a valid Supabase session for /api/tutor.
+  TUTOR_REQUIRE_AUTH?: string
+  // When set, /api/models is only served to requests sending this token.
+  ADMIN_TOKEN?: string
   VITE_GOOGLE_DRIVE_CLIENT_ID?: string
   VITE_ONEDRIVE_CLIENT_ID?: string
   VITE_DROPBOX_APP_KEY?: string
@@ -17,11 +23,40 @@ const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const MAX_SEARCH_LENGTH = 160
 
-function fetchWithTimeout(input: string, init: RequestInit, milliseconds = 5_000): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('upstream timeout')), milliseconds)
-    fetch(input, init).then((response) => { clearTimeout(timer); resolve(response) }).catch((reason) => { clearTimeout(timer); reject(reason) })
-  })
+async function fetchWithTimeout(input: string | URL, init: RequestInit = {}, milliseconds = 5_000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), milliseconds)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Best-effort per-isolate limiter. It slows scripted abuse of the paid and
+// upstream-backed routes; use a Cloudflare rate-limit rule for hard guarantees.
+const rateBuckets = new Map<string, { count: number; resetAt: number }>()
+function rateLimited(request: Request, route: string, limit: number, windowMs = 60_000): boolean {
+  const now = Date.now()
+  if (rateBuckets.size > 5_000) for (const [key, bucket] of rateBuckets) if (bucket.resetAt <= now) rateBuckets.delete(key)
+  const key = `${route}:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`
+  const bucket = rateBuckets.get(key)
+  if (!bucket || bucket.resetAt <= now) { rateBuckets.set(key, { count: 1, resetAt: now + windowMs }); return false }
+  bucket.count += 1
+  return bucket.count > limit
+}
+
+async function hasValidSession(request: Request, env: Env): Promise<boolean> {
+  const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const base = env.VITE_SUPABASE_URL?.trim().replace(/\/$/, '')
+  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+  if (!token || !base || !key) return false
+  try {
+    const response = await fetchWithTimeout(`${base}/auth/v1/user`, { headers: { authorization: `Bearer ${token}`, apikey: key } })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 function json(data: unknown, status = 200): Response {
@@ -31,7 +66,71 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
+type Generated = { ok: true; text: string; model: string } | { ok: false; error: string; status: number }
+
+// One Gemini call with model fallback. Shared by the tutor and review routes.
+async function generate(
+  env: Env,
+  options: { system: string; prompt: string; maxOutputTokens: number; temperature: number; json?: boolean },
+): Promise<Generated> {
+  const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
+  if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.', status: 503 }
+
+  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
+  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
+  let lastStatus = 0
+  let lastDetail = ''
+  for (const model of models) {
+    let response: Response
+    try {
+      response = await fetchWithTimeout(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: options.system }] },
+          contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
+          generationConfig: {
+            temperature: options.temperature,
+            maxOutputTokens: options.maxOutputTokens,
+            ...(options.json ? { responseMimeType: 'application/json' } : {}),
+          },
+        }),
+      }, 25_000)
+    } catch {
+      return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
+    }
+
+    if (response.ok) {
+      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
+      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+      return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
+    }
+
+    lastStatus = response.status
+    try {
+      const providerError = (await response.clone().json()) as { error?: { message?: string } }
+      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
+    } catch {
+      lastDetail = ''
+    }
+    if (response.status === 429) return { ok: false, error: 'Gemini is busy. Try again in a moment.', status: 429 }
+    if (![404, 500, 502, 503, 504].includes(response.status)) break
+  }
+  return { ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}`, status: 502 }
+}
+
+// Rate limit and (optionally) require a signed-in session for AI routes.
+async function guardAi(request: Request, env: Env, route: string, limit: number, busy: string, signIn: string): Promise<Response | null> {
+  if (rateLimited(request, route, limit)) return json({ ok: false, error: busy }, 429)
+  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
+    return json({ ok: false, error: signIn }, 401)
+  }
+  return null
+}
+
 async function answerTutor(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(request, env, 'tutor', 20, 'Too many questions. Try again in a minute.', 'Sign in to ask Noema.')
+  if (refused) return refused
   let input: { question?: unknown; context?: unknown; book?: unknown }
   try {
     input = (await request.json()) as typeof input
@@ -44,11 +143,6 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
 
   const context = typeof input.context === 'string' ? input.context.slice(0, MAX_CONTEXT_LENGTH) : ''
   const book = typeof input.book === 'string' ? input.book.slice(0, MAX_BOOK_LENGTH) : ''
-  const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
-  if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
-
-  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  const models = [...new Set([configuredModel, 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
     'You are Noema, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
@@ -57,45 +151,58 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     'For borrowed or hosted books, distinguish metadata from the actual text. Explain exact passages only when the learner supplies the passage or notes. Never claim access to protected reader contents; ask the learner to paste a passage when needed.',
     'Treat the supplied visible reading text and selected passage as the learner\'s immediate context. Prefer that text over general book metadata or distant excerpts.',
     'When relevant text is supplied, explain it from that text, mention the current chapter or page when available, and distinguish direct evidence from interpretation.',
+    'Book excerpts are labelled [Section N]. When you rely on one, cite it as (Section N) so the learner can find it, and never cite a section you were not given.',
     'Keep the answer focused unless the learner asks for a deep explanation.',
   ].join(' ')
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
 
-  let lastStatus = 0
-  let lastDetail = ''
-  for (const model of models) {
-    let response: Response
-    try {
-      response = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.35, maxOutputTokens: 800 },
-        }),
-      })
-    } catch {
-      return json({ ok: false, error: 'Noema could not reach Gemini right now.' }, 502)
-    }
+  const result = await generate(env, { system, prompt, maxOutputTokens: 800, temperature: 0.35 })
+  return result.ok ? json({ ok: true, text: result.text, model: result.model }) : json({ ok: false, error: result.error }, result.status)
+}
 
-    if (response.ok) {
-      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
-      return text ? json({ ok: true, text, model }) : json({ ok: false, error: 'Gemini returned an empty answer.' }, 502)
-    }
+const MAX_PASSAGE_LENGTH = 6_000
 
-    lastStatus = response.status
-    try {
-      const providerError = (await response.clone().json()) as { error?: { message?: string } }
-      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
-    } catch {
-      lastDetail = ''
-    }
-    if (response.status === 429) return json({ ok: false, error: 'Gemini is busy. Try again in a moment.' }, 429)
-    if (![404, 500, 502, 503, 504].includes(response.status)) break
+// Drafts study questions from one passage. The client shows them to the
+// learner, who approves each one before it becomes a review card.
+async function draftReviewCards(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(request, env, 'review', 10, 'Too many requests. Try again in a minute.', 'Sign in to create review questions.')
+  if (refused) return refused
+  let input: { passage?: unknown; bookTitle?: unknown; count?: unknown }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
   }
-  return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}` }, 502)
+  const passage = typeof input.passage === 'string' ? input.passage.trim().slice(0, MAX_PASSAGE_LENGTH) : ''
+  if (passage.length < 40) return json({ ok: false, error: 'Select a longer passage to make questions from.' }, 400)
+  const bookTitle = typeof input.bookTitle === 'string' ? input.bookTitle.slice(0, 200) : ''
+  const requested = typeof input.count === 'number' && Number.isFinite(input.count) ? Math.round(input.count) : 3
+  const count = Math.max(1, Math.min(5, requested))
+
+  const system = [
+    'You write review questions for a learner, grounded only in the passage supplied.',
+    'Return a JSON array of objects with "question" and "answer" strings, and nothing else.',
+    'Every question must be answerable from the passage alone, without outside knowledge or the surrounding book.',
+    'Prefer questions that test understanding of an idea over recalling exact wording. Keep each answer to one to three sentences.',
+    'Do not invent facts or quotations. If the passage supports fewer questions than requested, return fewer.',
+  ].join(' ')
+  const prompt = `${bookTitle ? `Book: ${bookTitle}\n` : ''}Write up to ${count} questions.\n\nPassage:\n${passage}`
+  const result = await generate(env, { system, prompt, maxOutputTokens: 900, temperature: 0.3, json: true })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema returned questions in an unexpected format. Try again.' }, 502)
+  }
+  const list = Array.isArray(parsed) ? parsed : (parsed as { cards?: unknown } | null)?.cards
+  const cards = (Array.isArray(list) ? list : [])
+    .map((item) => item as { question?: unknown; answer?: unknown })
+    .filter((item) => typeof item?.question === 'string' && typeof item?.answer === 'string' && item.question.trim() && item.answer.trim())
+    .slice(0, count)
+    .map((item) => ({ question: String(item.question).trim().slice(0, 400), answer: String(item.answer).trim().slice(0, 800) }))
+  return cards.length > 0 ? json({ ok: true, cards }) : json({ ok: false, error: 'Noema could not make questions from that passage.' }, 502)
 }
 
 type SearchResult = {
@@ -116,11 +223,12 @@ type SearchResult = {
 }
 
 async function searchFreeResources(request: Request): Promise<Response> {
+  if (rateLimited(request, 'search', 30)) return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
   try {
     const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
     if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
     const encoded = encodeURIComponent(query)
-    const openLibrary = fetch(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
+    const openLibrary = fetchWithTimeout(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
@@ -130,7 +238,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
-    const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
+    const gutenberg = fetchWithTimeout(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
@@ -168,7 +276,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           }
         })
       }).catch(() => [] as SearchResult[])
-    const archive = fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
+    const archive = fetchWithTimeout(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { response?: { docs?: Array<{ identifier?: string; title?: string; creator?: string | string[]; year?: number | string; description?: string | string[]; collection?: string | string[] }> } }
@@ -204,16 +312,50 @@ async function searchFreeResources(request: Request): Promise<Response> {
 
 const RESOURCE_HOSTS = ['gutenberg.org', 'archive.org', 'arxiv.org', 'nih.gov', 'pmc.ncbi.nlm.nih.gov', 'zenodo.org', 'doaj.org']
 
+const MAX_RESOURCE_BYTES = 80 * 1024 * 1024
+const MAX_RESOURCE_REDIRECTS = 3
+
+function isAllowedResource(url: URL): boolean {
+  return url.protocol === 'https:' && RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
+}
+
 async function proxyResource(request: Request): Promise<Response> {
+  if (rateLimited(request, 'resource', 20)) return json({ ok: false, error: 'Too many downloads. Try again in a minute.' }, 429)
   const target = new URL(request.url).searchParams.get('url')
   if (!target) return json({ ok: false, error: 'A resource URL is required.' }, 400)
   let url: URL
   try { url = new URL(target) } catch { return json({ ok: false, error: 'The resource URL is invalid.' }, 400) }
-  if (url.protocol !== 'https:' || !RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) return json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
-  const response = await fetch(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' } })
-  if (!response.ok) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
+  const refusal = json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
+  if (!isAllowedResource(url)) return refusal
+
+  // Follow redirects by hand so every hop stays on the allowlist.
+  let response: Response
+  try {
+    for (let hop = 0; ; hop += 1) {
+      response = await fetchWithTimeout(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' }, redirect: 'manual' }, 20_000)
+      const location = response.headers.get('location')
+      if (response.status < 300 || response.status >= 400 || !location) break
+      if (hop >= MAX_RESOURCE_REDIRECTS) return json({ ok: false, error: 'The source redirected too many times.' }, 502)
+      url = new URL(location, url)
+      if (!isAllowedResource(url)) return refusal
+    }
+  } catch {
+    return json({ ok: false, error: 'The source did not respond in time.' }, 502)
+  }
+  if (!response.ok || !response.body) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_RESOURCE_BYTES) return json({ ok: false, error: 'This file is too large to import.' }, 413)
+
+  let received = 0
+  const limiter = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      received += chunk.byteLength
+      if (received > MAX_RESOURCE_BYTES) controller.error(new Error('resource too large'))
+      else controller.enqueue(chunk)
+    },
+  })
   const headers = new Headers({ 'cache-control': 'public, max-age=3600', 'content-type': response.headers.get('content-type') || 'application/octet-stream' })
-  return new Response(response.body, { status: response.status, headers })
+  return new Response(response.body.pipeThrough(limiter), { status: 200, headers })
 }
 
 const worker = {
@@ -231,11 +373,13 @@ const worker = {
       return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
     }
     if (url.pathname === '/api/models' && request.method === 'GET') {
+      const adminToken = env.ADMIN_TOKEN?.trim()
+      if (!adminToken || request.headers.get('x-admin-token') !== adminToken) return json({ ok: false, error: 'Not found.' }, 404)
       const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
       if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured.' }, 503)
       let response: Response
       try {
-        response = await fetch(`${GEMINI_BASE}/models?key=${encodeURIComponent(apiKey)}`)
+        response = await fetchWithTimeout(`${GEMINI_BASE}/models`, { headers: { 'x-goog-api-key': apiKey } })
       } catch {
         return json({ ok: false, error: 'Gemini model discovery could not reach Google.' }, 502)
       }
@@ -256,6 +400,10 @@ const worker = {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204 })
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return answerTutor(request, env)
+    }
+    if (url.pathname === '/api/review') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return draftReviewCards(request, env)
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)

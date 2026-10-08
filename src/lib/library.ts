@@ -1,3 +1,4 @@
+import { markDeleted, markRestored } from './tombstones'
 export type BookFormat = 'epub' | 'pdf' | 'resource' | 'web'
 
 export type LibraryBook = {
@@ -55,6 +56,7 @@ export function writeLibraryBooks(books: LibraryBook[]): void {
 }
 
 export function upsertLibraryBook(book: LibraryBook): LibraryBook[] {
+  markRestored('book', book.id)
   const books = readLibraryBooks().filter((item) => item.id !== book.id)
   const next = [book, ...books]
   writeLibraryBooks(next)
@@ -62,6 +64,7 @@ export function upsertLibraryBook(book: LibraryBook): LibraryBook[] {
 }
 
 export function removeLibraryBook(id: string): LibraryBook[] {
+  markDeleted('book', id)
   const books = readLibraryBooks().filter((item) => item.id !== id)
   writeLibraryBooks(books)
   void deleteEpubFile(id)
