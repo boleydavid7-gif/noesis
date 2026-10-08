@@ -502,7 +502,7 @@ export function PathPlanner({
               ? `${clarification.topic} covers a lot. What do you want to focus on?`
               : 'Which angles interest you?'}
           </h3>
-          <p>Pick one. Its path and reading list will be built around exactly that.</p>
+          <p>Pick one to see what it covers. Nothing is built until you press Build, so look around first.</p>
           <div className="planner-focuses">
             {clarification.focuses.map((focus, index) => {
               const on = picked === focus.title
@@ -523,6 +523,26 @@ export function PathPlanner({
               )
             })}
           </div>
+          {(() => {
+            const chosen = clarification.focuses.find((focus) => focus.title === picked)
+            if (!chosen) return null
+            return (
+              <div className="planner-explain" aria-live="polite">
+                <h4>{chosen.title}</h4>
+                <p>{chosen.description}</p>
+                {chosen.covers?.length ? (
+                  <p>
+                    <strong>You’d study:</strong> {chosen.covers.join(' · ')}
+                  </p>
+                ) : null}
+                {chosen.fits ? (
+                  <p>
+                    <strong>Good for:</strong> {chosen.fits}
+                  </p>
+                ) : null}
+              </div>
+            )
+          })()}
           <div className="planner-questions">
             <label>
               Your level
@@ -554,6 +574,17 @@ export function PathPlanner({
           <div className="planner-actions">
             <button className="primary-button" onClick={() => void build()} disabled={busy || !picked}>
               <Sparkles size={15} /> {status === 'planning' ? 'Building…' : 'Build this path'}
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => {
+                reset()
+                setStatus('idle')
+              }}
+              disabled={busy}
+            >
+              None of these, start over
             </button>
             <button className="text-button" onClick={() => void build(true)} disabled={busy}>
               Skip, suggest a few paths

@@ -6820,3 +6820,19 @@ body {
   margin-top: 2px;
   color: var(--muted);
 }
+.planner-explain {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.35);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.06);
+}
+.planner-explain h4,
+.planner-explain p {
+  margin: 0;
+}
+.planner-explain p {
+  font-size: 13px;
+  line-height: 1.45;
+}

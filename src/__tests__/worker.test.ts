@@ -548,7 +548,12 @@ describe('clarify route', () => {
     topic: 'Psychology',
     broad: true,
     focuses: [
-      { title: 'Foundations of psychology', description: 'The core ideas.' },
+      {
+        title: 'Foundations of psychology',
+        description: 'The core ideas.',
+        covers: ['Memory', 'Learning', 7],
+        fits: 'Anyone starting out.',
+      },
       { title: 'Clinical psychology', description: 'Mental health and treatment.' },
       { title: '', description: 'dropped' },
     ],
@@ -573,11 +578,13 @@ describe('clarify route', () => {
     const body = (await (await ask('Psychology', '7.7.9.1')).json()) as {
       ok: boolean
       broad: boolean
-      focuses: Array<{ title: string }>
+      focuses: Array<{ title: string; covers: string[]; fits: string }>
     }
     expect(body.ok).toBe(true)
     expect(body.broad).toBe(true)
     expect(body.focuses.map((focus) => focus.title)).toEqual(['Foundations of psychology', 'Clinical psychology'])
+    expect(body.focuses[0].covers).toEqual(['Memory', 'Learning'])
+    expect(body.focuses[0].fits).toBe('Anyone starting out.')
   })
 
   it('rejects an empty goal', async () => {

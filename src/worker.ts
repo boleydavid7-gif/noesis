@@ -304,13 +304,13 @@ async function clarifyGoal(request: Request, env: Env): Promise<Response> {
   const result = await generate(env, {
     system: [
       'You help a learner narrow down what they want to learn. Reply with JSON only, in exactly this shape:',
-      '{"topic":"","broad":true,"focuses":[{"title":"","description":""}]}.',
+      '{"topic":"","broad":true,"focuses":[{"title":"","description":"","covers":[""],"fits":""}]}.',
       '"topic" is the subject in two to five words. "broad" is true when the goal is a whole field that contains several distinct areas (such as psychology, finance, or programming) and false when it is already specific.',
-      'List six to eight "focuses": distinct, specific areas within the subject that someone might want to study, ordered from the usual starting point to more specialised areas. Include a foundational or introductory focus first. "title" is two to five words; "description" is one short sentence.',
+      'List six to eight "focuses": distinct, specific areas within the subject that someone might want to study, ordered from the usual starting point to more specialised areas. Include a foundational or introductory focus first. "title" is two to five words; "description" is one or two plain sentences saying what studying this area is about; "covers" lists three or four of the main topics someone would study; "fits" is one short sentence on who it suits or what it leads to.',
       'If the goal is already specific, list focuses that are different angles on it (for example theory, practice, exam preparation).',
     ].join(' '),
     prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 1_200,
+    maxOutputTokens: 2_500,
     temperature: 0.4,
     json: true,
   })
@@ -325,8 +325,13 @@ async function clarifyGoal(request: Request, env: Env): Promise<Response> {
     .flatMap((item) => {
       const row = (item ?? {}) as Record<string, unknown>
       const title = typeof row.title === 'string' ? row.title.trim().slice(0, 60) : ''
-      const description = typeof row.description === 'string' ? row.description.trim().slice(0, 140) : ''
-      return title ? [{ title, description }] : []
+      const description = typeof row.description === 'string' ? row.description.trim().slice(0, 260) : ''
+      const fits = typeof row.fits === 'string' ? row.fits.trim().slice(0, 160) : ''
+      const covers = (Array.isArray(row.covers) ? row.covers : [])
+        .filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+        .map((item) => item.trim().slice(0, 60))
+        .slice(0, 5)
+      return title ? [{ title, description, covers, fits }] : []
     })
     .slice(0, 8)
   if (focuses.length < 2)
