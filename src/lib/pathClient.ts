@@ -75,12 +75,20 @@ export async function resolveBook(candidate: BookCandidate, now = Date.now()): P
 // as each one arrives so the page can fill in progressively.
 export async function resolveBooks(
   candidates: BookCandidate[],
-  onProgress?: (books: ResolvedBook[]) => void,
+  onProgress?: (books: ResolvedBook[], done: number, total: number) => void,
   concurrency = 4,
 ): Promise<ResolvedBook[]> {
   const results: Array<ResolvedBook | null | undefined> = new Array(candidates.length).fill(undefined)
   let next = 0
-  const report = () => onProgress?.(results.filter((book): book is ResolvedBook => Boolean(book)))
+  let finished = 0
+  const report = () => {
+    finished += 1
+    onProgress?.(
+      results.filter((book): book is ResolvedBook => Boolean(book)),
+      finished,
+      candidates.length,
+    )
+  }
   const worker = async () => {
     while (next < candidates.length) {
       const index = next
