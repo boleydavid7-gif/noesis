@@ -31,6 +31,8 @@ function writeCache(cache: Record<string, CacheEntry>) {
 
 export const bookKey = (candidate: BookCandidate) => `${candidate.title}|${candidate.author}`.toLowerCase()
 
+export class AuthRequiredError extends Error {}
+
 export type Focus = { title: string; description: string; covers?: string[]; fits?: string }
 export type Clarification = { topic: string; broad: boolean; focuses: Focus[] }
 export type PlanOptions = { focuses?: string[]; level?: string; purpose?: string }
@@ -47,6 +49,7 @@ async function post<T>(route: string, body: unknown, fallback: string): Promise<
     throw new Error('Could not reach Noesis. Check your connection and try again.')
   }
   const result = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T
+  if (response.status === 401) throw new AuthRequiredError(result.error || 'Sign in to use this.')
   if (!response.ok || !result.ok) throw new Error(result.error || fallback)
   return result
 }

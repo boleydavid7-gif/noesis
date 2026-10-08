@@ -1,7 +1,8 @@
-import { useContext, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star } from 'lucide-react'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import {
+  AuthRequiredError,
   requestClarification,
   requestMaterials,
   requestSuggestion,
@@ -184,6 +185,7 @@ function StudyWith({ plan, milestone }: { plan: PathPlan; milestone: PlanMilesto
               </ul>
             </details>
             <em>Book</em>
+            <FreeCopyFinder book={book} />
           </li>
         ))}
       </ul>
@@ -399,28 +401,88 @@ function MiniBooks({ books, loading }: { books: ResolvedBook[]; loading: boolean
   )
 }
 
+const PLANNER_KEY = 'noesis:planner:v1'
+const PLANNER_DAYS = 7
+
+type PlannerMemory = {
+  at: number
+  goal: string
+  clarification: Clarification | null
+  picked: string
+  level: string
+  purpose: string
+  hours: number
+  suggestion: Suggestion | null
+  booksByPath: Record<string, ResolvedBook[]>
+  saved: string[]
+}
+
+// The planner keeps its last session so leaving the page doesn't throw away a plan.
+function readPlannerMemory(): PlannerMemory | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PLANNER_KEY) ?? 'null') as PlannerMemory | null
+    if (!parsed || typeof parsed.goal !== 'string' || Date.now() - parsed.at > PLANNER_DAYS * 86_400_000) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export function PathPlanner({
   onSave,
   onNotice,
+  signedIn,
+  onSignIn,
 }: {
   onSave: (path: LearningPath) => void
   onNotice: (message: string) => void
+  signedIn: boolean
+  onSignIn: () => void
 }) {
-  const [goal, setGoal] = useState('')
-  const [status, setStatus] = useState<'idle' | 'clarifying' | 'asking' | 'planning' | 'ready' | 'error'>('idle')
-  const [clarification, setClarification] = useState<Clarification | null>(null)
-  const [picked, setPicked] = useState('')
-  const [level, setLevel] = useState(LEVELS[0])
-  const [purpose, setPurpose] = useState(PURPOSES[0])
-  const [hours, setHours] = useState(4)
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
-  const [booksByPath, setBooksByPath] = useState<Record<string, ResolvedBook[]>>({})
+  const [memory] = useState(readPlannerMemory)
+  const [goal, setGoal] = useState(memory?.goal ?? '')
+  const [status, setStatus] = useState<'idle' | 'clarifying' | 'asking' | 'planning' | 'ready' | 'error'>(
+    memory?.suggestion ? 'ready' : memory?.clarification ? 'asking' : 'idle',
+  )
+  const [clarification, setClarification] = useState<Clarification | null>(memory?.clarification ?? null)
+  const [picked, setPicked] = useState(memory?.picked ?? '')
+  const [level, setLevel] = useState(memory?.level ?? LEVELS[0])
+  const [purpose, setPurpose] = useState(memory?.purpose ?? PURPOSES[0])
+  const [hours, setHours] = useState(memory?.hours ?? 4)
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(memory?.suggestion ?? null)
+  const [booksByPath, setBooksByPath] = useState<Record<string, ResolvedBook[]>>(memory?.booksByPath ?? {})
   const [lookingUp, setLookingUp] = useState(false)
   const [error, setError] = useState('')
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
-  const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [saved, setSaved] = useState<Set<string>>(new Set(memory?.saved ?? []))
   const [examples, setExamples] = useState(false)
   const run = useRef(0)
+
+  useEffect(() => {
+    try {
+      const empty = !goal && !clarification && !suggestion
+      if (empty) localStorage.removeItem(PLANNER_KEY)
+      else
+        localStorage.setItem(
+          PLANNER_KEY,
+          JSON.stringify({
+            at: Date.now(),
+            goal,
+            clarification,
+            picked,
+            level,
+            purpose,
+            hours,
+            suggestion,
+            booksByPath,
+            saved: [...saved],
+          } satisfies PlannerMemory),
+        )
+    } catch {
+      // Remembering the plan is a convenience.
+    }
+  }, [goal, clarification, picked, level, purpose, hours, suggestion, booksByPath, saved])
 
   const paths = useMemo(
     () => (suggestion ? suggestion.paths.map((path) => withSchedule(path, hours)) : []),
@@ -430,6 +492,7 @@ export function PathPlanner({
   function fail(reason: unknown, id: number, fallback: string) {
     if (id !== run.current) return
     setError(reason instanceof Error ? reason.message : fallback)
+    setNeedsSignIn(reason instanceof AuthRequiredError)
     setStatus('error')
     setLookingUp(false)
   }
@@ -442,6 +505,8 @@ export function PathPlanner({
     setPicked('')
     setOpen(null)
     setError('')
+    setNeedsSignIn(false)
+    setSaved(new Set())
   }
 
   // Step 1: find out what the learner means before planning anything.
@@ -483,20 +548,33 @@ export function PathPlanner({
       if (id !== run.current) return
       setSuggestion(plan)
       setStatus('ready')
-      setLookingUp(true)
-      // Look up each path's own books, filling its card in as soon as they arrive.
-      for (const path of plan.paths) {
-        const found = await resolveBooks(path.books ?? [])
-        if (id !== run.current) return
-        const seen = new Set<string>()
-        const unique = found.filter((book) => !seen.has(book.title.toLowerCase()) && seen.add(book.title.toLowerCase()))
-        setBooksByPath((current) => ({ ...current, [path.id]: rankBooks(unique, 10) }))
-      }
-      setLookingUp(false)
+      await loadBooks(plan, id)
     } catch (reason) {
       fail(reason, id, 'Noema could not build a path right now.')
     }
   }
+
+  // Looks up each path's own books, filling its card in as soon as they arrive.
+  async function loadBooks(plan: Suggestion, id: number) {
+    setLookingUp(true)
+    for (const path of plan.paths) {
+      const found = await resolveBooks(path.books ?? [])
+      if (id !== run.current) return
+      const seen = new Set<string>()
+      const unique = found.filter((book) => !seen.has(book.title.toLowerCase()) && seen.add(book.title.toLowerCase()))
+      setBooksByPath((current) => ({ ...current, [path.id]: rankBooks(unique, 10) }))
+    }
+    setLookingUp(false)
+  }
+
+  // A restored plan whose books never finished loading picks up where it left off.
+  useEffect(() => {
+    if (!memory?.suggestion) return
+    const plan = memory.suggestion
+    if (plan.paths.every((path) => memory.booksByPath[path.id])) return
+    void loadBooks(plan, run.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function save(path: SuggestedPath) {
     if (!suggestion) return
@@ -519,6 +597,14 @@ export function PathPlanner({
               <h3>What do you want to learn?</h3>
             </div>
           </div>
+          {!signedIn ? (
+            <p className="planner-signin">
+              Planning uses Noema, which needs an account.{' '}
+              <button type="button" className="text-button" onClick={onSignIn}>
+                Sign in or create one
+              </button>
+            </p>
+          ) : null}
           <div className="planner-goal-body">
             <textarea
               value={goal}
@@ -561,6 +647,14 @@ export function PathPlanner({
           {status === 'error' && error ? (
             <p className="weather-error" role="alert">
               {error}
+              {needsSignIn ? (
+                <>
+                  {' '}
+                  <button type="button" className="text-button" onClick={onSignIn}>
+                    Sign in
+                  </button>
+                </>
+              ) : null}
             </p>
           ) : null}
         </form>
@@ -589,7 +683,7 @@ export function PathPlanner({
                     {on ? <Check size={13} /> : null} {focus.title}
                   </strong>
                   {index === 0 ? <span className="plan-pill">Good place to start</span> : null}
-                  <small>{focus.description}</small>
+                  {on ? null : <small>{focus.description}</small>}
                 </button>
               )
             })}

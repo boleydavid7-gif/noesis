@@ -66,6 +66,11 @@ export async function sendPasswordReset(email: string): Promise<void> {
   if (result.error) throw new Error(result.error.message)
 }
 
+export async function updatePassword(password: string): Promise<void> {
+  const result = await getAuthClient().auth.updateUser({ password })
+  if (result.error) throw new Error(result.error.message)
+}
+
 export async function signOut(): Promise<void> {
   const result = await getAuthClient().auth.signOut()
   if (result.error) throw new Error(result.error.message)
