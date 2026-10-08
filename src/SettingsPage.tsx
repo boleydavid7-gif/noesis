@@ -159,6 +159,40 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             label="Open books in wide layout"
           />
         </Row>
+        <Row title="Page width" detail="A narrower column is easier to follow in a novel.">
+          <Segmented
+            label="Page width"
+            value={reading.lineWidth}
+            onChange={(value) => set('reading', 'lineWidth', value)}
+            options={[
+              { value: 'full', label: 'Full' },
+              { value: 'comfortable', label: 'Medium' },
+              { value: 'narrow', label: 'Narrow' },
+            ]}
+          />
+        </Row>
+        <Row title="Paragraphs" detail="Indented, spaced, or as the book has them.">
+          <Segmented
+            label="Paragraphs"
+            value={reading.paragraphs}
+            onChange={(value) => set('reading', 'paragraphs', value)}
+            options={[
+              { value: 'book', label: 'Book’s own' },
+              { value: 'indent', label: 'Indented' },
+              { value: 'space', label: 'Spaced' },
+            ]}
+          />
+        </Row>
+        <Row title="Justified text">
+          <Toggle
+            checked={reading.justify}
+            onChange={(value) => set('reading', 'justify', value)}
+            label="Justified text"
+          />
+        </Row>
+        <Row title="Drop caps" detail="A large first letter at the start of a chapter.">
+          <Toggle checked={reading.dropCap} onChange={(value) => set('reading', 'dropCap', value)} label="Drop caps" />
+        </Row>
         <Row title="Listening speed" detail="For read-aloud in the reader.">
           <Segmented
             label="Listening speed"

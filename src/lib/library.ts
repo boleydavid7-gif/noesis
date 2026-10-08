@@ -11,6 +11,10 @@ export type LibraryBook = {
   added?: string // when the book first joined the library
   finished?: string // when the reader first reached the end
   shelves?: string[] // the reader's own groupings
+  series?: string
+  seriesIndex?: number
+  review?: { stars: number; line: string; reread: boolean; at: string }
+  reviewAsked?: boolean // so the finish note is only offered once
 
   cover: string
   coverDataUrl?: string

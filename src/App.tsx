@@ -294,6 +294,10 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
+  const [finishPrompt, setFinishPrompt] = useState<string | null>(null)
+  const [finishStars, setFinishStars] = useState(0)
+  const [finishLine, setFinishLine] = useState('')
+  const [finishReread, setFinishReread] = useState(false)
   const [readerSearch, setReaderSearch] = useState('')
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
@@ -336,10 +340,19 @@ function App() {
   const selectedBook = useMemo(() => books.find((book) => book.id === selectedBookId) ?? null, [books, selectedBookId])
   const filteredBooks = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase()
-    const inShelf = shelfFilter ? books.filter((book) => book.shelves?.includes(shelfFilter)) : books
+    const inShelf = shelfFilter.startsWith('shelf:')
+      ? books.filter((book) => book.shelves?.includes(shelfFilter.slice(6)))
+      : shelfFilter.startsWith('series:')
+        ? books.filter((book) => book.series === shelfFilter.slice(7))
+        : shelfFilter === 'finished'
+          ? books.filter((book) => book.finished)
+          : books
     const matches = q
       ? inShelf.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q))
       : [...inShelf]
+    if (shelfFilter.startsWith('series:'))
+      return matches.sort((a, b) => (a.seriesIndex ?? 999) - (b.seriesIndex ?? 999))
+    if (shelfFilter === 'finished') return matches.sort((a, b) => (b.finished ?? '').localeCompare(a.finished ?? ''))
     return matches.sort((a, b) =>
       librarySort === 'title'
         ? a.title.localeCompare(b.title)
@@ -348,6 +361,11 @@ function App() {
           : b.updated.localeCompare(a.updated),
     )
   }, [books, libraryQuery, librarySort, shelfFilter])
+  const allSeries = useMemo(
+    () => [...new Set(books.flatMap((book) => (book.series ? [book.series] : [])))].sort((a, b) => a.localeCompare(b)),
+    [books],
+  )
+  const hasFinished = books.some((book) => book.finished)
   const allShelves = useMemo(
     () => [...new Set(books.flatMap((book) => book.shelves ?? []))].sort((a, b) => a.localeCompare(b)),
     [books],
@@ -995,6 +1013,13 @@ function App() {
     chapterIndex?: number,
     chapterProgress?: number,
   ) {
+    const before = books.find((book) => book.id === id)
+    if (before && !before.finished && !before.reviewAsked && progress >= 99) {
+      setFinishStars(0)
+      setFinishLine('')
+      setFinishReread(false)
+      setFinishPrompt(id)
+    }
     setBooks((current) => {
       const next = current.map((book) =>
         book.id === id
@@ -1015,6 +1040,38 @@ function App() {
       if (changed) upsertLibraryBook(changed)
       return next
     })
+  }
+  function closeFinishPrompt(save: boolean) {
+    const book = books.find((item) => item.id === finishPrompt)
+    setFinishPrompt(null)
+    if (!book) return
+    setBooks(
+      upsertLibraryBook({
+        ...book,
+        reviewAsked: true,
+        review:
+          save && finishStars > 0
+            ? {
+                stars: finishStars,
+                line: finishLine.trim().slice(0, 140),
+                reread: finishReread,
+                at: new Date().toISOString(),
+              }
+            : book.review,
+        updated: new Date().toISOString(),
+      }),
+    )
+  }
+  function setBookSeries(book: LibraryBook, series: string, index?: number) {
+    const name = series.trim().slice(0, 60)
+    setBooks(
+      upsertLibraryBook({
+        ...book,
+        series: name || undefined,
+        seriesIndex: name && index && index > 0 ? Math.round(index) : undefined,
+        updated: new Date().toISOString(),
+      }),
+    )
   }
   function setBookShelves(book: LibraryBook, shelves: string[]) {
     const changed: LibraryBook = {
@@ -1877,21 +1934,42 @@ function App() {
           </div>
         </div>
         <LibraryDeepSearch books={books} onOpen={openAtPassage} onAsk={askAboutHits} />
-        {allShelves.length > 0 ? (
+        {allShelves.length + allSeries.length > 0 || hasFinished ? (
           <div className="shelf-chips" role="tablist" aria-label="Shelves">
-            {['', ...allShelves].map((name) => (
+            {[
+              { key: '', label: 'All books' },
+              ...allShelves.map((name) => ({ key: `shelf:${name}`, label: name })),
+              ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
+              ...(hasFinished ? [{ key: 'finished', label: 'Finished' }] : []),
+            ].map((chip) => (
               <button
-                key={name || 'all'}
+                key={chip.key || 'all'}
                 role="tab"
-                aria-selected={shelfFilter === name}
-                className={shelfFilter === name ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
-                onClick={() => setShelfFilter(name)}
+                aria-selected={shelfFilter === chip.key}
+                className={shelfFilter === chip.key ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
+                onClick={() => setShelfFilter(chip.key)}
               >
-                {name || 'All books'}
+                {chip.label}
               </button>
             ))}
           </div>
         ) : null}
+        {shelfFilter.startsWith('series:')
+          ? (() => {
+              const next = filteredBooks.find((book) => !book.finished && book.progress < 99)
+              return next ? (
+                <div className="series-next panel-card">
+                  <span>
+                    Next in this series: <strong>{next.title}</strong>
+                    {next.seriesIndex ? ` (#${next.seriesIndex})` : ''}
+                  </span>
+                  <button className="secondary-button" onClick={() => openSavedBook(next)}>
+                    {next.progress > 0 ? 'Continue' : 'Start'}
+                  </button>
+                </div>
+              ) : null
+            })()
+          : null}
         <BookSection
           books={filteredBooks}
           onOpen={openSavedBook}
@@ -1899,6 +1977,7 @@ function App() {
           onDelete={deleteBook}
           shelves={allShelves}
           onShelves={setBookShelves}
+          onSeries={setBookSeries}
         />
       </Page>
     )
@@ -2702,6 +2781,60 @@ function App() {
         ) : null}
         {createPortal(
           <>
+            {finishPrompt ? (
+              <div className="brain-backdrop" data-overlay onMouseDown={() => closeFinishPrompt(false)}>
+                <form
+                  className="recovery-panel panel-card finish-panel"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    closeFinishPrompt(true)
+                  }}
+                >
+                  <h2>You finished {books.find((book) => book.id === finishPrompt)?.title ?? 'the book'}</h2>
+                  <div className="finish-stars" role="radiogroup" aria-label="Your rating">
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={finishStars === value}
+                        aria-label={`${value} ${value === 1 ? 'star' : 'stars'}`}
+                        className={value <= finishStars ? 'finish-star finish-star-on' : 'finish-star'}
+                        onClick={() => setFinishStars(value)}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  <label>
+                    In a line
+                    <input
+                      value={finishLine}
+                      onChange={(event) => setFinishLine(event.target.value)}
+                      maxLength={140}
+                      placeholder="What stayed with you?"
+                    />
+                  </label>
+                  <label className="finish-reread">
+                    <input
+                      type="checkbox"
+                      checked={finishReread}
+                      onChange={(event) => setFinishReread(event.target.checked)}
+                    />
+                    I’d read this again
+                  </label>
+                  <div className="recovery-actions">
+                    <button className="primary-button" type="submit" disabled={finishStars === 0}>
+                      Save
+                    </button>
+                    <button type="button" className="text-button" onClick={() => closeFinishPrompt(false)}>
+                      Not now
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : null}
             {sharedView ? (
               <div className="brain-backdrop" data-overlay onMouseDown={() => setSharedView(null)}>
                 <section className="noema-panel shared-panel" onMouseDown={(event) => event.stopPropagation()}>
@@ -2973,11 +3106,15 @@ function ShelfPicker({
   book,
   all,
   onChange,
+  onSeries,
 }: {
   book: LibraryBook
   all: string[]
   onChange: (book: LibraryBook, shelves: string[]) => void
+  onSeries?: (book: LibraryBook, series: string, index?: number) => void
 }) {
+  const [seriesName, setSeriesName] = useState(book.series ?? '')
+  const [seriesNo, setSeriesNo] = useState(book.seriesIndex ? String(book.seriesIndex) : '')
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const root = useRef<HTMLDivElement | null>(null)
@@ -3025,6 +3162,34 @@ function ShelfPicker({
               aria-label="New shelf name"
             />
           </form>
+          {onSeries ? (
+            <form
+              className="series-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onSeries(book, seriesName, Number(seriesNo) || undefined)
+              }}
+            >
+              <label>Series</label>
+              <input
+                value={seriesName}
+                onChange={(event) => setSeriesName(event.target.value)}
+                placeholder="Series name"
+                maxLength={60}
+                aria-label="Series name"
+              />
+              <input
+                value={seriesNo}
+                onChange={(event) => setSeriesNo(event.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+                placeholder="Book no."
+                inputMode="numeric"
+                aria-label="Number in series"
+              />
+              <button className="text-button" type="submit">
+                Save series
+              </button>
+            </form>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -3038,6 +3203,7 @@ function BookSection({
   onDelete,
   shelves,
   onShelves,
+  onSeries,
 }: {
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
@@ -3045,6 +3211,7 @@ function BookSection({
   onDelete?: (book: LibraryBook) => void
   shelves?: string[]
   onShelves?: (book: LibraryBook, shelves: string[]) => void
+  onSeries?: (book: LibraryBook, series: string, index?: number) => void
 }) {
   return (
     <section className="section-block library-section">
@@ -3076,8 +3243,17 @@ function BookSection({
                 </div>
                 <div className="book-card-title">{book.title}</div>
                 <div className="book-card-author">{book.author}</div>
+                {book.review ? (
+                  <div className="book-card-review" title={book.review.line}>
+                    {'★'.repeat(book.review.stars)}
+                    {'☆'.repeat(5 - book.review.stars)}
+                    {book.review.line ? <span> {book.review.line}</span> : null}
+                  </div>
+                ) : null}
               </button>
-              {onShelves ? <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} /> : null}
+              {onShelves ? (
+                <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} onSeries={onSeries} />
+              ) : null}
               {onDelete ? (
                 <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
                   <Trash2 size={13} />
