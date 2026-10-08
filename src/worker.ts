@@ -4,6 +4,7 @@ import {
   buyLinks,
   cleanBooks,
   cleanResources,
+  isPublicHttps,
   cleanSuggestion,
   MAX_PATHS,
   matchScore,
@@ -883,7 +884,8 @@ export function parseStandardEbooks(xml: string): SearchResult[] {
         description: tag(block, 'summary').slice(0, 400) || undefined,
         source: 'Standard Ebooks',
         sourceUrl,
-        downloadUrl: unescape(href).replace('?source=feed', ''),
+        // The address as the feed gives it: without its ?source=feed tail Standard Ebooks answers with a web page.
+        downloadUrl: unescape(href),
         free: true,
         format: 'EPUB',
         kind: 'book',
@@ -1185,6 +1187,47 @@ async function proxyResource(request: Request): Promise<Response> {
   return new Response(response.body.pipeThrough(limiter), { status: 200, headers })
 }
 
+// Fetches a public OPDS catalogue for the browser, which often cannot read other sites directly.
+// Only public https addresses, only catalogue-like answers, and a size limit.
+async function proxyCatalogue(request: Request): Promise<Response> {
+  if (rateLimited(request, 'opds', 40))
+    return json({ ok: false, error: 'Too many requests. Try again in a minute.' }, 429)
+  const target = new URL(request.url).searchParams.get('url') ?? ''
+  if (!isPublicHttps(target)) return json({ ok: false, error: 'Use the public https address of the catalogue.' }, 400)
+  let url = new URL(target)
+  let response: Response
+  try {
+    for (let hop = 0; ; hop += 1) {
+      response = await fetchWithTimeout(
+        url,
+        {
+          headers: { accept: 'application/atom+xml,application/xml;q=0.9,*/*;q=0.5', 'user-agent': 'Noesis/1.0' },
+          redirect: 'manual',
+        },
+        15_000,
+      )
+      const location = response.headers.get('location')
+      if (response.status < 300 || response.status >= 400 || !location) break
+      if (hop >= MAX_RESOURCE_REDIRECTS)
+        return json({ ok: false, error: 'The catalogue redirected too many times.' }, 502)
+      url = new URL(location, url)
+      if (!isPublicHttps(url.toString()))
+        return json({ ok: false, error: 'The catalogue redirected somewhere unsafe.' }, 400)
+    }
+  } catch {
+    return json({ ok: false, error: 'The catalogue did not respond in time.' }, 502)
+  }
+  if (!response.ok) return json({ ok: false, error: `The catalogue returned ${response.status}.` }, 502)
+  const type = response.headers.get('content-type') ?? ''
+  if (!/xml|atom|opds/i.test(type)) return json({ ok: false, error: 'That address is not an OPDS catalogue.' }, 422)
+  const text = await response.text()
+  if (text.length > 4_000_000) return json({ ok: false, error: 'That catalogue page is too large.' }, 413)
+  return new Response(text, {
+    status: 200,
+    headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'private, max-age=60' },
+  })
+}
+
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -1247,6 +1290,10 @@ const worker = {
     if (url.pathname === '/api/materials') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return findMaterials(request, env)
+    }
+    if (url.pathname === '/api/opds') {
+      if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return proxyCatalogue(request)
     }
     if (url.pathname === '/api/define') {
       if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)

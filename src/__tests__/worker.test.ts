@@ -731,8 +731,37 @@ describe('Standard Ebooks search', () => {
       description: 'A Regency-era novel & more.',
     })
     expect(book.downloadUrl).toBe(
-      'https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub',
+      'https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=feed',
     )
     expect(book.coverUrl).toContain('cover-thumbnail.jpg')
+  })
+})
+
+describe('opds proxy', () => {
+  const ask = (target: string, ip: string) =>
+    call(`/api/opds?url=${encodeURIComponent(target)}`, { headers: { 'cf-connecting-ip': ip } }, {})
+
+  it('passes on a public catalogue', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<feed><title>Books</title></feed>', { headers: { 'content-type': 'application/atom+xml' } }),
+      ),
+    )
+    const response = await ask('https://books.example.com/opds', '7.9.4.1')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('<title>Books</title>')
+  })
+
+  it('refuses private addresses, plain http and things that are not catalogues', async () => {
+    expect((await ask('http://books.example.com/opds', '7.9.4.2')).status).toBe(400)
+    expect((await ask('https://192.168.1.5/opds', '7.9.4.3')).status).toBe(400)
+    expect((await ask('https://localhost/opds', '7.9.4.4')).status).toBe(400)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html></html>', { headers: { 'content-type': 'text/html' } })),
+    )
+    expect((await ask('https://books.example.com/', '7.9.4.5')).status).toBe(422)
   })
 })

@@ -90,6 +90,7 @@ import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
 import { CommandBar } from './CommandBar'
+import { OpdsBrowser } from './OpdsBrowser'
 import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
@@ -2379,6 +2380,7 @@ function App() {
             </div>
           )}
         </section>
+        <OpdsBrowser onImport={(file) => importFiles([file])} />
         <section className="resource-section drm-sources" aria-label="More places for DRM-free books">
           <div className="section-heading">
             <div>
