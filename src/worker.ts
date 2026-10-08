@@ -1,3 +1,12 @@
+import {
+  BOOK_NOTES,
+  RESOURCE_KINDS,
+  cleanSuggestion,
+  pickBook,
+  resolvedFromRecord,
+  type BookRecord,
+} from './lib/pathPlan'
+
 type Env = {
   ASSETS: { fetch(request: Request): Promise<Response> }
   GEMINI_API_KEY?: string
@@ -9,6 +18,8 @@ type Env = {
   TUTOR_REQUIRE_AUTH?: string
   // When set, /api/models is only served to requests sending this token.
   ADMIN_TOKEN?: string
+  // Optional: raises the Google Books lookup quota for /api/book.
+  GOOGLE_BOOKS_API_KEY?: string
   VITE_GOOGLE_DRIVE_CLIENT_ID?: string
   VITE_ONEDRIVE_CLIENT_ID?: string
   VITE_DROPBOX_APP_KEY?: string
@@ -208,6 +219,174 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   return result.ok
     ? json({ ok: true, text: result.text, model: result.model })
     : json({ ok: false, error: result.error }, result.status)
+}
+
+async function linkWorks(url: string): Promise<boolean> {
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'GET',
+        redirect: 'follow',
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; NoesisLinkCheck/1.0)', range: 'bytes=0-0' },
+      },
+      4_000,
+    )
+    void response.body?.cancel()
+    // A site that blocks bots (403/429) is still a real site; only gone or broken pages are dropped.
+    return !(response.status === 404 || response.status === 410 || response.status >= 500)
+  } catch {
+    return false
+  }
+}
+
+// Turns a learner's goal into three structured paths, plus books and free
+// resources to look up. Books are verified one by one through /api/book.
+async function planPath(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'path',
+    6,
+    'Too many requests. Try again in a few minutes.',
+    'Sign in to create learning paths.',
+  )
+  if (refused) return refused
+  let input: { goal?: unknown }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  }
+  const goal = typeof input.goal === 'string' ? input.goal.trim().slice(0, 400) : ''
+  if (goal.length < 8) return json({ ok: false, error: 'Describe what you want to learn in a sentence or two.' }, 400)
+
+  const system = [
+    'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
+    '{"paths":[{"title":"","summary":"","weeks":"","level":"","milestones":[{"title":"","topics":[""]}]}],',
+    '"books":[{"title":"","author":"","note":""}],',
+    '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
+    "Give exactly three paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).",
+    'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "weeks" is a realistic range such as "6–8 weeks". "level" is Beginner, Intermediate, or Advanced.',
+    'List eight real, published books you are confident exist, as a mix of overview, practical, and reference titles, with the author\'s name. "note" is one of: ' +
+      BOOK_NOTES.join(', ') +
+      '.',
+    'List four to six free, reputable resources such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
+      RESOURCE_KINDS.join(', ') +
+      '.',
+    "Never invent a book, an author, or a web address. If you are not sure of an exact address, use the provider's main website address.",
+  ].join(' ')
+  const result = await generate(env, {
+    system,
+    prompt: `Learner's goal: ${goal}`,
+    maxOutputTokens: 4_000,
+    temperature: 0.5,
+    json: true,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema returned a plan in an unexpected format. Try again.' }, 502)
+  }
+  const suggestion = cleanSuggestion(goal, parsed)
+  if (!suggestion)
+    return json(
+      { ok: false, error: 'Noema could not build a path for that. Try describing your goal differently.' },
+      502,
+    )
+  const checks = await Promise.all(suggestion.resources.map((resource) => linkWorks(resource.url)))
+  suggestion.resources = suggestion.resources.filter((_, index) => checks[index])
+  return json({ ok: true, suggestion })
+}
+
+type GoogleVolume = {
+  volumeInfo?: {
+    title?: string
+    subtitle?: string
+    authors?: string[]
+    publishedDate?: string
+    industryIdentifiers?: Array<{ type?: string; identifier?: string }>
+    imageLinks?: { thumbnail?: string; smallThumbnail?: string }
+    averageRating?: number
+    ratingsCount?: number
+    infoLink?: string
+    description?: string
+  }
+  saleInfo?: { saleability?: string; buyLink?: string; listPrice?: { amount?: number; currencyCode?: string } }
+  accessInfo?: { publicDomain?: boolean; epub?: { isAvailable?: boolean; downloadLink?: string } }
+}
+
+function secure(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  return url.replace(/^http:\/\//, 'https://')
+}
+
+function toRecord(volume: GoogleVolume): BookRecord | null {
+  const info = volume.volumeInfo
+  if (!info?.title) return null
+  const ids = info.industryIdentifiers ?? []
+  const price = volume.saleInfo?.listPrice
+  let formatted: string | undefined
+  if (price?.amount && price.currencyCode) {
+    try {
+      formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: price.currencyCode }).format(
+        price.amount,
+      )
+    } catch {
+      formatted = undefined
+    }
+  }
+  const year = Number.parseInt(info.publishedDate?.slice(0, 4) ?? '', 10)
+  return {
+    title: info.subtitle ? `${info.title}: ${info.subtitle}` : info.title,
+    authors: info.authors ?? [],
+    year: Number.isFinite(year) ? year : undefined,
+    isbn10: ids.find((id) => id.type === 'ISBN_10')?.identifier,
+    isbn13: ids.find((id) => id.type === 'ISBN_13')?.identifier,
+    coverUrl: secure(info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail),
+    rating: typeof info.averageRating === 'number' ? info.averageRating : undefined,
+    ratingsCount: typeof info.ratingsCount === 'number' ? info.ratingsCount : undefined,
+    price: formatted,
+    description: info.description?.slice(0, 320),
+    buyLink: volume.saleInfo?.saleability === 'FOR_SALE' ? secure(volume.saleInfo.buyLink) : undefined,
+    infoUrl: secure(info.infoLink),
+    freeUrl: volume.accessInfo?.publicDomain && volume.accessInfo.epub?.isAvailable ? secure(info.infoLink) : undefined,
+  }
+}
+
+// Finds the real catalogue record for a book the AI named. Answers
+// { book: null } when nothing matches closely enough, and a 502 when the
+// catalogue itself could not be reached.
+async function lookupBook(request: Request, env: Env): Promise<Response> {
+  if (rateLimited(request, 'book', 80))
+    return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
+  const params = new URL(request.url).searchParams
+  const title = params.get('title')?.trim().slice(0, 140) ?? ''
+  const author = params.get('author')?.trim().slice(0, 100) ?? ''
+  const note = params.get('note')?.trim().slice(0, 40) || undefined
+  if (title.length < 2) return json({ ok: false, error: 'A title is required.' }, 400)
+  const query = `intitle:${title}${author ? ` inauthor:${author}` : ''}`
+  const key = env.GOOGLE_BOOKS_API_KEY?.trim()
+  const fields =
+    'items(volumeInfo(title,subtitle,authors,publishedDate,industryIdentifiers,imageLinks,averageRating,ratingsCount,infoLink,description),saleInfo(saleability,buyLink,listPrice),accessInfo(publicDomain,epub))'
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books&fields=${encodeURIComponent(fields)}${key ? `&key=${encodeURIComponent(key)}` : ''}`
+  let volumes: GoogleVolume[]
+  try {
+    const response = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, 6_000)
+    if (!response.ok) return json({ ok: false, error: 'Book lookup is unavailable right now.' }, 502)
+    volumes = ((await response.json()) as { items?: GoogleVolume[] }).items ?? []
+  } catch {
+    return json({ ok: false, error: 'Book lookup is unavailable right now.' }, 502)
+  }
+  const records = volumes.flatMap((volume) => {
+    const record = toRecord(volume)
+    return record ? [record] : []
+  })
+  const picked = pickBook(records, title, author)
+  return json({ ok: true, book: picked ? resolvedFromRecord(picked, note) : null })
 }
 
 const MAX_PASSAGE_LENGTH = 6_000
@@ -632,6 +811,14 @@ const worker = {
     if (url.pathname === '/api/review') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return draftReviewCards(request, env)
+    }
+    if (url.pathname === '/api/path') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return planPath(request, env)
+    }
+    if (url.pathname === '/api/book') {
+      if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return lookupBook(request, env)
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)

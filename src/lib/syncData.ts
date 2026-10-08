@@ -6,6 +6,7 @@ import type { CalendarEvent } from './calendar'
 import { sanitizeEvents } from './calendar'
 import { sanitizeTasks, type FocusState, type FocusTask } from './focus'
 import { mergeById } from './merge'
+import type { LearningPath } from './pathPlan'
 import type { ReviewCard } from './review'
 import { applyTombstones, type Tombstones } from './tombstones'
 
@@ -16,7 +17,7 @@ export type FocusSync = {
   metaUpdated?: string
   tasks: FocusTask[]
 }
-export type SyncBundle = { events: CalendarEvent[]; cards: ReviewCard[]; focus: FocusSync }
+export type SyncBundle = { events: CalendarEvent[]; cards: ReviewCard[]; focus: FocusSync; paths?: LearningPath[] }
 
 export function focusToSync(state: FocusState): FocusSync {
   return {
@@ -62,12 +63,16 @@ export function mergeTasks(local: FocusTask[], remote: FocusTask[]): FocusTask[]
 export function mergeBundles(local: SyncBundle, remote: SyncBundle | undefined, tombstones: Tombstones): SyncBundle {
   const events = remote ? mergeById(local.events, remote.events) : local.events
   const cards = remote ? mergeById(local.cards, remote.cards) : local.cards
+  // Paths are only merged when this side sends them (the account route does; the
+  // provider route syncs paths through its own manifest field).
+  const paths = local.paths ? (remote?.paths ? mergeById(local.paths, remote.paths) : local.paths) : undefined
   const useRemoteMeta = remote ? later(local.focus.metaUpdated, remote.focus.metaUpdated) : false
   const meta = useRemoteMeta && remote ? remote.focus : local.focus
   const tasks = remote ? mergeTasks(local.focus.tasks, remote.focus.tasks) : local.focus.tasks
   return {
     events: applyTombstones('event', events, tombstones),
     cards: applyTombstones('card', cards, tombstones),
+    paths: paths ? applyTombstones('path', paths, tombstones) : undefined,
     focus: {
       title: meta.title,
       session: meta.session,
@@ -76,6 +81,20 @@ export function mergeBundles(local: SyncBundle, remote: SyncBundle | undefined, 
       tasks: applyTombstones('focus', tasks, tombstones),
     },
   }
+}
+
+function sanitizePaths(value: unknown): LearningPath[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.filter((item): item is LearningPath => {
+    const path = item as Partial<LearningPath> | null
+    return (
+      !!path &&
+      typeof path.id === 'string' &&
+      typeof path.title === 'string' &&
+      typeof path.createdAt === 'string' &&
+      Array.isArray(path.bookIds)
+    )
+  })
 }
 
 function sanitizeCards(value: unknown): ReviewCard[] {
@@ -106,6 +125,7 @@ export function sanitizeBundle(value: unknown): SyncBundle | undefined {
   return {
     events: sanitizeEvents(row.events),
     cards: sanitizeCards(row.cards),
+    paths: sanitizePaths((row as { paths?: unknown }).paths),
     focus: {
       title: typeof focus.title === 'string' && focus.title.trim() ? focus.title : 'Today’s focus',
       session: typeof focus.session === 'string' && focus.session.trim() ? focus.session : 'Reading',

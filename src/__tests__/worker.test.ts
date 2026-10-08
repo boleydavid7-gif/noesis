@@ -177,3 +177,165 @@ describe('tutor answer length', () => {
     expect(sent(mock).generationConfig.maxOutputTokens).toBe(800)
   })
 })
+
+describe('learning path routes', () => {
+  const plan = {
+    paths: [
+      {
+        title: 'Foundations',
+        summary: 'Start here.',
+        weeks: '6–8 weeks',
+        level: 'Beginner',
+        milestones: [
+          { title: 'Basics', topics: ['One', 'Two'] },
+          { title: 'Next', topics: ['Three'] },
+        ],
+      },
+    ],
+    books: [{ title: 'Computer Networking: A Top-Down Approach', author: 'Kurose', note: 'Best overview' }],
+    resources: [
+      { title: 'Working site', publisher: 'A', url: 'https://good.example.com/course', kind: 'Free course' },
+      { title: 'Gone page', publisher: 'B', url: 'https://gone.example.com/missing', kind: 'Free course' },
+      { title: 'Unreachable', publisher: 'C', url: 'https://down.example.com/', kind: 'Free course' },
+    ],
+  }
+  const geminiThen = (checks: (url: string) => Response | Promise<Response>) =>
+    vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes('generativelanguage'))
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(plan) }] } }] }))
+      return checks(url)
+    })
+  const ask = (goal: unknown, ip: string) =>
+    call(
+      '/api/path',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify({ goal }) },
+      { GEMINI_API_KEY: 'k' },
+    )
+
+  it('rejects a goal that is too short', async () => {
+    expect((await ask('hi', '7.7.7.1')).status).toBe(400)
+  })
+
+  it('returns a cleaned plan and drops links that are gone or unreachable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      geminiThen((url) => {
+        if (url.startsWith('https://good.')) return new Response('x', { status: 206 })
+        if (url.startsWith('https://gone.')) return new Response('nope', { status: 404 })
+        throw new Error('network down')
+      }),
+    )
+    const response = await ask('I want to understand networking from scratch', '7.7.7.2')
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      suggestion: { paths: unknown[]; resources: Array<{ title: string }>; books: unknown[] }
+    }
+    expect(body.suggestion.paths).toHaveLength(1)
+    expect(body.suggestion.books).toHaveLength(1)
+    expect(body.suggestion.resources.map((resource) => resource.title)).toEqual(['Working site'])
+  })
+
+  it('keeps a link whose site blocks bots', async () => {
+    vi.stubGlobal(
+      'fetch',
+      geminiThen(() => new Response('blocked', { status: 403 })),
+    )
+    const body = (await (await ask('I want to understand networking from scratch', '7.7.7.3')).json()) as {
+      suggestion: { resources: unknown[] }
+    }
+    expect(body.suggestion.resources).toHaveLength(3)
+  })
+
+  it('fails cleanly when the model returns something unusable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"paths":[]}' }] } }] })),
+      ),
+    )
+    expect((await ask('I want to understand networking from scratch', '7.7.7.4')).status).toBe(502)
+  })
+
+  const volume = (title: string, authors: string[], extra: Record<string, unknown> = {}) => ({
+    volumeInfo: {
+      title,
+      authors,
+      publishedDate: '2021-03-01',
+      industryIdentifiers: [
+        { type: 'ISBN_10', identifier: '0136681557' },
+        { type: 'ISBN_13', identifier: '9780136681557' },
+      ],
+      imageLinks: { thumbnail: 'http://books.google.com/cover.jpg' },
+      averageRating: 4.5,
+      ratingsCount: 200,
+      infoLink: 'http://books.google.com/info',
+      ...extra,
+    },
+    saleInfo: {
+      saleability: 'FOR_SALE',
+      buyLink: 'https://play.google.com/store/books/details?id=abc',
+      listPrice: { amount: 49.99, currencyCode: 'USD' },
+    },
+  })
+  const lookup = (query: string, ip: string) =>
+    call(`/api/book?${query}`, { headers: { 'cf-connecting-ip': ip } }, { GOOGLE_BOOKS_API_KEY: 'key123' })
+
+  it('finds a real book with cover, rating, price and store links', async () => {
+    const mock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [volume('Computer Networking', ['James Kurose'], { subtitle: 'A Top-Down Approach' })],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await lookup(
+      'title=Computer%20Networking%3A%20A%20Top-Down%20Approach&author=Kurose&note=Best%20overview',
+      '8.8.8.1',
+    )
+    const body = (await response.json()) as {
+      book: {
+        title: string
+        coverUrl: string
+        rating: number
+        price: string
+        note: string
+        buy: Array<{ store: string; url: string }>
+      }
+    }
+    expect(body.book.title).toBe('Computer Networking: A Top-Down Approach')
+    expect(body.book.coverUrl.startsWith('https://')).toBe(true)
+    expect(body.book.rating).toBe(4.5)
+    expect(body.book.price).toBe('$49.99')
+    expect(body.book.note).toBe('Best overview')
+    expect(body.book.buy.map((link) => link.store)).toEqual([
+      'Bookshop.org',
+      'Amazon',
+      'Google Play Books',
+      'Find in a library',
+    ])
+    expect(String((mock.mock.calls[0] as unknown as [string])[0])).toContain('key=key123')
+  })
+
+  it('answers null when nothing matches closely, and 502 when the catalogue is down', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ items: [volume('Gardening for Beginners', ['Pat Green'])] }))),
+    )
+    expect(
+      ((await (await lookup('title=Network%20Warrior&author=Donahue', '8.8.8.2')).json()) as { book: unknown }).book,
+    ).toBeNull()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('quota', { status: 429 })),
+    )
+    expect((await lookup('title=Network%20Warrior', '8.8.8.3')).status).toBe(502)
+  })
+
+  it('requires a title and only accepts GET', async () => {
+    expect((await lookup('author=x', '8.8.8.4')).status).toBe(400)
+    expect((await call('/api/book', { method: 'POST' })).status).toBe(405)
+  })
+})
