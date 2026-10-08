@@ -280,6 +280,8 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
+  const [tutorOk, setTutorOk] = useState(false)
+  const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [justSavedPath, setJustSavedPath] = useState<string | null>(null)
   const [signOutClear, setSignOutClear] = useState(false)
@@ -884,7 +886,7 @@ function App() {
     kind: BrainNoteKind
     tags: string[]
     location?: BrainNoteLocation
-  }) {
+  }): Promise<Note> {
     const note: Note = {
       id: `local-${crypto.randomUUID()}`,
       kind: fields.kind,
@@ -902,6 +904,23 @@ function App() {
         ? 'Saved to your Second Brain.'
         : 'Saved on this device. It will sync when Supabase is available.',
     )
+    return note
+  }
+  // Keeps one of Noema's answers as a note, optionally going straight on to review questions for it.
+  async function keepNoemaAnswer(makeCards: boolean) {
+    const topic = tutorPrompt.match(/“([^”]{3,80})”/)?.[1]
+    const note = await addNote({
+      title: topic ?? (tutorPrompt.trim().slice(0, 60) || 'From Noema'),
+      body: tutorReply,
+      source: tutorContext?.bookTitle ? `Noema · ${tutorContext.bookTitle}` : 'Noema',
+      kind: 'note',
+      tags: [],
+    })
+    if (makeCards) {
+      setReviewStartNote(note.id)
+      setOverlay(null)
+      selectNav('Review')
+    }
   }
   async function editNote(note: Note) {
     setNotes((current) => current.map((item) => (item.id === note.id ? note : item)))
@@ -919,6 +938,7 @@ function App() {
     if (!question) return
     if (!settings.ai.enabled) {
       setTutorPrompt(question)
+      setTutorOk(false)
       setTutorReply('Noema is turned off. You can turn it back on in Settings → AI Companion.')
       return
     }
@@ -926,6 +946,7 @@ function App() {
     if (readingContext) setTutorContext(readingContext)
     setTutorPrompt(question)
     setTutorReply('')
+    setTutorOk(false)
     setTutorBusy(true)
     let bookText = ''
     if (noemaUseContext && settings.ai.useReadingText && selectedBook?.format === 'epub')
@@ -981,6 +1002,7 @@ function App() {
       const result = (await response.json()) as { ok?: boolean; text?: string; error?: string }
       if (!response.ok || !result.ok) throw new Error(result.error || 'Noema could not answer right now.')
       setTutorReply(result.text ?? 'Noema returned an empty answer.')
+      setTutorOk(Boolean(result.text))
       showNotice(
         activeContext?.visibleText || activeContext?.selectedText
           ? 'Noema answered from the page you are reading.'
@@ -1518,6 +1540,15 @@ function App() {
             <small>by Proairetos</small>
           </div>
         </section>
+        {dueCount > 0 ? (
+          <button className="due-card panel-card" onClick={() => selectNav('Review')}>
+            <RotateCcw size={16} />
+            <span>
+              {dueCount} review {dueCount === 1 ? 'card is' : 'cards are'} due
+            </span>
+            <ArrowRight size={15} />
+          </button>
+        ) : null}
         {books.length + paths.length + notes.length === 0 ? (
           <section className="start-card panel-card">
             <h2>Start here</h2>
@@ -2156,6 +2187,8 @@ function App() {
         <ReviewPage
           key={reviewRemount}
           notes={notes}
+          startWith={reviewStartNote}
+          onStarted={() => setReviewStartNote(null)}
           onNotice={showNotice}
           onChanged={() => setDataVersion((value) => value + 1)}
         />
@@ -2448,6 +2481,8 @@ function App() {
                 prompt={tutorPrompt}
                 reply={tutorReply}
                 busy={tutorBusy}
+                canKeep={tutorOk}
+                onKeep={(makeCards) => void keepNoemaAnswer(makeCards)}
                 useContext={noemaUseContext}
                 setUseContext={setNoemaUseContext}
                 setPrompt={setTutorPrompt}
@@ -3091,6 +3126,8 @@ function NoemaOverlay({
   prompt,
   reply,
   busy,
+  canKeep,
+  onKeep,
   useContext: contextOn,
   setUseContext,
   setPrompt,
@@ -3101,6 +3138,8 @@ function NoemaOverlay({
   prompt: string
   reply: string
   busy: boolean
+  canKeep: boolean
+  onKeep: (makeCards: boolean) => void
   useContext: boolean
   setUseContext: (value: boolean) => void
   setPrompt: (value: string) => void
@@ -3191,6 +3230,16 @@ function NoemaOverlay({
           <div className="tutor-reply">
             <strong>{prompt}</strong>
             <p>{reply}</p>
+            {canKeep ? (
+              <div className="tutor-reply-actions">
+                <button className="secondary-button" onClick={() => onKeep(false)}>
+                  Save as note
+                </button>
+                <button className="secondary-button" onClick={() => onKeep(true)}>
+                  Make review cards
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>
