@@ -856,7 +856,7 @@ export function Reader({
       }
     >
       {wideLayout ? (
-        <div className="reader-wide-topbar" aria-label="Focus reader controls">
+        <div className="reader-wide-topbar" aria-label="Expanded reader controls">
           <div className="reader-wide-capture">
             <span>Capture</span>
             <select
@@ -901,8 +901,8 @@ export function Reader({
             <button
               className="icon-button"
               onClick={() => setWideLayout(false)}
-              aria-label="Exit focus reader"
-              title="Exit focus reader"
+              aria-label="Exit expanded view"
+              title="Exit expanded view"
             >
               <Minimize2 size={18} />
             </button>
@@ -1146,7 +1146,7 @@ export function Reader({
             <option value="night">Night</option>
           </select>
           <button className="secondary-button" onClick={() => setWideLayout(true)}>
-            <Maximize2 size={14} /> Wide
+            <Maximize2 size={14} /> Expand
           </button>
         </div>
       ) : null}

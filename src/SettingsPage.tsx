@@ -152,11 +152,11 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             ]}
           />
         </Row>
-        <Row title="Open books in wide layout" detail="Shows the reading tools beside the page.">
+        <Row title="Open books expanded" detail="Shows the reading tools beside the page.">
           <Toggle
             checked={reading.startWide}
             onChange={(value) => set('reading', 'startWide', value)}
-            label="Open books in wide layout"
+            label="Open books expanded"
           />
         </Row>
         <Row title="Page width" detail="A narrower column is easier to follow in a novel.">
