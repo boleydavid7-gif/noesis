@@ -42,7 +42,12 @@ The current app is a working reader-first build:
 - Account supports email/password sign-in and can upgrade an anonymous session
   without moving its notes to a new user.
 - Explore searches Project Gutenberg, Open Library, OpenAlex, and Internet Archive through `/api/search`; hosted and borrowed items can open their official reader inside Noesis.
-- Cloud Backup can connect a learner's own Google Drive, OneDrive, or Dropbox.
+- Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
+  AI Companion, Notifications, Privacy, and About. Every setting is stored
+  locally (`noesis:settings:v1`) and read by the app: reader text/page/font,
+  accent and scenery, library sort and indexing, auto-sync, Noema context and
+  answer length, and review reminders.
+- Cloud Backup (Settings → Backup & Sync) can connect a learner's own Google Drive, OneDrive, or Dropbox.
   It syncs a manifest and separate EPUB files, then merges them on another
   device. ZIP remains an optional manual export only.
 

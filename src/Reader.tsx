@@ -24,6 +24,7 @@ import type { BrainNote, BrainNoteKind, BrainNoteLocation } from './lib/knowledg
 import { openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
+import { FONT_STACKS, READER_COLORS, type ReaderTheme, type Settings } from './lib/settings'
 
 type Note = BrainNote
 type SearchHit = { cfi: string; excerpt: string; chapter: string }
@@ -31,7 +32,6 @@ const MAX_SEARCH_HITS = 40
 export type NoteAction = 'highlight' | 'note' | 'question' | 'reflect' | 'connect'
 export type ReaderNoteHandler = (text: string, kind?: NoteAction, location?: BrainNoteLocation) => void
 
-type ReaderTheme = 'paper' | 'sepia' | 'night'
 type PageDirection = 'next' | 'previous'
 type ReaderChapter = { label: string; href: string }
 type ReaderLocation = {
@@ -102,6 +102,20 @@ function chapterEntries(value: unknown): ReaderChapter[] {
   })
 }
 
+// Applies the reading settings to an epubjs rendition. Used when the book
+// opens and whenever a setting changes.
+function applyReadingStyle(
+  themes: { fontSize: (value: string) => void; override: (name: string, value: string, important?: boolean) => void },
+  reading: Settings['reading'],
+) {
+  const colors = READER_COLORS[reading.theme]
+  themes.fontSize(`${reading.fontSize}%`)
+  themes.override('background-color', colors.background, true)
+  themes.override('color', colors.color, true)
+  themes.override('line-height', String(reading.lineHeight), true)
+  themes.override('font-family', FONT_STACKS[reading.font] ?? 'inherit', true)
+}
+
 export function Reader({
   book,
   notes,
@@ -111,6 +125,8 @@ export function Reader({
   onOpenNote,
   onAsk,
   onBookmark,
+  reading,
+  onReadingChange,
   initialLocation: jumpLocation,
 }: {
   book: LibraryBook
@@ -128,6 +144,8 @@ export function Reader({
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
   onBookmark: () => void
+  reading: Settings['reading']
+  onReadingChange: (patch: Partial<Settings['reading']>) => void
   initialLocation?: BrainNoteLocation | null
 }) {
   const frame = useRef<HTMLDivElement>(null)
@@ -141,9 +159,13 @@ export function Reader({
   const [chapterIndex, setChapterIndex] = useState(Math.max(0, book.chapterIndex ?? 0))
   const [chapterProgress, setChapterProgress] = useState(Math.max(0, Math.min(1, book.chapterProgress ?? 0)))
   const [pdfUrl, setPdfUrl] = useState('')
-  const [fontSize, setFontSize] = useState(100)
-  const [readerTheme, setReaderTheme] = useState<ReaderTheme>('paper')
-  const [wideLayout, setWideLayout] = useState(false)
+  // Text size, page color, font and spacing come from Settings, so a change in
+  // either place applies to every book.
+  const { fontSize, theme: readerTheme } = reading
+  const readingRef = useLatest(reading)
+  const setFontSize = (value: number) => onReadingChange({ fontSize: value })
+  const setReaderTheme = (value: ReaderTheme) => onReadingChange({ theme: value })
+  const [wideLayout, setWideLayout] = useState(reading.startWide)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [searchOutcome, setSearchOutcome] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] })
@@ -327,6 +349,7 @@ export function Reader({
           spread: 'none',
         })
         rendition.current = instance
+        applyReadingStyle(instance.themes, readingRef.current)
         let activeChapterIndex = initialIndex
         let scrollTimer: number | undefined
         const scrollTargets = new Set<EventTarget>()
@@ -550,17 +573,8 @@ export function Reader({
   useEffect(() => {
     const current = rendition.current
     if (!current || book.format !== 'epub') return
-    const colors =
-      readerTheme === 'night'
-        ? { background: '#111a22', color: '#dce8f2' }
-        : readerTheme === 'sepia'
-          ? { background: '#f1e6d0', color: '#4b3b2c' }
-          : { background: '#f6f2e9', color: '#233a4e' }
-    current.themes.fontSize(`${fontSize}%`)
-    current.themes.override('background-color', colors.background, true)
-    current.themes.override('color', colors.color, true)
-    current.themes.override('line-height', '1.65', true)
-  }, [book.format, fontSize, readerTheme])
+    applyReadingStyle(current.themes, reading)
+  }, [book.format, reading])
   const handleChapterSelect = (href: string) => {
     const index = toc.findIndex((item) => item.href === href)
     if (index >= 0) goToChapterRef.current(index)

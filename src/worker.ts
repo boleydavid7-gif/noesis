@@ -38,10 +38,14 @@ async function fetchWithTimeout(input: string | URL, init: RequestInit = {}, mil
 const rateBuckets = new Map<string, { count: number; resetAt: number }>()
 function rateLimited(request: Request, route: string, limit: number, windowMs = 60_000): boolean {
   const now = Date.now()
-  if (rateBuckets.size > 5_000) for (const [key, bucket] of rateBuckets) if (bucket.resetAt <= now) rateBuckets.delete(key)
+  if (rateBuckets.size > 5_000)
+    for (const [key, bucket] of rateBuckets) if (bucket.resetAt <= now) rateBuckets.delete(key)
   const key = `${route}:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`
   const bucket = rateBuckets.get(key)
-  if (!bucket || bucket.resetAt <= now) { rateBuckets.set(key, { count: 1, resetAt: now + windowMs }); return false }
+  if (!bucket || bucket.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs })
+    return false
+  }
   bucket.count += 1
   return bucket.count > limit
 }
@@ -52,7 +56,9 @@ async function hasValidSession(request: Request, env: Env): Promise<boolean> {
   const key = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
   if (!token || !base || !key) return false
   try {
-    const response = await fetchWithTimeout(`${base}/auth/v1/user`, { headers: { authorization: `Bearer ${token}`, apikey: key } })
+    const response = await fetchWithTimeout(`${base}/auth/v1/user`, {
+      headers: { authorization: `Bearer ${token}`, apikey: key },
+    })
     return response.ok
   } catch {
     return false
@@ -83,26 +89,34 @@ async function generate(
   for (const model of models) {
     let response: Response
     try {
-      response = await fetchWithTimeout(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: options.system }] },
-          contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
-          generationConfig: {
-            temperature: options.temperature,
-            maxOutputTokens: options.maxOutputTokens,
-            ...(options.json ? { responseMimeType: 'application/json' } : {}),
-          },
-        }),
-      }, 25_000)
+      response = await fetchWithTimeout(
+        `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: options.system }] },
+            contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
+            generationConfig: {
+              temperature: options.temperature,
+              maxOutputTokens: options.maxOutputTokens,
+              ...(options.json ? { responseMimeType: 'application/json' } : {}),
+            },
+          }),
+        },
+        25_000,
+      )
     } catch {
       return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
     }
 
     if (response.ok) {
       const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+      const text =
+        body.candidates?.[0]?.content?.parts
+          ?.map((part) => part.text ?? '')
+          .join('')
+          .trim() ?? ''
       return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
     }
 
@@ -116,11 +130,22 @@ async function generate(
     if (response.status === 429) return { ok: false, error: 'Gemini is busy. Try again in a moment.', status: 429 }
     if (![404, 500, 502, 503, 504].includes(response.status)) break
   }
-  return { ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}`, status: 502 }
+  return {
+    ok: false,
+    error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}`,
+    status: 502,
+  }
 }
 
 // Rate limit and (optionally) require a signed-in session for AI routes.
-async function guardAi(request: Request, env: Env, route: string, limit: number, busy: string, signIn: string): Promise<Response | null> {
+async function guardAi(
+  request: Request,
+  env: Env,
+  route: string,
+  limit: number,
+  busy: string,
+  signIn: string,
+): Promise<Response | null> {
   if (rateLimited(request, route, limit)) return json({ ok: false, error: busy }, 429)
   if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
     return json({ ok: false, error: signIn }, 401)
@@ -129,9 +154,16 @@ async function guardAi(request: Request, env: Env, route: string, limit: number,
 }
 
 async function answerTutor(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(request, env, 'tutor', 20, 'Too many questions. Try again in a minute.', 'Sign in to ask Noema.')
+  const refused = await guardAi(
+    request,
+    env,
+    'tutor',
+    20,
+    'Too many questions. Try again in a minute.',
+    'Sign in to ask Noema.',
+  )
   if (refused) return refused
-  let input: { question?: unknown; context?: unknown; book?: unknown }
+  let input: { question?: unknown; context?: unknown; book?: unknown; length?: unknown }
   try {
     input = (await request.json()) as typeof input
   } catch {
@@ -149,15 +181,33 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     'When the context does not contain enough evidence, say that clearly and offer a useful next step.',
     'Do not invent quotations or pretend to have read a book that is not in the supplied context.',
     'For borrowed or hosted books, distinguish metadata from the actual text. Explain exact passages only when the learner supplies the passage or notes. Never claim access to protected reader contents; ask the learner to paste a passage when needed.',
-    'Treat the supplied visible reading text and selected passage as the learner\'s immediate context. Prefer that text over general book metadata or distant excerpts.',
+    "Treat the supplied visible reading text and selected passage as the learner's immediate context. Prefer that text over general book metadata or distant excerpts.",
     'When relevant text is supplied, explain it from that text, mention the current chapter or page when available, and distinguish direct evidence from interpretation.',
     'Book excerpts are labelled [Section N]. When you rely on one, cite it as (Section N) so the learner can find it, and never cite a section you were not given.',
     'Keep the answer focused unless the learner asks for a deep explanation.',
   ].join(' ')
-  const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
+  const prompt = [
+    `Current book context:\n${book || '(none)'}`,
+    `Second Brain notes:\n${context || '(none)'}`,
+    `Learner question:\n${question}`,
+  ].join('\n\n')
 
-  const result = await generate(env, { system, prompt, maxOutputTokens: 800, temperature: 0.35 })
-  return result.ok ? json({ ok: true, text: result.text, model: result.model }) : json({ ok: false, error: result.error }, result.status)
+  const length = input.length === 'concise' || input.length === 'detailed' ? input.length : 'balanced'
+  const lengthNote =
+    length === 'concise'
+      ? 'Keep the answer short: two or three sentences unless the learner asks for more.'
+      : length === 'detailed'
+        ? 'Give a thorough, well-organized answer with the reasoning and relevant detail.'
+        : ''
+  const result = await generate(env, {
+    system: lengthNote ? `${system} ${lengthNote}` : system,
+    prompt,
+    maxOutputTokens: { concise: 450, balanced: 800, detailed: 1500 }[length],
+    temperature: 0.35,
+  })
+  return result.ok
+    ? json({ ok: true, text: result.text, model: result.model })
+    : json({ ok: false, error: result.error }, result.status)
 }
 
 const MAX_PASSAGE_LENGTH = 6_000
@@ -165,7 +215,14 @@ const MAX_PASSAGE_LENGTH = 6_000
 // Drafts study questions from one passage. The client shows them to the
 // learner, who approves each one before it becomes a review card.
 async function draftReviewCards(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(request, env, 'review', 10, 'Too many requests. Try again in a minute.', 'Sign in to create review questions.')
+  const refused = await guardAi(
+    request,
+    env,
+    'review',
+    10,
+    'Too many requests. Try again in a minute.',
+    'Sign in to create review questions.',
+  )
   if (refused) return refused
   let input: { passage?: unknown; bookTitle?: unknown; count?: unknown }
   try {
@@ -199,10 +256,21 @@ async function draftReviewCards(request: Request, env: Env): Promise<Response> {
   const list = Array.isArray(parsed) ? parsed : (parsed as { cards?: unknown } | null)?.cards
   const cards = (Array.isArray(list) ? list : [])
     .map((item) => item as { question?: unknown; answer?: unknown })
-    .filter((item) => typeof item?.question === 'string' && typeof item?.answer === 'string' && item.question.trim() && item.answer.trim())
+    .filter(
+      (item) =>
+        typeof item?.question === 'string' &&
+        typeof item?.answer === 'string' &&
+        item.question.trim() &&
+        item.answer.trim(),
+    )
     .slice(0, count)
-    .map((item) => ({ question: String(item.question).trim().slice(0, 400), answer: String(item.answer).trim().slice(0, 800) }))
-  return cards.length > 0 ? json({ ok: true, cards }) : json({ ok: false, error: 'Noema could not make questions from that passage.' }, 502)
+    .map((item) => ({
+      question: String(item.question).trim().slice(0, 400),
+      answer: String(item.answer).trim().slice(0, 800),
+    }))
+  return cards.length > 0
+    ? json({ ok: true, cards })
+    : json({ ok: false, error: 'Noema could not make questions from that passage.' }, 502)
 }
 
 type SearchResult = {
@@ -223,86 +291,211 @@ type SearchResult = {
 }
 
 async function searchFreeResources(request: Request): Promise<Response> {
-  if (rateLimited(request, 'search', 30)) return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
+  if (rateLimited(request, 'search', 30))
+    return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
   try {
     const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
     if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
     const encoded = encodeURIComponent(query)
-    const openLibrary = fetchWithTimeout(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
+    const openLibrary = fetchWithTimeout(
+      `https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`,
+      { headers: { accept: 'application/json' } },
+    )
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
-        const body = JSON.parse(await response.text()) as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
-        return (body.docs ?? []).filter((item) => item && typeof item.title === 'string').map((item, index): SearchResult => ({
-          id: item.key ?? `${item.title}-${index}`, title: item.title ?? 'Untitled', author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author', year: item.first_publish_year,
-          coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
-          source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata', kind: 'book',
-        }))
-      }).catch(() => [] as SearchResult[])
-    const gutenberg = fetchWithTimeout(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) return [] as SearchResult[]
-        const body = JSON.parse(await response.text()) as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
-        return (body.results ?? []).filter((item) => item && typeof item.title === 'string').slice(0, 12).map((item): SearchResult => ({
-          id: String(item.id ?? item.title), title: item.title ?? 'Untitled', author: item.authors?.map((author) => author?.name).filter(Boolean).join(', ') || 'Unknown author',
-          coverUrl: item.formats?.['image/jpeg'], source: 'Project Gutenberg', sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`, downloadUrl: item.formats?.['application/epub+zip'] || item.formats?.['application/pdf'], free: item.copyright === false, format: item.formats?.['application/epub+zip'] ? 'EPUB' : 'Public domain', kind: 'book',
-        }))
-      }).catch(() => [] as SearchResult[])
-    const academic = fetchWithTimeout(`https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12&mailto=noesis@proairetos.com`, { headers: { accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) return [] as SearchResult[]
-        const body = JSON.parse(await response.text()) as { results?: Array<{ id?: string; title?: string; publication_year?: number; authorships?: Array<{ author?: { display_name?: string } }>; doi?: string; primary_location?: { landing_page_url?: string; pdf_url?: string; source?: { display_name?: string } }; open_access?: { is_oa?: boolean } }> }
-        return (body.results ?? []).filter((item) => item && typeof item.title === 'string').map((item, index): SearchResult => ({
-          id: item.id ?? `${item.title}-${index}`, title: item.title ?? 'Untitled article', author: item.authorships?.slice(0, 3).map((entry) => entry.author?.display_name).filter(Boolean).join(', ') || 'Unknown author', year: item.publication_year,
-          source: 'OpenAlex', sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '', downloadUrl: item.primary_location?.pdf_url, free: item.open_access?.is_oa === true, format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article', kind: 'article',
-        }))
-      }).catch(() => [] as SearchResult[])
-    const academicFallback = fetchWithTimeout(`https://api.crossref.org/works?query=${encoded}&filter=type:journal-article&rows=12`, { headers: { accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) return [] as SearchResult[]
-        const body = JSON.parse(await response.text()) as { message?: { items?: Array<{ DOI?: string; title?: string[]; author?: Array<{ given?: string; family?: string }>; published?: { 'date-parts'?: number[][] }; URL?: string; link?: Array<{ URL?: string; 'content-type'?: string }>; license?: Array<{ URL?: string }> }> } }
-        return (body.message?.items ?? []).filter((item) => item && item.title?.[0]).map((item, index): SearchResult => {
-          const pdf = item.link?.find((link) => link['content-type']?.toLowerCase().includes('pdf'))?.URL
-          return {
-            id: item.DOI ?? `${item.title?.[0]}-${index}`,
-            title: item.title?.[0] ?? 'Journal article',
-            author: item.author?.slice(0, 3).map((author) => [author.given, author.family].filter(Boolean).join(' ')).filter(Boolean).join(', ') || 'Unknown author',
-            year: item.published?.['date-parts']?.[0]?.[0],
-            source: 'Crossref',
-            sourceUrl: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : ''),
-            downloadUrl: pdf,
-            free: Boolean(pdf || item.license?.length),
-            format: pdf ? 'Journal PDF' : 'Journal article',
-            kind: 'article',
-          }
-        })
-      }).catch(() => [] as SearchResult[])
-    const archive = fetchWithTimeout(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
-      .then(async (response) => {
-        if (!response.ok) return [] as SearchResult[]
-        const body = JSON.parse(await response.text()) as { response?: { docs?: Array<{ identifier?: string; title?: string; creator?: string | string[]; year?: number | string; description?: string | string[]; collection?: string | string[] }> } }
-        return (body.response?.docs ?? []).filter((item) => item.identifier && item.title).map((item): SearchResult => {
-          const identifier = item.identifier ?? ''
-          const collections = Array.isArray(item.collection) ? item.collection : [item.collection ?? '']
-          const restricted = collections.some((value) => /inlibrary|lending|printdisabled|borrow/i.test(value))
-          const description = Array.isArray(item.description) ? item.description.join(' ') : item.description
-          return {
-            id: identifier,
-            title: item.title ?? 'Internet Archive item',
-            author: Array.isArray(item.creator) ? item.creator.slice(0, 2).join(', ') : item.creator || 'Unknown author',
-            year: typeof item.year === 'string' ? Number.parseInt(item.year, 10) || undefined : item.year,
-            description: typeof description === 'string' ? description.slice(0, 1_200) : undefined,
-            source: 'Internet Archive',
-            sourceUrl: `https://archive.org/details/${identifier}`,
-            readerUrl: `https://archive.org/embed/${identifier}`,
-            coverUrl: `https://archive.org/services/img/${identifier}`,
-            free: !restricted,
-            format: restricted ? 'Borrowed reader' : 'Internet Archive reader',
-            accessType: restricted ? 'borrow' : 'public',
+        const body = JSON.parse(await response.text()) as {
+          docs?: Array<{
+            key?: string
+            title?: string
+            author_name?: string[]
+            cover_i?: number
+            first_publish_year?: number
+          }>
+        }
+        return (body.docs ?? [])
+          .filter((item) => item && typeof item.title === 'string')
+          .map((item, index): SearchResult => ({
+            id: item.key ?? `${item.title}-${index}`,
+            title: item.title ?? 'Untitled',
+            author: item.author_name?.slice(0, 2).join(', ') || 'Unknown author',
+            year: item.first_publish_year,
+            coverUrl: item.cover_i ? `https://covers.openlibrary.org/b/id/${item.cover_i}-M.jpg` : undefined,
+            source: 'Open Library',
+            sourceUrl: `https://openlibrary.org${item.key ?? ''}`,
+            free: false,
+            format: 'Book metadata',
             kind: 'book',
+          }))
+      })
+      .catch(() => [] as SearchResult[])
+    const gutenberg = fetchWithTimeout(`https://gutendex.com/books/?search=${encoded}`, {
+      headers: { accept: 'application/json' },
+    })
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as {
+          results?: Array<{
+            id?: number
+            title?: string
+            authors?: Array<{ name?: string }>
+            copyright?: boolean
+            formats?: Record<string, string>
+          }>
+        }
+        return (body.results ?? [])
+          .filter((item) => item && typeof item.title === 'string')
+          .slice(0, 12)
+          .map((item): SearchResult => ({
+            id: String(item.id ?? item.title),
+            title: item.title ?? 'Untitled',
+            author:
+              item.authors
+                ?.map((author) => author?.name)
+                .filter(Boolean)
+                .join(', ') || 'Unknown author',
+            coverUrl: item.formats?.['image/jpeg'],
+            source: 'Project Gutenberg',
+            sourceUrl: `https://www.gutenberg.org/ebooks/${item.id ?? ''}`,
+            downloadUrl: item.formats?.['application/epub+zip'] || item.formats?.['application/pdf'],
+            free: item.copyright === false,
+            format: item.formats?.['application/epub+zip'] ? 'EPUB' : 'Public domain',
+            kind: 'book',
+          }))
+      })
+      .catch(() => [] as SearchResult[])
+    const academic = fetchWithTimeout(
+      `https://api.openalex.org/works?search=${encoded}&filter=is_oa:true&per-page=12&mailto=noesis@proairetos.com`,
+      { headers: { accept: 'application/json' } },
+    )
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as {
+          results?: Array<{
+            id?: string
+            title?: string
+            publication_year?: number
+            authorships?: Array<{ author?: { display_name?: string } }>
+            doi?: string
+            primary_location?: { landing_page_url?: string; pdf_url?: string; source?: { display_name?: string } }
+            open_access?: { is_oa?: boolean }
+          }>
+        }
+        return (body.results ?? [])
+          .filter((item) => item && typeof item.title === 'string')
+          .map((item, index): SearchResult => ({
+            id: item.id ?? `${item.title}-${index}`,
+            title: item.title ?? 'Untitled article',
+            author:
+              item.authorships
+                ?.slice(0, 3)
+                .map((entry) => entry.author?.display_name)
+                .filter(Boolean)
+                .join(', ') || 'Unknown author',
+            year: item.publication_year,
+            source: 'OpenAlex',
+            sourceUrl: item.primary_location?.landing_page_url || item.doi || item.id || '',
+            downloadUrl: item.primary_location?.pdf_url,
+            free: item.open_access?.is_oa === true,
+            format: item.primary_location?.pdf_url ? 'Open-access PDF' : 'Academic article',
+            kind: 'article',
+          }))
+      })
+      .catch(() => [] as SearchResult[])
+    const academicFallback = fetchWithTimeout(
+      `https://api.crossref.org/works?query=${encoded}&filter=type:journal-article&rows=12`,
+      { headers: { accept: 'application/json' } },
+    )
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as {
+          message?: {
+            items?: Array<{
+              DOI?: string
+              title?: string[]
+              author?: Array<{ given?: string; family?: string }>
+              published?: { 'date-parts'?: number[][] }
+              URL?: string
+              link?: Array<{ URL?: string; 'content-type'?: string }>
+              license?: Array<{ URL?: string }>
+            }>
           }
-        })
-      }).catch(() => [] as SearchResult[])
-    const [library, gutenbergResults, academicResults, academicFallbackResults, archiveResults] = await Promise.all([openLibrary, gutenberg, academic, academicFallback, archive])
+        }
+        return (body.message?.items ?? [])
+          .filter((item) => item && item.title?.[0])
+          .map((item, index): SearchResult => {
+            const pdf = item.link?.find((link) => link['content-type']?.toLowerCase().includes('pdf'))?.URL
+            return {
+              id: item.DOI ?? `${item.title?.[0]}-${index}`,
+              title: item.title?.[0] ?? 'Journal article',
+              author:
+                item.author
+                  ?.slice(0, 3)
+                  .map((author) => [author.given, author.family].filter(Boolean).join(' '))
+                  .filter(Boolean)
+                  .join(', ') || 'Unknown author',
+              year: item.published?.['date-parts']?.[0]?.[0],
+              source: 'Crossref',
+              sourceUrl: item.URL || (item.DOI ? `https://doi.org/${item.DOI}` : ''),
+              downloadUrl: pdf,
+              free: Boolean(pdf || item.license?.length),
+              format: pdf ? 'Journal PDF' : 'Journal article',
+              kind: 'article',
+            }
+          })
+      })
+      .catch(() => [] as SearchResult[])
+    const archive = fetchWithTimeout(
+      `https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`,
+      { headers: { accept: 'application/json' } },
+    )
+      .then(async (response) => {
+        if (!response.ok) return [] as SearchResult[]
+        const body = JSON.parse(await response.text()) as {
+          response?: {
+            docs?: Array<{
+              identifier?: string
+              title?: string
+              creator?: string | string[]
+              year?: number | string
+              description?: string | string[]
+              collection?: string | string[]
+            }>
+          }
+        }
+        return (body.response?.docs ?? [])
+          .filter((item) => item.identifier && item.title)
+          .map((item): SearchResult => {
+            const identifier = item.identifier ?? ''
+            const collections = Array.isArray(item.collection) ? item.collection : [item.collection ?? '']
+            const restricted = collections.some((value) => /inlibrary|lending|printdisabled|borrow/i.test(value))
+            const description = Array.isArray(item.description) ? item.description.join(' ') : item.description
+            return {
+              id: identifier,
+              title: item.title ?? 'Internet Archive item',
+              author: Array.isArray(item.creator)
+                ? item.creator.slice(0, 2).join(', ')
+                : item.creator || 'Unknown author',
+              year: typeof item.year === 'string' ? Number.parseInt(item.year, 10) || undefined : item.year,
+              description: typeof description === 'string' ? description.slice(0, 1_200) : undefined,
+              source: 'Internet Archive',
+              sourceUrl: `https://archive.org/details/${identifier}`,
+              readerUrl: `https://archive.org/embed/${identifier}`,
+              coverUrl: `https://archive.org/services/img/${identifier}`,
+              free: !restricted,
+              format: restricted ? 'Borrowed reader' : 'Internet Archive reader',
+              accessType: restricted ? 'borrow' : 'public',
+              kind: 'book',
+            }
+          })
+      })
+      .catch(() => [] as SearchResult[])
+    const [library, gutenbergResults, academicResults, academicFallbackResults, archiveResults] = await Promise.all([
+      openLibrary,
+      gutenberg,
+      academic,
+      academicFallback,
+      archive,
+    ])
     const academicResultsToUse = academicResults.length > 0 ? academicResults : academicFallbackResults
     return json({ ok: true, results: [...gutenbergResults, ...academicResultsToUse, ...archiveResults, ...library] })
   } catch {
@@ -310,29 +503,52 @@ async function searchFreeResources(request: Request): Promise<Response> {
   }
 }
 
-const RESOURCE_HOSTS = ['gutenberg.org', 'archive.org', 'arxiv.org', 'nih.gov', 'pmc.ncbi.nlm.nih.gov', 'zenodo.org', 'doaj.org']
+const RESOURCE_HOSTS = [
+  'gutenberg.org',
+  'archive.org',
+  'arxiv.org',
+  'nih.gov',
+  'pmc.ncbi.nlm.nih.gov',
+  'zenodo.org',
+  'doaj.org',
+]
 
 const MAX_RESOURCE_BYTES = 80 * 1024 * 1024
 const MAX_RESOURCE_REDIRECTS = 3
 
 function isAllowedResource(url: URL): boolean {
-  return url.protocol === 'https:' && RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
+  return (
+    url.protocol === 'https:' &&
+    RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
+  )
 }
 
 async function proxyResource(request: Request): Promise<Response> {
-  if (rateLimited(request, 'resource', 20)) return json({ ok: false, error: 'Too many downloads. Try again in a minute.' }, 429)
+  if (rateLimited(request, 'resource', 20))
+    return json({ ok: false, error: 'Too many downloads. Try again in a minute.' }, 429)
   const target = new URL(request.url).searchParams.get('url')
   if (!target) return json({ ok: false, error: 'A resource URL is required.' }, 400)
   let url: URL
-  try { url = new URL(target) } catch { return json({ ok: false, error: 'The resource URL is invalid.' }, 400) }
-  const refusal = json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
+  try {
+    url = new URL(target)
+  } catch {
+    return json({ ok: false, error: 'The resource URL is invalid.' }, 400)
+  }
+  const refusal = json(
+    { ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' },
+    403,
+  )
   if (!isAllowedResource(url)) return refusal
 
   // Follow redirects by hand so every hop stays on the allowlist.
   let response: Response
   try {
     for (let hop = 0; ; hop += 1) {
-      response = await fetchWithTimeout(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' }, redirect: 'manual' }, 20_000)
+      response = await fetchWithTimeout(
+        url,
+        { headers: { accept: 'application/epub+zip,application/pdf,*/*' }, redirect: 'manual' },
+        20_000,
+      )
       const location = response.headers.get('location')
       if (response.status < 300 || response.status >= 400 || !location) break
       if (hop >= MAX_RESOURCE_REDIRECTS) return json({ ok: false, error: 'The source redirected too many times.' }, 502)
@@ -344,7 +560,8 @@ async function proxyResource(request: Request): Promise<Response> {
   }
   if (!response.ok || !response.body) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
   const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > MAX_RESOURCE_BYTES) return json({ ok: false, error: 'This file is too large to import.' }, 413)
+  if (Number.isFinite(declared) && declared > MAX_RESOURCE_BYTES)
+    return json({ ok: false, error: 'This file is too large to import.' }, 413)
 
   let received = 0
   const limiter = new TransformStream<Uint8Array, Uint8Array>({
@@ -354,7 +571,10 @@ async function proxyResource(request: Request): Promise<Response> {
       else controller.enqueue(chunk)
     },
   })
-  const headers = new Headers({ 'cache-control': 'public, max-age=3600', 'content-type': response.headers.get('content-type') || 'application/octet-stream' })
+  const headers = new Headers({
+    'cache-control': 'public, max-age=3600',
+    'content-type': response.headers.get('content-type') || 'application/octet-stream',
+  })
   return new Response(response.body.pipeThrough(limiter), { status: 200, headers })
 }
 
@@ -370,11 +590,16 @@ const worker = {
       })
     }
     if (url.pathname === '/api/health' && request.method === 'GET') {
-      return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
+      return json({
+        ok: true,
+        worker: 'noesis-dev',
+        geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()),
+      })
     }
     if (url.pathname === '/api/models' && request.method === 'GET') {
       const adminToken = env.ADMIN_TOKEN?.trim()
-      if (!adminToken || request.headers.get('x-admin-token') !== adminToken) return json({ ok: false, error: 'Not found.' }, 404)
+      if (!adminToken || request.headers.get('x-admin-token') !== adminToken)
+        return json({ ok: false, error: 'Not found.' }, 404)
       const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
       if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured.' }, 503)
       let response: Response
@@ -387,7 +612,10 @@ const worker = {
       try {
         body = (await response.json()) as typeof body
       } catch {
-        return json({ ok: false, error: `Gemini model discovery returned a non-JSON response (${response.status}).` }, 502)
+        return json(
+          { ok: false, error: `Gemini model discovery returned a non-JSON response (${response.status}).` },
+          502,
+        )
       }
       if (!response.ok) return json({ ok: false, error: `Gemini model discovery failed (${response.status}).` }, 502)
       const models = (body.models ?? [])

@@ -59,6 +59,12 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { ReviewPage } from './ReviewPage'
+import { SettingsPage } from './SettingsPage'
+import type { SettingsSectionId } from './settings/sections'
+import { Group, Row, Toggle } from './settings/controls'
+import { timeAgo } from './lib/time'
+import { readSettings, rootAppearance, writeSettings, type Settings as AppSettings } from './lib/settings'
+import { dueCards, readReviewCards } from './lib/review'
 import { markDeleted, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
 import { syncAccountLibrary } from './lib/accountLibrary'
@@ -138,8 +144,7 @@ const navItems = [
   { label: 'Review', text: 'Review', icon: RotateCcw },
   { label: 'Learning Paths', text: 'Paths', icon: ListChecks },
   { label: 'Explore', text: 'Explore', icon: Search },
-  { label: 'Cloud Backup', text: 'Settings', icon: Settings },
-  { label: 'Account', text: 'Account', icon: UserRound },
+  { label: 'Settings', text: 'Settings', icon: Settings },
 ]
 
 function readPaths(): LearningPath[] {
@@ -294,9 +299,18 @@ function App() {
   const [notes, setNotes] = useState<Note[]>(() => readLocalNotes())
   const [paths, setPaths] = useState<LearningPath[]>(() => readPaths())
   const [now, setNow] = useState(() => new Date())
+  const [settings, setSettings] = useState<AppSettings>(() => readSettings())
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('account')
+  const [lastSyncedAt, setLastSyncedAt] = useState(() => {
+    try {
+      return localStorage.getItem('noesis:last-sync') ?? ''
+    } catch {
+      return ''
+    }
+  })
   const [activeNav, setActiveNav] = useState('Home')
   const [libraryQuery, setLibraryQuery] = useState('')
-  const [librarySort, setLibrarySort] = useState<LibrarySort>('recent')
+  const [librarySort, setLibrarySort] = useState<LibrarySort>(() => settings.library.defaultSort)
   const [resourceQuery, setResourceQuery] = useState('')
   const [resources, setResources] = useState<Resource[]>([])
   const [searching, setSearching] = useState(false)
@@ -353,6 +367,43 @@ function App() {
   const timeGreeting = greetingFor(now)
   const displayName = displayNameFor(authUser, profileFirstName)
   const focusRemaining = focusRemainingSeconds(focusState, focusNow)
+  // Review cards live in local storage; recount whenever the page changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav])
+  useEffect(() => {
+    const root = document.documentElement
+    const { classes, vars } = rootAppearance(settings)
+    for (const name of ['no-scenery', 'reduce-motion', 'compact']) root.classList.toggle(name, classes.includes(name))
+    for (const key of [
+      '--gold-warm',
+      '--gold-soft',
+      '--accent-light',
+      '--accent-fill',
+      '--accent-border',
+      '--accent-hover',
+      '--accent-rgb',
+      '--accent-mark',
+    ]) {
+      root.style.removeProperty(key)
+    }
+    for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value)
+  }, [settings])
+  useEffect(() => {
+    const count = dueCount
+    if (!settings.notifications.reviewReminders || count === 0) return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const today = new Date().toDateString()
+    try {
+      if (localStorage.getItem('noesis:review-notified') === today) return
+      localStorage.setItem('noesis:review-notified', today)
+    } catch {
+      return
+    }
+    new Notification('Noesis', {
+      body: `${count} review ${count === 1 ? 'card is' : 'cards are'} ready.`,
+      icon: '/icons/icon-192.png',
+    })
+  }, [dueCount, settings.notifications.reviewReminders])
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(timer)
@@ -416,15 +467,17 @@ function App() {
     setCloudConnections((current) => (JSON.stringify(current) === JSON.stringify(bound) ? current : bound))
   }, [authUser, authUserId])
   useEffect(() => {
-    if (!authUser || isAnonymousUser(authUser)) return
+    if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
     let cancelled = false
     const restore = async () => {
       try {
         const restored = await syncAccountLibrary(readLibraryBooks())
-        if (!cancelled)
+        if (!cancelled) {
           setBooks((current) =>
             JSON.stringify(current) === JSON.stringify(restored) ? current : (writeLibraryBooks(restored), restored),
           )
+          markSynced()
+        }
       } catch (reason) {
         if (!cancelled) {
           const message = reason instanceof Error ? reason.message : ''
@@ -440,7 +493,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [authUser, authUserId])
+  }, [authUser, authUserId, settings.backup.autoSync])
   useEffect(() => {
     const metadata = authUser?.user_metadata as Record<string, unknown> | undefined
     const metadataName =
@@ -468,7 +521,7 @@ function App() {
   useEffect(() => {
     const user = authUserRef.current
     const connection = cloudConnection
-    if (!user || isAnonymousUser(user) || !connection) {
+    if (!user || isAnonymousUser(user) || !connection || !settings.backup.autoSync) {
       cloudReady.current = false
       return
     }
@@ -493,6 +546,7 @@ function App() {
             ? current
             : (writePaths(merged.paths as LearningPath[]), merged.paths as LearningPath[]),
         )
+        markSynced()
       } catch (reason) {
         if (!cancelled)
           showNotice(
@@ -514,7 +568,7 @@ function App() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [authUserId, authUserRef, cloudConnection, books, notes, paths])
+  }, [authUserId, authUserRef, cloudConnection, books, notes, paths, settings.backup.autoSync])
   useEffect(() => {
     let timer: number | undefined
     const update = () => {
@@ -550,6 +604,25 @@ function App() {
       document.removeEventListener('keyup', update)
     }
   }, [])
+  function updateSettings(next: AppSettings) {
+    setSettings(next)
+    writeSettings(next)
+  }
+  function markSynced() {
+    const stamp = new Date().toISOString()
+    setLastSyncedAt(stamp)
+    try {
+      localStorage.setItem('noesis:last-sync', stamp)
+    } catch {
+      // Storage can be unavailable; the time then only lasts for this session.
+    }
+  }
+  function openSettings(section: SettingsSectionId) {
+    setSettingsSection(section)
+    setMobileNavOpen(false)
+    setSelectedBookId(null)
+    setActiveNav('Settings')
+  }
   function showNotice(message: string) {
     setNotice(message)
     window.setTimeout(() => setNotice(''), 3800)
@@ -661,12 +734,15 @@ function App() {
             'Imported PDF',
           )
       await saveEpubFile(book.id, data)
-      if (parsed?.text) await saveBookText(book.id, parsed.text)
+      if (settings.library.indexText && parsed?.text) await saveBookText(book.id, parsed.text)
       const nextBooks = upsertLibraryBook(book)
       setBooks(nextBooks)
-      if (authUser && !isAnonymousUser(authUser)) {
+      if (settings.backup.autoSync && authUser && !isAnonymousUser(authUser)) {
         void syncAccountLibrary(nextBooks)
-          .then((synced) => setBooks(synced))
+          .then((synced) => {
+            setBooks(synced)
+            markSynced()
+          })
           .catch(() => undefined)
       }
       setSelectedBookId(book.id)
@@ -743,26 +819,35 @@ function App() {
   async function askNoema(prompt: string, readingContext?: ReaderTutorContext) {
     const question = prompt.trim()
     if (!question) return
+    if (!settings.ai.enabled) {
+      setTutorPrompt(question)
+      setTutorReply('Noema is turned off. You can turn it back on in Settings → AI Companion.')
+      return
+    }
     const activeContext = readingContext ?? tutorContext
     if (readingContext) setTutorContext(readingContext)
     setTutorPrompt(question)
     setTutorReply('')
     setTutorBusy(true)
     let bookText = ''
-    if (selectedBook?.format === 'epub') bookText = (await loadBookText(selectedBook.id).catch(() => '')) || ''
-    const contextText = notes
-      .slice(0, 30)
-      .map((note) => `${note.title} (${note.source}): ${note.body}`)
-      .join('\n\n')
-    const position = activeContext
-      ? [
-          `Reading position: ${activeContext.chapter ?? 'Current chapter'}${activeContext.page ? ` · page ${activeContext.page}` : ''}`,
-          activeContext.selectedText ? `Selected passage:\n${activeContext.selectedText.slice(0, 8_000)}` : '',
-          activeContext.visibleText ? `Visible reading text:\n${activeContext.visibleText}` : '',
-        ]
-          .filter(Boolean)
+    if (settings.ai.useReadingText && selectedBook?.format === 'epub')
+      bookText = (await loadBookText(selectedBook.id).catch(() => '')) || ''
+    const contextText = settings.ai.useNotes
+      ? notes
+          .slice(0, 30)
+          .map((note) => `${note.title} (${note.source}): ${note.body}`)
           .join('\n\n')
       : ''
+    const position =
+      activeContext && settings.ai.useReadingText
+        ? [
+            `Reading position: ${activeContext.chapter ?? 'Current chapter'}${activeContext.page ? ` · page ${activeContext.page}` : ''}`,
+            activeContext.selectedText ? `Selected passage:\n${activeContext.selectedText.slice(0, 8_000)}` : '',
+            activeContext.visibleText ? `Visible reading text:\n${activeContext.visibleText}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        : ''
     const additionalBookText =
       selectedBook?.format === 'epub' && bookText
         ? `Additional book context:\n${retrievedContext(bookText, `${question} ${activeContext?.selectedText ?? ''}`, activeContext?.visibleText ? 10_000 : 24_000)}`
@@ -792,7 +877,7 @@ function App() {
       const response = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({ question, book: bookContext, context: contextText }),
+        body: JSON.stringify({ question, book: bookContext, context: contextText, length: settings.ai.length }),
       })
       const result = (await response.json()) as { ok?: boolean; text?: string; error?: string }
       if (!response.ok || !result.ok) throw new Error(result.error || 'Noema could not answer right now.')
@@ -873,7 +958,7 @@ function App() {
               resource.coverUrl,
             )
         await saveEpubFile(book.id, data)
-        if (parsed?.text) await saveBookText(book.id, parsed.text)
+        if (settings.library.indexText && parsed?.text) await saveBookText(book.id, parsed.text)
         setBooks(upsertLibraryBook(book))
         setSelectedBookId(book.id)
         setActiveNav('Read')
@@ -944,10 +1029,28 @@ function App() {
     showNotice('Learning path created.')
   }
   function deleteBook(book: LibraryBook) {
-    if (!window.confirm(`Remove ${book.title} from your library?`)) return
+    if (settings.library.confirmDelete && !window.confirm(`Remove ${book.title} from your library?`)) return
     setBooks(removeLibraryBook(book.id))
     if (selectedBookId === book.id) setSelectedBookId(null)
     showNotice(`${book.title} was removed.`)
+  }
+  function clearLocalData() {
+    if (
+      !window.confirm(
+        'Delete all Noesis data on this device? Books, notes, review cards, and settings will be removed from this browser. Anything synced to your account or a cloud provider is kept.',
+      )
+    )
+      return
+    try {
+      for (const key of Object.keys(localStorage)) if (key.startsWith('noesis:')) localStorage.removeItem(key)
+    } catch {
+      // Nothing more to clear if storage is unavailable.
+    }
+    const request = indexedDB.deleteDatabase('noesis-library')
+    const reload = () => window.location.assign('/')
+    request.onsuccess = reload
+    request.onerror = reload
+    request.onblocked = reload
   }
   async function restorePayload(payload: Awaited<ReturnType<typeof restoreBackup>>) {
     setBooks(payload.books)
@@ -976,7 +1079,7 @@ function App() {
   async function connectCloud(id: CloudProviderId) {
     if (!authUser || isAnonymousUser(authUser)) {
       showNotice('Sign in to Noesis before connecting a personal cloud provider.')
-      setActiveNav('Account')
+      openSettings('account')
       return
     }
     try {
@@ -1485,58 +1588,91 @@ function App() {
       </Page>
     )
   }
-  function backupPage() {
+  async function syncEverything() {
+    if (!authUser || isAnonymousUser(authUser)) {
+      showNotice('Sign in first to sync your library.')
+      openSettings('account')
+      return
+    }
+    setCloudSyncing(true)
+    try {
+      let current = books
+      try {
+        current = await syncAccountLibrary(readLibraryBooks())
+        setBooks(current)
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : ''
+        showNotice(
+          /Bucket not found|NoSuchBucket/i.test(message)
+            ? 'Run the Noesis storage migration in Supabase to sync uploaded books.'
+            : message || 'Your book files could not be synced.',
+        )
+      }
+      let state = { books: current, notes, paths: paths as unknown[] }
+      for (const connection of cloudConnections.filter(
+        (item) => item.ownerUserId === authUserId && item.expiresAt > Date.now() + 30_000,
+      )) {
+        state = await syncCloudState(connection, state)
+      }
+      setBooks(state.books)
+      setNotes(state.notes)
+      setPaths(state.paths as LearningPath[])
+      writeLibraryBooks(state.books)
+      writeLocalNotes(state.notes)
+      writePaths(state.paths as LearningPath[])
+      markSynced()
+      showNotice('Everything is up to date.')
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : 'Sync failed. Try again in a moment.')
+    } finally {
+      setCloudSyncing(false)
+    }
+  }
+  function backupSection() {
     const signedIn = Boolean(authUser && !isAnonymousUser(authUser))
+    const protectedNow = signedIn && Boolean(lastSyncedAt) && online
+    const headline = !online
+      ? 'You are offline'
+      : !signedIn
+        ? 'Sign in to protect your library'
+        : cloudSyncing
+          ? 'Syncing your latest changes…'
+          : protectedNow
+            ? 'Everything is protected'
+            : 'Ready to sync'
+    const detail = !online
+      ? 'Changes stay on this device until you reconnect.'
+      : !signedIn
+        ? 'Create an account or sign in so your books and notes can follow you to other devices.'
+        : lastSyncedAt
+          ? `Last sync: ${timeAgo(lastSyncedAt)}${settings.backup.autoSync ? '' : ' · automatic sync is off'}`
+          : settings.backup.autoSync
+            ? 'Your first sync will run shortly.'
+            : 'Automatic sync is off. Use Sync now.'
     return (
-      <Page title="Cloud backup" subtitle="Keep your library synced across devices with storage you control.">
-        <section className="profile-settings panel-card">
+      <>
+        <section className={`sync-status panel-card${protectedNow ? '' : ' sync-status-warn'}`}>
           <div>
-            <p className="eyebrow">Personalize Noesis</p>
-            <h3>Your greeting</h3>
-            <p>
-              Set the first name Noesis should use on the home page. Leave it blank to use your account name or the
-              first part of your email.
-            </p>
+            {protectedNow ? (
+              <CheckCircle2 size={34} className="sync-status-icon" />
+            ) : (
+              <Cloud size={34} className="sync-status-icon" />
+            )}
+            <div>
+              <h3>{headline}</h3>
+              <p>{detail}</p>
+            </div>
           </div>
-          <form className="profile-name-form" onSubmit={saveFirstName}>
-            <label>
-              First name
-              <input
-                value={profileFirstName}
-                onChange={(event) => setProfileFirstName(event.target.value)}
-                placeholder="e.g. David"
-                autoComplete="given-name"
-              />
-            </label>
-            <button className="primary-button" type="submit">
-              Save name
-            </button>
-          </form>
+          <button className="primary-button" onClick={() => void syncEverything()} disabled={cloudSyncing || !online}>
+            <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
+          </button>
         </section>
-        <section className="backup-hero panel-card">
-          <div className="backup-icon">
-            <Cloud size={24} />
-          </div>
-          <div>
-            <h3>Live cloud sync</h3>
-            <p>
-              Noesis syncs your library manifest, notes, paths, and each local EPUB as separate files. When you sign in
-              on another device and connect the same provider, your reading data and books are restored without a ZIP
-              archive.
-            </p>
-            <small>
-              {!online
-                ? 'You are offline. Changes will stay on this device until you reconnect.'
-                : !signedIn
-                  ? 'Sign in from Account before connecting a personal cloud provider.'
-                  : cloudSyncing
-                    ? 'Syncing your latest changes…'
-                    : cloudConnections.length
-                      ? 'Connected and syncing automatically.'
-                      : 'Connect one provider below to begin.'}
-            </small>
-          </div>
-        </section>
+        <Group title="Cloud backup" icon={<Cloud size={18} />}>
+          <p className="setting-note">
+            Signed-in accounts sync to private Noesis storage automatically. You can also connect your own cloud
+            storage. Each provider only sees a Noesis app folder, and a connection is per device.
+          </p>
+        </Group>
         <section className="cloud-provider-grid">
           {cloudProviders.map((provider) => {
             const connection = signedIn
@@ -1602,29 +1738,62 @@ function App() {
             )
           })}
         </section>
-        <div className="backup-actions">
-          <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
-            <Download size={15} /> Export a local ZIP
-          </button>
-          <button className="secondary-button" onClick={() => backupInput.current?.click()}>
-            <Upload size={15} /> Restore a local export
-          </button>
-        </div>
-        <div className="backup-note panel-card">
-          <strong>How another device gets your EPUBs</strong>
-          <p>
-            Sign in to the same Noesis account, connect the same provider, and Noesis downloads the separate EPUB files
-            and metadata into that device’s local reader. A provider connection is per device by design; Noesis never
-            stores your provider password.
+        <Group title="Offline backup" icon={<Download size={18} />}>
+          <Row title="Export a ZIP" detail="A copy of your books, notes, and learning paths for one-off transfers.">
+            <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
+              <Download size={15} /> Export
+            </button>
+          </Row>
+          <Row title="Restore from a ZIP" detail="Brings back a Noesis export on this device.">
+            <button className="secondary-button" onClick={() => backupInput.current?.click()}>
+              <Upload size={15} /> Restore
+            </button>
+          </Row>
+        </Group>
+        <Group title="Backup options" icon={<RotateCcw size={18} />}>
+          <Row title="Automatic sync" detail="Sync in the background when your library or notes change.">
+            <Toggle
+              checked={settings.backup.autoSync}
+              onChange={(value) => updateSettings({ ...settings, backup: { ...settings.backup, autoSync: value } })}
+              label="Automatic sync"
+            />
+          </Row>
+          <p className="setting-note">
+            Synced: books and files, highlights and notes, reading progress, and learning paths. Review cards and these
+            settings stay on this device for now.
           </p>
-        </div>
-      </Page>
+        </Group>
+      </>
     )
   }
-  function accountPage() {
+  function accountSection() {
     const anonymous = isAnonymousUser(authUser)
     return (
-      <Page title="Account" subtitle="Use one account to keep notes and backups connected.">
+      <>
+        <section className="profile-settings panel-card">
+          <div>
+            <p className="eyebrow">Personalize Noesis</p>
+            <h3>Your greeting</h3>
+            <p>
+              Set the first name Noesis should use on the home page. Leave it blank to use your account name or the
+              first part of your email.
+            </p>
+          </div>
+          <form className="profile-name-form" onSubmit={saveFirstName}>
+            <label>
+              First name
+              <input
+                value={profileFirstName}
+                onChange={(event) => setProfileFirstName(event.target.value)}
+                placeholder="e.g. David"
+                autoComplete="given-name"
+              />
+            </label>
+            <button className="primary-button" type="submit">
+              Save name
+            </button>
+          </form>
+        </section>
         {authUser && !anonymous ? (
           <section className="account-signed panel-card">
             <div className="account-avatar">
@@ -1713,7 +1882,7 @@ function App() {
             </p>
           </form>
         )}
-      </Page>
+      </>
     )
   }
   const page =
@@ -1733,6 +1902,8 @@ function App() {
         onOpenNote={openNoteLocation}
         onAsk={openNoemaPanel}
         onBookmark={() => toggleBookmark(selectedBook.id)}
+        reading={settings.reading}
+        onReadingChange={(patch) => updateSettings({ ...settings, reading: { ...settings.reading, ...patch } })}
         initialLocation={readerJump}
       />
     ) : activeNav === 'Home' ? (
@@ -1755,10 +1926,21 @@ function App() {
       progressPage()
     ) : activeNav === 'Explore' ? (
       explorePage()
-    ) : activeNav === 'Cloud Backup' ? (
-      backupPage()
-    ) : activeNav === 'Account' ? (
-      accountPage()
+    ) : activeNav === 'Settings' ? (
+      <SettingsPage
+        section={settingsSection}
+        onSection={setSettingsSection}
+        settings={settings}
+        onChange={updateSettings}
+        account={accountSection()}
+        backup={backupSection()}
+        books={books}
+        dueCount={dueCount}
+        signedInEmail={authUser && !isAnonymousUser(authUser) ? (authUser.email ?? undefined) : undefined}
+        onExport={() => void downloadBackupFile(books, notes, paths)}
+        onClearLocal={clearLocalData}
+        onNotice={showNotice}
+      />
     ) : (
       <div className="empty-state">Choose a page from the navigation.</div>
     )
@@ -1795,6 +1977,7 @@ function App() {
               >
                 <Icon size={17} />
                 <span>{text}</span>
+                {label === 'Review' && dueCount > 0 ? <b className="nav-badge">{dueCount}</b> : null}
               </button>
             ))}
           </nav>
@@ -1871,7 +2054,7 @@ function App() {
           >
             <Sparkles size={17} />
           </button>
-          <button className="account-top-button" onClick={() => selectNav('Account')} aria-label="Open account">
+          <button className="account-top-button" onClick={() => openSettings('account')} aria-label="Open account">
             {displayName?.slice(0, 1).toUpperCase() || <UserRound size={16} />}
           </button>
         </header>
@@ -2010,7 +2193,7 @@ function App() {
           </div>
         ) : null}
       </main>
-      {activeNav !== 'Read' ? (
+      {activeNav !== 'Read' && activeNav !== 'Settings' ? (
         <DesktopContextSidebar
           now={now}
           notes={notes}
