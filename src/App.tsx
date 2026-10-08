@@ -54,9 +54,10 @@ import {
   type BrainNoteKind,
   type BrainNoteLocation,
 } from './lib/knowledge'
-import { epubBookFromParsed, parseEpub, pdfBookFromSource } from './lib/epub'
+import { epubBookFromParsed, openEpub, parseEpub, pdfBookFromSource, recapText } from './lib/epub'
 import {
   loadBookText,
+  loadEpubFile,
   readLibraryBooks,
   removeLibraryBook,
   saveBookText,
@@ -294,7 +295,7 @@ function App() {
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
   const [readerSearch, setReaderSearch] = useState('')
-  const [recapPending, setRecapPending] = useState<string | null>(null)
+
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
@@ -824,11 +825,32 @@ function App() {
     setOverlay('brain')
   }
   // "Where was I?": a spoiler-free recap of what's been read so far.
-  function recap(book: LibraryBook | null, readText?: string) {
+  async function recap(book: LibraryBook | null) {
     if (!book) return
     setNoemaUseContext(true)
     openNoemaPanel(RECAP_QUESTION)
-    void askNoema(RECAP_QUESTION, undefined, { book, recap: true, readText })
+    setTutorBusy(true)
+    setTutorReply('Reading back through the book…')
+    // The text up to the reader's place comes straight from the book file, so this works from
+    // Home without opening the book and without the saved text index.
+    let readText: string | undefined
+    if (book.format === 'epub') {
+      try {
+        const data = await loadEpubFile(book.id)
+        if (data) {
+          const epub = await openEpub(data)
+          readText = await recapText(epub, {
+            href: book.currentHref,
+            chapterProgress: book.chapterProgress ?? 0,
+            progress: book.progress,
+          })
+          epub.destroy()
+        }
+      } catch {
+        readText = undefined
+      }
+    }
+    await askNoema(RECAP_QUESTION, undefined, { book, recap: true, readText })
   }
   function saveWord(word: string, definition: string, location: BrainNoteLocation) {
     void addNote({
@@ -1711,13 +1733,7 @@ function App() {
                       Continue reading <ArrowRight size={16} />
                     </button>
                     {current.format === 'epub' && current.progress > 0 ? (
-                      <button
-                        className="secondary-button"
-                        onClick={() => {
-                          setRecapPending(current.id)
-                          openSavedBook(current)
-                        }}
-                      >
+                      <button className="secondary-button" onClick={() => void recap(current)}>
                         Where was I?
                       </button>
                     ) : null}
@@ -2410,9 +2426,7 @@ function App() {
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
         onAsk={openNoemaPanel}
-        onRecap={(text) => recap(selectedBook, text)}
-        autoRecap={recapPending === selectedBook.id}
-        onAutoRecapped={() => setRecapPending(null)}
+        onRecap={() => void recap(selectedBook)}
         onSaveWord={saveWord}
         initialSearch={readerSearch}
         onBookmark={() => toggleBookmark(selectedBook.id)}

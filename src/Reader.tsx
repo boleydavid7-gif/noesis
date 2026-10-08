@@ -144,8 +144,6 @@ export function Reader({
   onOpenNote,
   onAsk,
   onRecap,
-  autoRecap,
-  onAutoRecapped,
 
   onSaveWord,
   initialSearch,
@@ -168,9 +166,7 @@ export function Reader({
   onNote: ReaderNoteHandler
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
-  onRecap: (readText: string) => void
-  autoRecap?: boolean
-  onAutoRecapped?: () => void
+  onRecap: () => void
 
   onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
   initialSearch?: string
@@ -383,56 +379,6 @@ export function Reader({
     [],
   )
 
-  // The text read so far, taken from the open book up to the reader's exact place: the opening,
-  // for who and where, and the latest pages.
-  const readTextSoFar = async (): Promise<string> => {
-    const epub = epubRef.current
-    if (!epub) return ''
-    try {
-      await epub.loaded.spine
-      const items = spineSections(epub)
-      const href = (locationRef.current.href ?? currentChapter.href ?? '').split('#')[0]
-      let here = items.findIndex((item) => href && item.href && (item.href.includes(href) || href.includes(item.href)))
-      if (here < 0) here = Math.min(items.length - 1, Math.floor(clampFraction(book.progress / 100) * items.length))
-      const sectionText = async (index: number) => {
-        try {
-          const section = epub.spine.get(items[index].index)
-          const root = (await section.load(epub.load.bind(epub))) as unknown as Element
-          const text = normalizeReaderText((root.querySelector?.('body') ?? root).textContent ?? '')
-          section.unload()
-          return text
-        } catch {
-          return ''
-        }
-      }
-      const current = await sectionText(here)
-      const upTo = current.slice(0, Math.floor(current.length * clampFraction(chapterProgress)))
-      let tail = upTo
-      for (let index = here - 1; index >= 0 && tail.length < 9_000; index -= 1)
-        tail = `${await sectionText(index)}\n\n${tail}`
-      let head = ''
-      for (let index = 0; index < here && head.length < 2_500; index += 1) {
-        head += `${head ? '\n\n' : ''}${await sectionText(index)}`
-      }
-      const trimmedTail = tail.length > 9_000 ? tail.slice(-9_000) : tail
-      const trimmedHead = head.slice(0, 2_500)
-      return tail.length <= 9_000 || here === 0 ? trimmedTail : `${trimmedHead}\n\n[…]\n\n${trimmedTail}`
-    } catch {
-      return ''
-    }
-  }
-  const askRecap = async () => onRecap(await readTextSoFar())
-  const autoRecapRef = useLatest(askRecap)
-  useEffect(() => {
-    if (!autoRecap || loading || book.format !== 'epub') return
-    const timer = window.setTimeout(() => {
-      void autoRecapRef.current()
-      onAutoRecapped?.()
-    }, 1200)
-    return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRecap, loading])
-
   // The meaning of the selected word.
   const [define, setDefine] = useState<{
     word: string
@@ -545,13 +491,35 @@ export function Reader({
         const savedChapters = chapterEntries(currentBook.toc)
         const chapters =
           savedChapters.length > 0 ? savedChapters : navigationChapters.length > 0 ? navigationChapters : spineChapters
+        // Page numbers come from scanning the whole book, which is slow, so the book opens first.
+        // The result is kept for next time.
         let generatedLocationCount = 0
+        const locationsKey = `noesis:locations:v1:${currentBook.id}`
         try {
-          await epub.locations.generate(1200)
-          generatedLocationCount = epub.locations.length()
+          const saved = localStorage.getItem(locationsKey)
+          if (saved) {
+            epub.locations.load(saved)
+            generatedLocationCount = epub.locations.length()
+          }
         } catch {
-          // Some EPUBs do not expose enough text for generated locations. The
-          // rendition's displayed page metadata remains the source of truth.
+          // A bad saved copy is simply rebuilt.
+        }
+        if (generatedLocationCount === 0) {
+          void epub.locations
+            .generate(1200)
+            .then(() => {
+              if (cancelled) return
+              generatedLocationCount = epub.locations.length()
+              try {
+                localStorage.setItem(locationsKey, epub.locations.save())
+              } catch {
+                // Storage can be full; the numbers are rebuilt next time.
+              }
+            })
+            .catch(() => {
+              // Some EPUBs do not expose enough text for generated locations. The
+              // rendition's displayed page metadata remains the source of truth.
+            })
         }
         const targetLocation = jumpLocation?.bookId === currentBook.id ? jumpLocation : null
         const savedHref = targetLocation?.href ?? currentBook.currentHref
@@ -711,34 +679,34 @@ export function Reader({
         })
         const firstChapter = chapters[initialIndex]?.href
         const savedLocation = targetLocation?.cfi || targetLocation?.href || currentBook.cfi || currentBook.currentHref
+        // Open straight at the saved place. If that shows nothing (an old address, or a contents
+        // entry that doesn't match the book), fall back to the chapter, then to the first pages.
+        const shownContent = () => {
+          const doc = frame.current?.querySelector('iframe')?.contentDocument
+          return Boolean(doc?.body && (doc.body.textContent ?? '').trim().length > 0)
+        }
+        const candidates = [
+          savedLocation,
+          firstChapter,
+          ...spineChapters.slice(0, 4).map((entry) => entry.href),
+        ].filter((target, index, all): target is string => Boolean(target) && all.indexOf(target) === index)
         let opened = false
-        if (firstChapter) {
+        let displayedOnce = false
+        for (const target of candidates) {
           try {
-            // Open through the same chapter href used by the chapter menu. This
-            // gives new books a reliable first view before restoring a saved spot.
-            await instance.display(firstChapter)
-            opened = true
-          } catch {
-            // A malformed first navigation entry can still be recoverable through
-            // the saved location or the first spine entry below.
-          }
-        }
-        if (savedLocation && savedLocation !== firstChapter) {
-          try {
-            await instance.display(savedLocation)
-            opened = true
-          } catch {
-            // Reopen the known chapter if an old CFI or href cleared the view.
-            if (firstChapter) {
-              try {
-                await instance.display(firstChapter)
-              } catch {
-                /* surface the original opening error below */
-              }
+            await instance.display(target)
+            if (cancelled) return
+            displayedOnce = true
+            if (shownContent()) {
+              opened = true
+              break
             }
+          } catch {
+            // Try the next way in.
           }
         }
-        if (!opened) throw new Error('This EPUB has no readable opening chapter.')
+        // A chapter that is only pictures still counts as open.
+        if (!opened && !displayedOnce) throw new Error('This EPUB has no readable opening chapter.')
         const iframe = frame.current?.querySelector('iframe')
         if (iframe?.contentDocument) attachView(undefined, { contents: { document: iframe.contentDocument } })
         const initialLocation = instance.currentLocation() as ReaderLocation | Promise<ReaderLocation> | undefined
@@ -987,12 +955,7 @@ export function Reader({
               </span>
             ) : null}
             {book.format === 'epub' ? (
-              <button
-                className="icon-button"
-                onClick={() => void askRecap()}
-                aria-label="Where was I?"
-                title="Where was I?"
-              >
+              <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
                 <History size={16} />
               </button>
             ) : null}

@@ -171,3 +171,48 @@ export function pdfBookFromSource(
     sourceUrl,
   }
 }
+
+const squash = (value: string) => value.replace(/\s+/g, ' ').trim()
+
+// The text read so far: the opening, for who and where, then the latest pages up to the reader's
+// exact place. Works on any opened book, so it does not need the saved text index.
+export async function recapText(
+  book: Book,
+  place: { href?: string; chapterProgress: number; progress: number },
+  head = 2_500,
+  tail = 9_000,
+): Promise<string> {
+  try {
+    await book.loaded.spine
+    const items = spineSections(book)
+    if (items.length === 0) return ''
+    const href = (place.href ?? '').split('#')[0]
+    let here = href
+      ? items.findIndex((item) => item.href && (item.href.includes(href) || href.includes(item.href)))
+      : -1
+    if (here < 0)
+      here = Math.min(items.length - 1, Math.floor(Math.max(0, Math.min(1, place.progress / 100)) * items.length))
+    const sectionText = async (index: number) => {
+      try {
+        const section = book.spine.get(items[index].index)
+        const root = (await section.load(book.load.bind(book))) as unknown as Element
+        const text = squash((root.querySelector?.('body') ?? root).textContent ?? '')
+        section.unload()
+        return text
+      } catch {
+        return ''
+      }
+    }
+    const current = await sectionText(here)
+    let recent = current.slice(0, Math.floor(current.length * Math.max(0, Math.min(1, place.chapterProgress))))
+    for (let index = here - 1; index >= 0 && recent.length < tail; index -= 1)
+      recent = `${await sectionText(index)}\n\n${recent}`
+    if (recent.length <= tail) return recent
+    let opening = ''
+    for (let index = 0; index < here && opening.length < head; index += 1)
+      opening += `${opening ? '\n\n' : ''}${await sectionText(index)}`
+    return `${opening.slice(0, head)}\n\n[…]\n\n${recent.slice(-tail)}`
+  } catch {
+    return ''
+  }
+}
