@@ -294,6 +294,7 @@ function App() {
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
   const [readerSearch, setReaderSearch] = useState('')
+  const [recapPending, setRecapPending] = useState<string | null>(null)
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
@@ -823,11 +824,11 @@ function App() {
     setOverlay('brain')
   }
   // "Where was I?": a spoiler-free recap of what's been read so far.
-  function recap(book: LibraryBook | null) {
+  function recap(book: LibraryBook | null, readText?: string) {
     if (!book) return
     setNoemaUseContext(true)
     openNoemaPanel(RECAP_QUESTION)
-    void askNoema(RECAP_QUESTION, undefined, { book, recap: true })
+    void askNoema(RECAP_QUESTION, undefined, { book, recap: true, readText })
   }
   function saveWord(word: string, definition: string, location: BrainNoteLocation) {
     void addNote({
@@ -1092,7 +1093,7 @@ function App() {
   async function askNoema(
     prompt: string,
     readingContext?: ReaderTutorContext,
-    options?: { book?: LibraryBook; recap?: boolean; extra?: string },
+    options?: { book?: LibraryBook; recap?: boolean; extra?: string; readText?: string },
   ) {
     const activeBook = options?.book ?? selectedBook
     const question = prompt.trim()
@@ -1114,6 +1115,14 @@ function App() {
       bookText = (await loadBookText(activeBook.id).catch(() => '')) || ''
     const spoilerSafe = settings.ai.avoidSpoilers && activeBook?.format === 'epub' && activeBook.progress < 99
     if (spoilerSafe && activeBook) bookText = readSoFar(bookText, activeBook.progress)
+    if (options?.recap && !options.readText && !bookText.trim()) {
+      setTutorOk(false)
+      setTutorReply(
+        'Noesis has no text for this book yet. Open the book and read a little, then try again. For older books, go to Settings → Library and rebuild the search index.',
+      )
+      setTutorBusy(false)
+      return
+    }
     const contextText = settings.ai.useNotes
       ? notes
           .slice(0, 30)
@@ -1134,7 +1143,7 @@ function App() {
       activeBook?.format === 'epub' && bookText
         ? `Additional book context:\n${
             options?.recap
-              ? recapExcerpt(bookText)
+              ? options.readText || recapExcerpt(bookText)
               : retrievedContext(
                   bookText,
                   `${question} ${activeContext?.selectedText ?? ''}`,
@@ -1702,7 +1711,13 @@ function App() {
                       Continue reading <ArrowRight size={16} />
                     </button>
                     {current.format === 'epub' && current.progress > 0 ? (
-                      <button className="secondary-button" onClick={() => recap(current)}>
+                      <button
+                        className="secondary-button"
+                        onClick={() => {
+                          setRecapPending(current.id)
+                          openSavedBook(current)
+                        }}
+                      >
                         Where was I?
                       </button>
                     ) : null}
@@ -2395,7 +2410,9 @@ function App() {
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
         onAsk={openNoemaPanel}
-        onRecap={() => recap(selectedBook)}
+        onRecap={(text) => recap(selectedBook, text)}
+        autoRecap={recapPending === selectedBook.id}
+        onAutoRecapped={() => setRecapPending(null)}
         onSaveWord={saveWord}
         initialSearch={readerSearch}
         onBookmark={() => toggleBookmark(selectedBook.id)}
