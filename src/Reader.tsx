@@ -41,7 +41,13 @@ import {
 import { addReading, countWords, formatDuration, readPace, timeLeft, writePace, wordsPerMinute } from './lib/pace'
 import { logReading, readDiary, writeDiary } from './lib/diary'
 import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
-import type { BrainNote, BrainNoteKind, BrainNoteLocation } from './lib/knowledge'
+import {
+  HIGHLIGHT_COLORS,
+  type BrainNote,
+  type BrainNoteKind,
+  type BrainNoteLocation,
+  type HighlightColor,
+} from './lib/knowledge'
 import { openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
@@ -183,6 +189,8 @@ export function Reader({
   onOpenNote,
   onAsk,
   onRecap,
+  onHighlight,
+  onHighlightEdit,
 
   onSaveWord,
   initialSearch,
@@ -206,6 +214,8 @@ export function Reader({
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
   onRecap: () => void
+  onHighlight: (text: string, color: HighlightColor, location: BrainNoteLocation) => void
+  onHighlightEdit: (noteId: string, color: HighlightColor | null) => void
 
   onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
   initialSearch?: string
@@ -231,6 +241,13 @@ export function Reader({
   const readingRef = useLatest(reading)
   const setFontSize = (value: number) => onReadingChange({ fontSize: value })
   const setReaderTheme = (value: ReaderTheme) => onReadingChange({ theme: value })
+  // What the reader has just selected, or the highlight they tapped, with the colours to choose from.
+  const [pick, setPick] = useState<{
+    text: string
+    location: BrainNoteLocation
+    noteId?: string
+    color?: HighlightColor
+  } | null>(null)
   const [wideLayout, setWideLayout] = useState(reading.startWide)
   // The tools panel covers the page on a phone, so it starts closed there.
   const [toolsOpen, setToolsOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches)
@@ -420,6 +437,63 @@ export function Reader({
     [],
   )
 
+  // Highlights are drawn on the page in the colour they were saved with.
+  const drawn = useRef(new Map<string, { cfi: string; color: HighlightColor }>())
+  const highlightKey = notes
+    .filter((note) => note.bookId === book.id && note.kind === 'highlight' && note.cfi?.startsWith('epubcfi'))
+    .map((note) => `${note.id}|${note.cfi}|${note.color ?? 'yellow'}`)
+    .join(';')
+  useEffect(() => {
+    const instance = rendition.current
+    if (loading || !instance || book.format !== 'epub') {
+      drawn.current.clear()
+      return
+    }
+    const wanted = new Map<string, { cfi: string; color: HighlightColor }>()
+    for (const entry of highlightKey ? highlightKey.split(';') : []) {
+      const [id, cfi, color] = entry.split('|')
+      wanted.set(id, { cfi, color: color as HighlightColor })
+    }
+    for (const [id, info] of drawn.current) {
+      const next = wanted.get(id)
+      if (next && next.cfi === info.cfi && next.color === info.color) continue
+      try {
+        instance.annotations.remove(info.cfi, 'highlight')
+      } catch {
+        // Already gone from the page.
+      }
+      drawn.current.delete(id)
+    }
+    for (const [id, info] of wanted) {
+      if (drawn.current.has(id)) continue
+      const css = HIGHLIGHT_COLORS.find((item) => item.id === info.color)?.css ?? '#f2d46b'
+      try {
+        instance.annotations.highlight(
+          info.cfi,
+          { noteId: id },
+          () => setPick({ text: '', location: currentNoteLocation(), noteId: id, color: info.color }),
+          'noesis-highlight',
+          { fill: css, 'fill-opacity': '0.38', 'mix-blend-mode': 'multiply' },
+        )
+        drawn.current.set(id, info)
+      } catch {
+        // A mark that can't be placed just isn't drawn.
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightKey, loading, book.format])
+  const finishPick = () => {
+    frame.current?.querySelector('iframe')?.contentWindow?.getSelection()?.removeAllRanges()
+    selectedTextRef.current = ''
+    setPick(null)
+  }
+  const chooseColor = (color: HighlightColor) => {
+    if (!pick) return
+    if (pick.noteId) onHighlightEdit(pick.noteId, color)
+    else onHighlight(pick.text, color, pick.location)
+    finishPick()
+  }
+
   // The meaning of the selected word.
   const [define, setDefine] = useState<{
     word: string
@@ -489,7 +563,7 @@ export function Reader({
     let cancelled = false
     let cleanupReading = () => undefined
     const currentBook = bookRef.current
-    const { onProgress: reportProgress, onNote: saveHighlight } = readerCallbacksRef.current
+    const { onProgress: reportProgress } = readerCallbacksRef.current
     const isExternal = currentBook.format === 'web' || currentBook.format === 'resource'
     const start = async () => {
       setLoading(true)
@@ -688,6 +762,14 @@ export function Reader({
           const contentDocument = view?.contents?.document
           if (!contentDocument) return
           attachScroll(contentDocument)
+          // The choices go away when the selection is let go of.
+          let clearTimer: number | undefined
+          contentDocument.addEventListener('selectionchange', () => {
+            window.clearTimeout(clearTimer)
+            clearTimer = window.setTimeout(() => {
+              if (contentDocument.getSelection()?.isCollapsed) setPick((current) => (current?.noteId ? current : null))
+            }, 250)
+          })
           window.setTimeout(() => noteChapterWordsRef.current(), 300)
           attachScroll(contentDocument.scrollingElement)
           attachScroll(contentDocument.documentElement)
@@ -706,16 +788,18 @@ export function Reader({
           const selectionPage =
             locationRef.current.page ??
             (Number.isFinite(selectionLocation) && selectionLocation >= 0 ? selectionLocation + 1 : undefined)
-          const selectionKind = wideLayoutRef.current ? wideCaptureKindRef.current : 'highlight'
-          saveHighlight(text, selectionKind, {
-            bookId: currentBook.id,
-            bookTitle: currentBook.title,
-            author: currentBook.author,
-            chapter: chapters[activeChapterIndex]?.label ?? currentBook.chapter,
-            chapterIndex: activeChapterIndex,
-            page: selectionPage,
-            href: locationRef.current.href ?? chapters[activeChapterIndex]?.href,
-            cfi: cfiRange,
+          setPick({
+            text,
+            location: {
+              bookId: currentBook.id,
+              bookTitle: currentBook.title,
+              author: currentBook.author,
+              chapter: chapters[activeChapterIndex]?.label ?? currentBook.chapter,
+              chapterIndex: activeChapterIndex,
+              page: selectionPage,
+              href: locationRef.current.href ?? chapters[activeChapterIndex]?.href,
+              cfi: cfiRange,
+            },
           })
         })
         const firstChapter = chapters[initialIndex]?.href
@@ -1212,6 +1296,54 @@ export function Reader({
             ) : (
               <div ref={frame} className="reader-frame" />
             )}
+            {pick ? (
+              <div className="reader-pick" role="toolbar" aria-label="Highlight">
+                {HIGHLIGHT_COLORS.map((item) => (
+                  <button
+                    key={item.id}
+                    className={'reader-pick-dot' + (pick.color === item.id ? ' reader-pick-dot-on' : '')}
+                    style={{ background: item.css }}
+                    aria-label={`${item.label} highlight`}
+                    onClick={() => chooseColor(item.id)}
+                  />
+                ))}
+                {pick.noteId ? (
+                  <button
+                    className="reader-pick-action"
+                    onClick={() => {
+                      onHighlightEdit(pick.noteId as string, null)
+                      finishPick()
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="reader-pick-action"
+                      onClick={() => {
+                        onNote(pick.text, 'note', pick.location)
+                        finishPick()
+                      }}
+                    >
+                      Note
+                    </button>
+                    <button
+                      className="reader-pick-action"
+                      onClick={() => {
+                        onAsk('Explain the selected passage', { ...pick.location, selectedText: pick.text })
+                        finishPick()
+                      }}
+                    >
+                      Ask Noema
+                    </button>
+                  </>
+                )}
+                <button className="reader-pick-action" onClick={finishPick} aria-label="Close">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null}
             {loading ? (
               <div className="reader-overlay">
                 <Sparkles size={18} /> Opening {book.title}…

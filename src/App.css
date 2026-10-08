@@ -8103,3 +8103,72 @@ body {
   flex: 0 0 auto;
   color: var(--muted);
 }
+.reader-pick {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
+  padding: 8px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.45);
+  border-radius: 999px;
+  background: rgba(8, 20, 34, 0.96);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+}
+.reader-pick-dot {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.reader-pick-dot-on {
+  border-color: #fff;
+}
+.reader-pick-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reader-pick-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.brain-page-colors {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.brain-color-dot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.brain-color-dot-on {
+  border-color: #fff;
+  opacity: 1;
+}
+.brain-item-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+}

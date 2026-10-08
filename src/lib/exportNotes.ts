@@ -25,6 +25,7 @@ export function noteToMarkdown(note: BrainNote): string {
     `source: ${quoteYaml(note.bookTitle ?? note.source)}`,
     note.chapter ? `chapter: ${quoteYaml(note.chapter)}` : '',
     note.page ? `page: ${note.page}` : '',
+    note.color ? `color: ${note.color}` : '',
     `created: ${note.createdAt}`,
     note.tags?.length ? `tags: [${note.tags.map((tag) => slug(tag)).join(', ')}]` : '',
     '---',
