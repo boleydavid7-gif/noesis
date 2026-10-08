@@ -3,6 +3,12 @@ type Env = {
   GEMINI_API_KEY?: string
   GOOGLE_API_KEY?: string
   GEMINI_TUTOR_MODEL?: string
+  VITE_SUPABASE_URL?: string
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string
+  // Set to "true" to require a valid Supabase session for /api/tutor.
+  TUTOR_REQUIRE_AUTH?: string
+  // When set, /api/models is only served to requests sending this token.
+  ADMIN_TOKEN?: string
 }
 
 const MAX_QUESTION_LENGTH = 2_000
@@ -11,11 +17,40 @@ const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const MAX_SEARCH_LENGTH = 160
 
-function fetchWithTimeout(input: string, init: RequestInit, milliseconds = 5_000): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('upstream timeout')), milliseconds)
-    fetch(input, init).then((response) => { clearTimeout(timer); resolve(response) }).catch((reason) => { clearTimeout(timer); reject(reason) })
-  })
+async function fetchWithTimeout(input: string | URL, init: RequestInit = {}, milliseconds = 5_000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), milliseconds)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Best-effort per-isolate limiter. It slows scripted abuse of the paid and
+// upstream-backed routes; use a Cloudflare rate-limit rule for hard guarantees.
+const rateBuckets = new Map<string, { count: number; resetAt: number }>()
+function rateLimited(request: Request, route: string, limit: number, windowMs = 60_000): boolean {
+  const now = Date.now()
+  if (rateBuckets.size > 5_000) for (const [key, bucket] of rateBuckets) if (bucket.resetAt <= now) rateBuckets.delete(key)
+  const key = `${route}:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`
+  const bucket = rateBuckets.get(key)
+  if (!bucket || bucket.resetAt <= now) { rateBuckets.set(key, { count: 1, resetAt: now + windowMs }); return false }
+  bucket.count += 1
+  return bucket.count > limit
+}
+
+async function hasValidSession(request: Request, env: Env): Promise<boolean> {
+  const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const base = env.VITE_SUPABASE_URL?.trim().replace(/\/$/, '')
+  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+  if (!token || !base || !key) return false
+  try {
+    const response = await fetchWithTimeout(`${base}/auth/v1/user`, { headers: { authorization: `Bearer ${token}`, apikey: key } })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 function json(data: unknown, status = 200): Response {
@@ -26,6 +61,10 @@ function json(data: unknown, status = 200): Response {
 }
 
 async function answerTutor(request: Request, env: Env): Promise<Response> {
+  if (rateLimited(request, 'tutor', 20)) return json({ ok: false, error: 'Too many questions. Try again in a minute.' }, 429)
+  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
+    return json({ ok: false, error: 'Sign in to ask Noema.' }, 401)
+  }
   let input: { question?: unknown; context?: unknown; book?: unknown }
   try {
     input = (await request.json()) as typeof input
@@ -42,7 +81,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
 
   const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  const models = [...new Set([configuredModel, 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.5-flash'])]
+  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
     'You are Noema, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
@@ -60,15 +99,15 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   for (const model of models) {
     let response: Response
     try {
-      response = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      response = await fetchWithTimeout(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.35, maxOutputTokens: 800 },
         }),
-      })
+      }, 25_000)
     } catch {
       return json({ ok: false, error: 'Noema could not reach Gemini right now.' }, 502)
     }
@@ -110,11 +149,12 @@ type SearchResult = {
 }
 
 async function searchFreeResources(request: Request): Promise<Response> {
+  if (rateLimited(request, 'search', 30)) return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
   try {
     const query = new URL(request.url).searchParams.get('q')?.trim().slice(0, MAX_SEARCH_LENGTH) ?? ''
     if (query.length < 2) return json({ ok: false, error: 'Enter at least two characters to search.' }, 400)
     const encoded = encodeURIComponent(query)
-    const openLibrary = fetch(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
+    const openLibrary = fetchWithTimeout(`https://openlibrary.org/search.json?q=${encoded}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { docs?: Array<{ key?: string; title?: string; author_name?: string[]; cover_i?: number; first_publish_year?: number }> }
@@ -124,7 +164,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           source: 'Open Library', sourceUrl: `https://openlibrary.org${item.key ?? ''}`, free: false, format: 'Book metadata', kind: 'book',
         }))
       }).catch(() => [] as SearchResult[])
-    const gutenberg = fetch(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
+    const gutenberg = fetchWithTimeout(`https://gutendex.com/books/?search=${encoded}`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { results?: Array<{ id?: number; title?: string; authors?: Array<{ name?: string }>; copyright?: boolean; formats?: Record<string, string> }> }
@@ -162,7 +202,7 @@ async function searchFreeResources(request: Request): Promise<Response> {
           }
         })
       }).catch(() => [] as SearchResult[])
-    const archive = fetch(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
+    const archive = fetchWithTimeout(`https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`, { headers: { accept: 'application/json' } })
       .then(async (response) => {
         if (!response.ok) return [] as SearchResult[]
         const body = JSON.parse(await response.text()) as { response?: { docs?: Array<{ identifier?: string; title?: string; creator?: string | string[]; year?: number | string; description?: string | string[]; collection?: string | string[] }> } }
@@ -198,16 +238,50 @@ async function searchFreeResources(request: Request): Promise<Response> {
 
 const RESOURCE_HOSTS = ['gutenberg.org', 'archive.org', 'arxiv.org', 'nih.gov', 'pmc.ncbi.nlm.nih.gov', 'zenodo.org', 'doaj.org']
 
+const MAX_RESOURCE_BYTES = 80 * 1024 * 1024
+const MAX_RESOURCE_REDIRECTS = 3
+
+function isAllowedResource(url: URL): boolean {
+  return url.protocol === 'https:' && RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
+}
+
 async function proxyResource(request: Request): Promise<Response> {
+  if (rateLimited(request, 'resource', 20)) return json({ ok: false, error: 'Too many downloads. Try again in a minute.' }, 429)
   const target = new URL(request.url).searchParams.get('url')
   if (!target) return json({ ok: false, error: 'A resource URL is required.' }, 400)
   let url: URL
   try { url = new URL(target) } catch { return json({ ok: false, error: 'The resource URL is invalid.' }, 400) }
-  if (url.protocol !== 'https:' || !RESOURCE_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) return json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
-  const response = await fetch(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' } })
-  if (!response.ok) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
+  const refusal = json({ ok: false, error: 'This resource cannot be imported directly. Open the source page instead.' }, 403)
+  if (!isAllowedResource(url)) return refusal
+
+  // Follow redirects by hand so every hop stays on the allowlist.
+  let response: Response
+  try {
+    for (let hop = 0; ; hop += 1) {
+      response = await fetchWithTimeout(url, { headers: { accept: 'application/epub+zip,application/pdf,*/*' }, redirect: 'manual' }, 20_000)
+      const location = response.headers.get('location')
+      if (response.status < 300 || response.status >= 400 || !location) break
+      if (hop >= MAX_RESOURCE_REDIRECTS) return json({ ok: false, error: 'The source redirected too many times.' }, 502)
+      url = new URL(location, url)
+      if (!isAllowedResource(url)) return refusal
+    }
+  } catch {
+    return json({ ok: false, error: 'The source did not respond in time.' }, 502)
+  }
+  if (!response.ok || !response.body) return json({ ok: false, error: `The source returned ${response.status}.` }, 502)
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_RESOURCE_BYTES) return json({ ok: false, error: 'This file is too large to import.' }, 413)
+
+  let received = 0
+  const limiter = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      received += chunk.byteLength
+      if (received > MAX_RESOURCE_BYTES) controller.error(new Error('resource too large'))
+      else controller.enqueue(chunk)
+    },
+  })
   const headers = new Headers({ 'cache-control': 'public, max-age=3600', 'content-type': response.headers.get('content-type') || 'application/octet-stream' })
-  return new Response(response.body, { status: response.status, headers })
+  return new Response(response.body.pipeThrough(limiter), { status: 200, headers })
 }
 
 const worker = {
@@ -217,11 +291,13 @@ const worker = {
       return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
     }
     if (url.pathname === '/api/models' && request.method === 'GET') {
+      const adminToken = env.ADMIN_TOKEN?.trim()
+      if (!adminToken || request.headers.get('x-admin-token') !== adminToken) return json({ ok: false, error: 'Not found.' }, 404)
       const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
       if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured.' }, 503)
       let response: Response
       try {
-        response = await fetch(`${GEMINI_BASE}/models?key=${encodeURIComponent(apiKey)}`)
+        response = await fetchWithTimeout(`${GEMINI_BASE}/models`, { headers: { 'x-goog-api-key': apiKey } })
       } catch {
         return json({ ok: false, error: 'Gemini model discovery could not reach Google.' }, 502)
       }

@@ -68,3 +68,12 @@ provider connection uses a browser access token and the learner's own account;
 Noesis never receives the provider password or client secret. Connect the
 provider from Cloud Backup after signing in. A ZIP export remains available
 for one-off manual transfers.
+
+### Worker protection
+
+`/api/tutor`, `/api/search`, and `/api/resource` are rate limited per client
+(best effort, per Worker isolate; add a Cloudflare rate-limiting rule for a hard
+limit). Set `TUTOR_REQUIRE_AUTH=true` as a Worker variable to require a valid
+Supabase session before Noema calls Gemini. `/api/models` returns 404 unless
+`ADMIN_TOKEN` is set and sent as `x-admin-token`. `/api/resource` follows
+redirects only to allowlisted hosts and refuses files over 80 MB.

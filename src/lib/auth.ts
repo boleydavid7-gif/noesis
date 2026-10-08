@@ -63,3 +63,12 @@ export function subscribeToAuth(callback: (event: AuthChangeEvent, session: Sess
 export function isAnonymousUser(user: User | null): boolean {
   return Boolean(user?.is_anonymous)
 }
+
+export async function authHeaders(): Promise<Record<string, string>> {
+  try {
+    const token = (await getCurrentSession())?.access_token
+    return token ? { authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
