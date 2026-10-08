@@ -1,5 +1,5 @@
 {
-  "name": "Noesis · Your reading space",
+  "name": "Noesis \u00b7 Your reading space",
   "short_name": "Noesis",
   "description": "A calm reading space where books become knowledge.",
   "start_url": "/",
@@ -10,10 +10,28 @@
   "background_color": "#06172a",
   "icons": [
     {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/noesis-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
