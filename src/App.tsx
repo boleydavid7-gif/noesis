@@ -73,6 +73,7 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
+import { discoverQuery, interestTerms, libraryPicks, onboardingSteps } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
@@ -321,6 +322,13 @@ function App() {
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
+  const [hideChecklist, setHideChecklist] = useState(() => {
+    try {
+      return localStorage.getItem('noesis:onboarding:done') === '1'
+    } catch {
+      return false
+    }
+  })
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -1444,9 +1452,9 @@ function App() {
       setTutorBusy(false)
     }
   }
-  async function searchResources(event?: React.FormEvent) {
+  async function searchResources(event?: React.FormEvent, override?: string) {
     event?.preventDefault()
-    const query = resourceQuery.trim()
+    const query = (override ?? resourceQuery).trim()
     if (!query) return
     setSearching(true)
     setResources([])
@@ -2003,6 +2011,36 @@ function App() {
             ) : null}
           </div>
         ) : null}
+        {books.length + paths.length + notes.length > 0 ? (
+          <HomeChecklist
+            steps={onboardingSteps({ books, noteCount: notes.length, pathCount: paths.length })}
+            hidden={hideChecklist}
+            onHide={() => {
+              setHideChecklist(true)
+              try {
+                localStorage.setItem('noesis:onboarding:done', '1')
+              } catch {
+                // The checklist simply returns next time.
+              }
+            }}
+            onStep={(id) => {
+              if (id === 'add') fileInput.current?.click()
+              else if (id === 'read') selectNav('Library')
+              else if (id === 'note') selectNav('Notes')
+              else selectNav('Learning Paths')
+            }}
+          />
+        ) : null}
+        <ReadNextCard
+          books={books}
+          notes={notes}
+          onOpenBook={openSavedBook}
+          onFind={(query) => {
+            setResourceQuery(query)
+            selectNav('Explore')
+            void searchResources(undefined, query)
+          }}
+        />
         {books.length + paths.length + notes.length === 0 ? (
           <section className="start-card panel-card">
             <h2>Start here</h2>
@@ -3648,6 +3686,87 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
+function HomeChecklist({
+  steps,
+  hidden,
+  onHide,
+  onStep,
+}: {
+  steps: ReturnType<typeof onboardingSteps>
+  hidden: boolean
+  onHide: () => void
+  onStep: (id: string) => void
+}) {
+  const done = steps.filter((step) => step.done).length
+  if (hidden || done === steps.length) return null
+  return (
+    <section className="checklist-card panel-card" aria-label="Getting started">
+      <div className="checklist-head">
+        <strong>
+          Getting started · {done} of {steps.length}
+        </strong>
+        <button className="text-button" onClick={onHide}>
+          Hide
+        </button>
+      </div>
+      <ul>
+        {steps.map((step) => (
+          <li key={step.id} className={step.done ? 'checklist-done' : ''}>
+            {step.done ? (
+              <span>
+                <Check size={14} /> {step.label}
+              </span>
+            ) : (
+              <button className="text-button" onClick={() => onStep(step.id)}>
+                {step.label}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ReadNextCard({
+  books,
+  notes,
+  onOpenBook,
+  onFind,
+}: {
+  books: LibraryBook[]
+  notes: Note[]
+  onOpenBook: (book: LibraryBook) => void
+  onFind: (query: string) => void
+}) {
+  const terms = useMemo(() => interestTerms(notes, books), [notes, books])
+  const picks = useMemo(() => libraryPicks(books, terms), [books, terms])
+  const query = discoverQuery(terms)
+  if (!query) return null
+  return (
+    <section className="read-next-card panel-card" aria-label="What to read next">
+      <strong>What to read next</strong>
+      {picks.length > 0 ? (
+        <ul>
+          {picks.map(({ book, because }) => (
+            <li key={book.id}>
+              <button className="text-button" onClick={() => onOpenBook(book)}>
+                {book.title}
+              </button>
+              <small> · matches your notes on {because.join(', ')}</small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="brain-rail-empty">Nothing unread in your library matches your notes yet.</p>
+      )}
+      <button className="text-button" onClick={() => onFind(query)}>
+        Find free books about {query}
+      </button>
+    </section>
+  )
+}
+
 function ResurfaceCard({
   notes,
   shuffle,
