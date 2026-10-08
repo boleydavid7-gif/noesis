@@ -8969,3 +8969,9 @@ body.reader-wide-open .sidebar {
 .reader-rail-off .reader-context-rail {
   display: none;
 }
+
+input[type='range'],
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--gold-warm, #c7a36a);
+}
