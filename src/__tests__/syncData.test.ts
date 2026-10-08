@@ -142,3 +142,40 @@ describe('sameItems', () => {
     expect(sameItems([], [])).toBe(true)
   })
 })
+
+describe('learning paths in the bundle', () => {
+  const path = (id: string, updated: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    title: `Path ${id}`,
+    description: '',
+    bookIds: [],
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updated,
+    ...extra,
+  })
+
+  it('keeps the newer copy of a path, so ticked topics follow you', () => {
+    const local = bundle({ paths: [path('p1', '2026-10-02T00:00:00.000Z', { title: 'Old title' })] })
+    const remote = bundle({ paths: [path('p1', '2026-10-05T00:00:00.000Z', { title: 'Edited on phone' })] })
+    expect(mergeBundles(local, remote, none).paths?.[0].title).toBe('Edited on phone')
+    expect(mergeBundles(remote, local, none).paths?.[0].title).toBe('Edited on phone')
+  })
+
+  it('adds a path from the other device and honours a deleted one', () => {
+    const merged = mergeBundles(
+      bundle({ paths: [path('a', '2026-10-02T00:00:00.000Z')] }),
+      bundle({ paths: [path('b', '2026-10-03T00:00:00.000Z')] }),
+      none,
+    )
+    expect(merged.paths?.map((item) => item.id).sort()).toEqual(['a', 'b'])
+    const deleted = mergeBundles(bundle({ paths: [path('a', '2026-10-02T00:00:00.000Z')] }), bundle(), {
+      'path:a': at('2026-10-04T00:00:00.000Z'),
+    })
+    expect(deleted.paths).toEqual([])
+  })
+
+  it('leaves paths alone when this side does not send them', () => {
+    const merged = mergeBundles(bundle(), bundle({ paths: [path('x', '2026-10-02T00:00:00.000Z')] }), none)
+    expect(merged.paths).toBeUndefined()
+  })
+})

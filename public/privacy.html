@@ -66,6 +66,11 @@
           <td>Finding free books and articles</td>
         </tr>
         <tr>
+          <td>A learning goal you describe, and the titles and authors of books suggested for it</td>
+          <td>You ask Noema to plan a learning path</td>
+          <td>Designing the path and looking up real books. Saved paths sync with your account.</td>
+        </tr>
+        <tr>
           <td>A city you search for, or your approximate coordinates if you choose “Detect my location”</td>
           <td>You set up the weather forecast</td>
           <td>Showing your local forecast. Your location is saved only on your device.</td>
@@ -115,6 +120,7 @@
         <li><strong>Cloudflare</strong> hosts the site and server code and processes request data such as IP addresses.</li>
         <li><strong>Supabase</strong> provides sign-in, note storage, and library file storage for signed-in users.</li>
         <li><strong>Google (Gemini API)</strong> generates Noema answers and review questions.</li>
+        <li><strong>Google Books</strong> receives book titles and authors (sent from our server, not your address) to find real book details such as covers and ratings. When Noema plans a path, our server also opens the free-resource links it suggests to check that they work. Store links (Bookshop.org, Amazon, Google Play Books, WorldCat) are ordinary links that open in a new tab; we do not earn commission from them.</li>
         <li><strong>Open-Meteo</strong> receives the city name or coordinates you choose for the weather forecast. If you use “Detect my location”, your browser asks for permission first, and <strong>BigDataCloud</strong> may receive your coordinates to turn them into a place name. Neither is contacted until you set up the forecast.</li>
         <li><strong>Open Library, Project Gutenberg, OpenAlex, Crossref, and the Internet Archive</strong> receive your search terms when you use Explore. Files you import from them are fetched through our server, which only retrieves content from approved free-resource sites.</li>
       </ul>

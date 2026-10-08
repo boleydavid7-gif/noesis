@@ -59,6 +59,8 @@ import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
+import { PathPlanDetail, PathPlanner } from './PathPlanner'
+import { planProgress, type LearningPath } from './lib/pathPlan'
 import { CalendarPanel } from './CalendarPanel'
 import { WeatherPanel } from './WeatherPanel'
 import {
@@ -114,7 +116,6 @@ type Overlay = 'brain' | 'noema' | null
 type SelectionOffer = { text: string; top: number; left: number }
 type NoteDraft = { title: string; body: string; source: string; kind: BrainNoteKind; location?: BrainNoteLocation }
 type LibrarySort = 'recent' | 'title' | 'progress'
-type LearningPath = { id: string; title: string; description: string; bookIds: string[]; createdAt: string }
 type Resource = {
   id: string
   title: string
@@ -314,6 +315,14 @@ function App() {
       return bundle.events
     })
     setFocusState((current) => applyFocusSync(current, bundle.focus))
+    const incomingPaths = bundle.paths
+    if (incomingPaths) {
+      setPaths((current) => {
+        if (sameItems(current, incomingPaths)) return current
+        writePaths(incomingPaths)
+        return incomingPaths
+      })
+    }
     if (!sameItems(readReviewCards(), bundle.cards)) {
       writeReviewCards(bundle.cards)
       setReviewRemount((value) => value + 1)
@@ -325,7 +334,12 @@ function App() {
     let cancelled = false
     const timer = window.setTimeout(async () => {
       try {
-        const merged = await syncAccountBundle({ events, cards: readReviewCards(), focus: focusToSync(focusState) })
+        const merged = await syncAccountBundle({
+          events,
+          cards: readReviewCards(),
+          focus: focusToSync(focusState),
+          paths,
+        })
         if (cancelled) return
         applyBundle(merged)
         markSynced()
@@ -340,7 +354,7 @@ function App() {
     }
     // focusState is read through focusSignature so timer ticks do not trigger a sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUserId, events, focusSignature, dataVersion, settings.backup.autoSync, applyBundle])
+  }, [authUserId, events, paths, focusSignature, dataVersion, settings.backup.autoSync, applyBundle])
   // Review cards live in local storage; recount whenever the page changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav, dataVersion, reviewRemount])
@@ -1035,12 +1049,18 @@ function App() {
       description: pathDraft.description.trim() || 'A personal collection for focused study.',
       bookIds: [],
       createdAt: new Date().toISOString(),
+      updated: new Date().toISOString(),
     }
     const next = [path, ...paths]
     setPaths(next)
     writePaths(next)
     setPathDraft({ title: '', description: '' })
     showNotice('Learning path created.')
+  }
+  function savePlannedPath(path: LearningPath) {
+    const next = [path, ...paths]
+    setPaths(next)
+    writePaths(next)
   }
   function deleteBook(book: LibraryBook) {
     if (settings.library.confirmDelete && !window.confirm(`Remove ${book.title} from your library?`)) return
@@ -1461,7 +1481,9 @@ function App() {
   }
   function pathsPage() {
     return (
-      <Page title="Learning paths" subtitle="Group books around a question, skill, or long-term goal.">
+      <Page title="Learning paths" subtitle="Describe a goal and Noema will plan the path, or group books yourself.">
+        <PathPlanner onSave={savePlannedPath} onNotice={showNotice} />
+        <h3 className="paths-own-heading">Or build your own</h3>
         <form className="create-form panel-card" onSubmit={createPath}>
           <input
             value={pathDraft.title}
@@ -1490,9 +1512,14 @@ function App() {
           onAssign={(pathId, bookId) => {
             const next = paths.map((path) =>
               path.id === pathId && bookId && !path.bookIds.includes(bookId)
-                ? { ...path, bookIds: [...path.bookIds, bookId] }
+                ? { ...path, bookIds: [...path.bookIds, bookId], updated: new Date().toISOString() }
                 : path,
             )
+            setPaths(next)
+            writePaths(next)
+          }}
+          onUpdate={(updated) => {
+            const next = paths.map((path) => (path.id === updated.id ? updated : path))
             setPaths(next)
             writePaths(next)
           }}
@@ -1643,14 +1670,20 @@ function App() {
             : message || 'Your book files could not be synced.',
         )
       }
-      let bundle: SyncBundle = { events, cards: readReviewCards(), focus: focusToSync(focusState) }
+      let bundle: SyncBundle = { events, cards: readReviewCards(), focus: focusToSync(focusState), paths }
       try {
         bundle = await syncAccountBundle(bundle)
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : ''
         showNotice(message || 'Your calendar and review cards could not be synced.')
       }
-      let state: CloudSyncState = { books: current, notes, paths: paths as unknown[], bundle }
+      const accountPaths = bundle.paths ?? paths
+      let state: CloudSyncState = {
+        books: current,
+        notes,
+        paths: accountPaths as unknown[],
+        bundle: { ...bundle, paths: undefined },
+      }
       for (const connection of cloudConnections.filter(
         (item) => item.ownerUserId === authUserId && item.expiresAt > Date.now() + 30_000,
       )) {
@@ -2435,6 +2468,7 @@ function PathSection({
   editable = false,
   onDelete,
   onAssign,
+  onUpdate,
 }: {
   paths: LearningPath[]
   books: LibraryBook[]
@@ -2442,7 +2476,9 @@ function PathSection({
   editable?: boolean
   onDelete?: (id: string) => void
   onAssign?: (pathId: string, bookId: string) => void
+  onUpdate?: (path: LearningPath) => void
 }) {
+  const [openPlan, setOpenPlan] = useState<string | null>(null)
   return (
     <section className="section-block path-section">
       <div className="section-heading">
@@ -2462,9 +2498,12 @@ function PathSection({
         <div className="journey-list">
           {paths.map((path) => {
             const pathBooks = books.filter((book) => path.bookIds.includes(book.id))
-            const progress = pathBooks.length
-              ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length)
-              : 0
+            const plan = path.plan ? planProgress(path.plan) : null
+            const progress = plan
+              ? plan.percent
+              : pathBooks.length
+                ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length)
+                : 0
             return (
               <article className="journey-item" key={path.id}>
                 <div className="journey-marker">
@@ -2480,9 +2519,23 @@ function PathSection({
                   </div>
                   <p>{path.description}</p>
                   <small>
-                    {pathBooks.length} {pathBooks.length === 1 ? 'book' : 'books'} ·{' '}
-                    {progress >= 100 ? 'Complete' : 'In progress'}
+                    {plan
+                      ? `${plan.done} of ${plan.total} topics · ${path.plan?.weeks ?? ''}`
+                      : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
+                    · {progress >= 100 ? 'Complete' : 'In progress'}
                   </small>
+                  {path.plan ? (
+                    <button
+                      className="text-button plan-toggle"
+                      onClick={() => setOpenPlan(openPlan === path.id ? null : path.id)}
+                      aria-expanded={openPlan === path.id}
+                    >
+                      {openPlan === path.id ? 'Hide plan' : 'Open plan'}
+                    </button>
+                  ) : null}
+                  {path.plan && openPlan === path.id && onUpdate ? (
+                    <PathPlanDetail path={path} onChange={onUpdate} />
+                  ) : null}
                   {editable && books.length > 0 ? (
                     <select
                       className="path-book-select"
