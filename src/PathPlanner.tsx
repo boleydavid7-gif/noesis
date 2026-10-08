@@ -1,9 +1,16 @@
 import { useContext, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star } from 'lucide-react'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
-import { requestClarification, requestSuggestion, resolveBooks, type Clarification } from './lib/pathClient'
+import {
+  requestClarification,
+  requestMaterials,
+  requestSuggestion,
+  resolveBooks,
+  type Clarification,
+} from './lib/pathClient'
 import {
   EXAMPLE_GOALS,
+  addMaterials,
   HOURS_PER_TOPIC,
   stageHours,
   withSchedule,
@@ -197,11 +204,39 @@ export function PathPlanDetail({
   onAsk?: (prompt: string) => void
 }) {
   const plan = path.plan
+  const [finding, setFinding] = useState<string | null>(null)
+  const [findError, setFindError] = useState('')
   if (!plan) return null
   const next = nextTopic(plan)
   const { done } = planProgress(plan)
   const tick = (topicId: string) =>
     onChange({ ...path, plan: toggleTopic(plan, topicId), updated: new Date().toISOString() })
+  // Asks Noema for books and free resources for one stage, checks them, and
+  // keeps them on the saved plan.
+  async function findFor(milestone: PlanMilestone) {
+    setFinding(milestone.id)
+    setFindError('')
+    try {
+      const found = await requestMaterials({
+        goal: plan!.goal,
+        stage: milestone.title,
+        topics: milestone.topics.map((topic) => topic.label),
+        level: plan!.level,
+      })
+      const books = await resolveBooks(found.books)
+      if (books.length === 0 && found.resources.length === 0)
+        throw new Error('Nothing verifiable turned up. Try again.')
+      onChange({
+        ...path,
+        plan: addMaterials(plan!, milestone.id, books, found.resources),
+        updated: new Date().toISOString(),
+      })
+    } catch (reason) {
+      setFindError(reason instanceof Error ? reason.message : 'Noema could not find materials right now.')
+    } finally {
+      setFinding(null)
+    }
+  }
   const explain = (topic: string) =>
     onAsk?.(
       `Explain “${topic}” for someone working toward this goal: ${plan.goal}. Keep it beginner friendly, then suggest one small way to practice it.`,
@@ -219,7 +254,12 @@ export function PathPlanDetail({
             </p>
             {done === 0 ? (
               <ol className="plan-how">
-                <li>Pick one of the materials listed for this stage and start with it.</li>
+                <li>
+                  {milestoneGuide(plan, next.milestone).books.length +
+                  milestoneGuide(plan, next.milestone).resources.length
+                    ? 'Pick one of the materials listed for this stage and start with it.'
+                    : 'Press “Find materials” to get books and free resources for this stage, then start with one.'}
+                </li>
                 <li>Work through the topics in order. Tick one when you could explain it in your own words.</li>
                 <li>
                   {next.milestone.outcome
@@ -229,15 +269,22 @@ export function PathPlanDetail({
               </ol>
             ) : null}
             <StudyWith plan={plan} milestone={next.milestone} />
+            {findError ? (
+              <p className="weather-error" role="alert">
+                {findError}
+              </p>
+            ) : null}
             <div className="plan-next-actions">
               <button className="primary-button" onClick={() => tick(next.topic.id)}>
                 <Check size={14} /> Mark done
               </button>
-              {onAsk ? (
-                <button className="secondary-button" onClick={() => explain(next.topic.label)}>
-                  <Sparkles size={14} /> Ask Noema to explain it
-                </button>
-              ) : null}
+              <button
+                className="secondary-button"
+                onClick={() => void findFor(next.milestone)}
+                disabled={finding !== null}
+              >
+                <Search size={14} /> {finding === next.milestone.id ? 'Finding…' : 'Find materials for this stage'}
+              </button>
             </div>
           </>
         ) : (
@@ -296,6 +343,11 @@ export function PathPlanDetail({
               ))}
             </ul>
             {!current ? <StudyWith plan={plan} milestone={milestone} /> : null}
+            {!current ? (
+              <button className="text-button" onClick={() => void findFor(milestone)} disabled={finding !== null}>
+                {finding === milestone.id ? 'Finding…' : 'Find materials for this stage'}
+              </button>
+            ) : null}
           </details>
         )
       })}

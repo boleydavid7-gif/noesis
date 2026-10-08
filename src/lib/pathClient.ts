@@ -1,5 +1,5 @@
 import { authHeaders } from './auth'
-import { unverifiedBook, type BookCandidate, type ResolvedBook, type Suggestion } from './pathPlan'
+import { unverifiedBook, type BookCandidate, type PlanResource, type ResolvedBook, type Suggestion } from './pathPlan'
 
 const CACHE_KEY = 'noesis:book-cache:v1'
 const FOUND_DAYS = 30
@@ -63,6 +63,20 @@ export async function requestSuggestion(goal: string, options: PlanOptions = {})
   )
   if (!result.suggestion) throw new Error('Noema could not build a path right now. Try again in a moment.')
   return result.suggestion
+}
+
+export async function requestMaterials(input: {
+  goal: string
+  stage: string
+  topics: string[]
+  level?: string
+}): Promise<{ books: BookCandidate[]; resources: PlanResource[] }> {
+  const result = await post<{ books?: BookCandidate[]; resources?: PlanResource[] }>(
+    '/api/materials',
+    input,
+    'Noema could not find materials right now. Try again in a moment.',
+  )
+  return { books: result.books ?? [], resources: result.resources ?? [] }
 }
 
 // null means "no such book was found" (so it is left out); a catalogue outage

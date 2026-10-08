@@ -116,7 +116,25 @@ function hoursOf(value: unknown): number | undefined {
   return Number.isFinite(hours) && hours > 0 ? Math.min(80, Math.max(2, Math.round(hours))) : undefined
 }
 
-function cleanBooks(value: unknown, limit = 12): BookCandidate[] {
+export function cleanResources(value: unknown, limit = 10): PlanResource[] {
+  return (Array.isArray(value) ? value : []).slice(0, limit).flatMap((item) => {
+    const row = (item ?? {}) as Record<string, unknown>
+    const url = clip(row.url, 300)
+    const title = clip(row.title, 100)
+    if (!title || !isPublicHttps(url)) return []
+    return [
+      {
+        title,
+        publisher: clip(row.publisher, 60),
+        url,
+        kind: clip(row.kind, 24) || 'Free resource',
+        note: clip(row.note, 120) || undefined,
+      },
+    ]
+  })
+}
+
+export function cleanBooks(value: unknown, limit = 12): BookCandidate[] {
   const seen = new Set<string>()
   return (Array.isArray(value) ? value : [])
     .slice(0, limit * 2)
@@ -190,23 +208,7 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
     120,
   )
 
-  const resources: PlanResource[] = (Array.isArray(root.resources) ? root.resources : [])
-    .slice(0, 10)
-    .flatMap((item) => {
-      const row = item as Record<string, unknown>
-      const url = clip(row.url, 300)
-      const title = clip(row.title, 100)
-      if (!title || !isPublicHttps(url)) return []
-      return [
-        {
-          title,
-          publisher: clip(row.publisher, 60),
-          url,
-          kind: clip(row.kind, 24) || 'Free resource',
-          note: clip(row.note, 120) || undefined,
-        },
-      ]
-    })
+  const resources = cleanResources(root.resources)
   return { goal: clip(goal, 400), paths, books, resources }
 }
 
@@ -282,6 +284,34 @@ export function milestoneGuide(
     ),
   )
   return { resources, books }
+}
+
+// Attaches freshly found books and free resources to one stage of a saved plan,
+// keeping everything the plan already had.
+export function addMaterials(
+  plan: PathPlan,
+  milestoneId: string,
+  books: ResolvedBook[],
+  resources: PlanResource[],
+): PathPlan {
+  const haveBook = (title: string) => plan.books.some((book) => sameName(book.title, title))
+  const haveResource = (url: string) => plan.resources.some((resource) => resource.url === url)
+  return {
+    ...plan,
+    books: [...plan.books, ...books.filter((book) => !haveBook(book.title))],
+    resources: [...plan.resources, ...resources.filter((resource) => !haveResource(resource.url))],
+    milestones: plan.milestones.map((milestone) =>
+      milestone.id === milestoneId
+        ? {
+            ...milestone,
+            bookTitles: [...new Set([...(milestone.bookTitles ?? []), ...books.map((book) => book.title)])].slice(-4),
+            resourceTitles: [
+              ...new Set([...(milestone.resourceTitles ?? []), ...resources.map((resource) => resource.title)]),
+            ].slice(-4),
+          }
+        : milestone,
+    ),
+  }
 }
 
 export function toggleTopic(plan: PathPlan, topicId: string): PathPlan {

@@ -591,3 +591,44 @@ describe('clarify route', () => {
     expect((await ask('', '7.7.9.2')).status).toBe(400)
   })
 })
+
+describe('materials route', () => {
+  const reply = {
+    books: [{ title: 'CompTIA A+ Guide', author: 'Mike Meyers', note: 'For certification' }, { author: 'no title' }],
+    resources: [
+      { title: 'Good course', publisher: 'A', url: 'https://good.example.com/c', kind: 'Free course' },
+      { title: 'Dead link', publisher: 'B', url: 'https://gone.example.com/x', kind: 'Free course' },
+    ],
+  }
+  const ask = (body: unknown, ip: string) =>
+    call(
+      '/api/materials',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify(body) },
+      { GEMINI_API_KEY: 'k' },
+    )
+
+  it('returns checked books and resources for one stage', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        const url = String(input)
+        if (url.includes('generativelanguage'))
+          return new Response(
+            JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] }),
+          )
+        return url.startsWith('https://good.')
+          ? new Response('x', { status: 200 })
+          : new Response('no', { status: 404 })
+      }),
+    )
+    const body = (await (
+      await ask({ goal: 'Pass A+', stage: 'Hardware', topics: ['PC components'] }, '7.8.1.1')
+    ).json()) as { ok: boolean; books: Array<{ title: string }>; resources: Array<{ title: string }> }
+    expect(body.books.map((book) => book.title)).toEqual(['CompTIA A+ Guide'])
+    expect(body.resources.map((resource) => resource.title)).toEqual(['Good course'])
+  })
+
+  it('needs a stage and topics', async () => {
+    expect((await ask({ goal: 'Pass A+' }, '7.8.1.2')).status).toBe(400)
+  })
+})

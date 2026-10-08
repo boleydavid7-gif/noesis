@@ -2,6 +2,8 @@ import {
   BOOK_NOTES,
   RESOURCE_KINDS,
   buyLinks,
+  cleanBooks,
+  cleanResources,
   cleanSuggestion,
   MAX_PATHS,
   matchScore,
@@ -338,6 +340,70 @@ async function clarifyGoal(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: 'Noema could not narrow that down. Try describing it differently.' }, 502)
   const topic = typeof parsed.topic === 'string' ? parsed.topic.trim().slice(0, 60) : ''
   return json({ ok: true, topic, broad: parsed.broad !== false, focuses })
+}
+
+// Finds books and free resources for one stage of a saved path, on request.
+async function findMaterials(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'materials',
+    12,
+    'Too many requests. Try again in a few minutes.',
+    'Sign in to find study materials.',
+  )
+  if (refused) return refused
+  let input: { goal?: unknown; stage?: unknown; topics?: unknown; level?: unknown }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  }
+  const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+  const goal = text(input.goal, 400)
+  const stage = text(input.stage, 100)
+  const topics = (Array.isArray(input.topics) ? input.topics : [])
+    .map((item) => text(item, 100))
+    .filter(Boolean)
+    .slice(0, 8)
+  if (!goal || !stage || topics.length === 0)
+    return json({ ok: false, error: 'Tell Noema which stage to find materials for.' }, 400)
+  const level = text(input.level, 40)
+  const result = await generate(env, {
+    system: [
+      'You recommend study materials for one stage of a learning path. Reply with JSON only, in exactly this shape:',
+      '{"books":[{"title":"","author":"","note":""}],"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
+      'Give three or four real, published books you are confident exist that teach exactly the topics given, best fit first, with the author\'s name. "note" is one of: ' +
+        BOOK_NOTES.join(', ') +
+        '.',
+      'Give two to four free, reputable resources for those topics, such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
+        RESOURCE_KINDS.join(', ') +
+        '.',
+      level ? `Pitch them for a learner who is: ${level}.` : '',
+      "Never invent a book, an author, or a web address. If you are not sure of an exact address, use the provider's main website address.",
+    ]
+      .filter(Boolean)
+      .join(' '),
+    prompt: `Learner's goal: ${goal}\nStage: ${stage}\nTopics: ${topics.join('; ')}`,
+    maxOutputTokens: 2_000,
+    temperature: 0.4,
+    json: true,
+    timeoutMs: 30_000,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  let parsed: { books?: unknown; resources?: unknown }
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+  const books = cleanBooks(parsed.books, 5)
+  const resources = cleanResources(parsed.resources, 6)
+  const checks = await Promise.all(resources.map((resource) => linkWorks(resource.url)))
+  const working = resources.filter((_, index) => checks[index])
+  if (books.length === 0 && working.length === 0)
+    return json({ ok: false, error: 'Noema could not find materials for that stage. Try again.' }, 502)
+  return json({ ok: true, books, resources: working })
 }
 
 // Turns a learner's goal into structured paths, plus books and free
@@ -1013,6 +1079,10 @@ const worker = {
     if (url.pathname === '/api/path') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return planPath(request, env)
+    }
+    if (url.pathname === '/api/materials') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return findMaterials(request, env)
     }
     if (url.pathname === '/api/clarify') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
