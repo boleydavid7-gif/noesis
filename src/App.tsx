@@ -59,6 +59,7 @@ import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
+import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
 import { planProgress, type LearningPath } from './lib/pathPlan'
 import { CalendarPanel } from './CalendarPanel'
@@ -1482,52 +1483,54 @@ function App() {
   function pathsPage() {
     return (
       <Page title="Learning paths" subtitle="Describe a goal and Noema will plan the path, or group books yourself.">
-        <PathPlanner onSave={savePlannedPath} onNotice={showNotice} />
-        <h3 className="paths-own-heading">Or build your own</h3>
-        <form className="create-form panel-card" onSubmit={createPath}>
-          <input
-            value={pathDraft.title}
-            onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })}
-            placeholder="Path name, e.g. Cognitive psychology"
+        <FreeCopyContext.Provider value={addResource}>
+          <PathPlanner onSave={savePlannedPath} onNotice={showNotice} />
+          <h3 className="paths-own-heading">Or build your own</h3>
+          <form className="create-form panel-card" onSubmit={createPath}>
+            <input
+              value={pathDraft.title}
+              onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })}
+              placeholder="Path name, e.g. Cognitive psychology"
+            />
+            <input
+              value={pathDraft.description}
+              onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })}
+              placeholder="What do you want this path to help you understand?"
+            />
+            <button className="primary-button" type="submit">
+              <Plus size={15} /> Create path
+            </button>
+          </form>
+          <PathSection
+            paths={paths}
+            books={books}
+            editable
+            onDelete={(id) => {
+              const next = paths.filter((path) => path.id !== id)
+              markDeleted('path', id)
+              setPaths(next)
+              writePaths(next)
+            }}
+            onAssign={(pathId, bookId) => {
+              const next = paths.map((path) =>
+                path.id === pathId && bookId && !path.bookIds.includes(bookId)
+                  ? { ...path, bookIds: [...path.bookIds, bookId], updated: new Date().toISOString() }
+                  : path,
+              )
+              setPaths(next)
+              writePaths(next)
+            }}
+            onAsk={(prompt) => {
+              openNoemaPanel(prompt)
+              void askNoema(prompt)
+            }}
+            onUpdate={(updated) => {
+              const next = paths.map((path) => (path.id === updated.id ? updated : path))
+              setPaths(next)
+              writePaths(next)
+            }}
           />
-          <input
-            value={pathDraft.description}
-            onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })}
-            placeholder="What do you want this path to help you understand?"
-          />
-          <button className="primary-button" type="submit">
-            <Plus size={15} /> Create path
-          </button>
-        </form>
-        <PathSection
-          paths={paths}
-          books={books}
-          editable
-          onDelete={(id) => {
-            const next = paths.filter((path) => path.id !== id)
-            markDeleted('path', id)
-            setPaths(next)
-            writePaths(next)
-          }}
-          onAssign={(pathId, bookId) => {
-            const next = paths.map((path) =>
-              path.id === pathId && bookId && !path.bookIds.includes(bookId)
-                ? { ...path, bookIds: [...path.bookIds, bookId], updated: new Date().toISOString() }
-                : path,
-            )
-            setPaths(next)
-            writePaths(next)
-          }}
-          onAsk={(prompt) => {
-            openNoemaPanel(prompt)
-            void askNoema(prompt)
-          }}
-          onUpdate={(updated) => {
-            const next = paths.map((path) => (path.id === updated.id ? updated : path))
-            setPaths(next)
-            writePaths(next)
-          }}
-        />
+        </FreeCopyContext.Provider>
       </Page>
     )
   }
