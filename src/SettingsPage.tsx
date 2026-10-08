@@ -38,7 +38,6 @@ export function SettingsPage(props: Props) {
   return (
     <div className="settings-page">
       <div className="settings-head">
-        <p>Customize your reading experience and keep your knowledge safe.</p>
         <label className="settings-search">
           <Search size={15} />
           <input
@@ -116,7 +115,7 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             aria-label="Text size"
           />
         </Row>
-        <Row title="Font" detail="Keep the book's own typeface, or choose one for every book.">
+        <Row title="Font" detail="Use each book’s own font, or pick one.">
           <Segmented
             label="Font"
             value={reading.font}
@@ -170,8 +169,7 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             fontFamily: FONT_STACKS[reading.font] ?? "Georgia, 'Times New Roman', serif",
           }}
         >
-          The quiet reader turns the page and, for a moment, the room falls away. What was only ink becomes an idea, and
-          the idea stays.
+          This is how your text will look.
         </div>
       </Group>
     </>
@@ -199,7 +197,7 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
           ))}
         </div>
       </Row>
-      <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds for a plain, faster look.">
+      <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds.">
         <Toggle
           checked={appearance.scenery}
           onChange={(value) => set('appearance', 'scenery', value)}
@@ -281,7 +279,7 @@ function LibrarySection({
             ]}
           />
         </Row>
-        <Row title="Index book text" detail="Lets Noema and search read your books. Turn off to skip it on import.">
+        <Row title="Index book text" detail="Lets search and Noema read your books.">
           <Toggle
             checked={settings.library.indexText}
             onChange={(value) => set('library', 'indexText', value)}
@@ -309,10 +307,7 @@ function LibrarySection({
             {books.length} {books.length === 1 ? 'book' : 'books'}
           </span>
         </Row>
-        <Row
-          title="Rebuild search index"
-          detail="Re-reads your EPUBs so Noema and search can use their text. Run this for books imported a while ago."
-        >
+        <Row title="Rebuild search index" detail="Re-read your books so search and Noema can use their text.">
           <button
             className="secondary-button"
             onClick={() => void rebuild()}
@@ -352,7 +347,7 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
             status === 'checking'
               ? 'Checking…'
               : status === 'ready'
-                ? 'Noema is connected and ready.'
+                ? 'Noema is connected.'
                 : status === 'missing'
                   ? 'Noema is not configured on this server yet.'
                   : 'Could not reach the server.'
@@ -445,7 +440,7 @@ function NotificationsSection({
           disabled={!supported}
         />
       </Row>
-      <Row title="Cards due now" detail="The Review item in the sidebar also shows this count.">
+      <Row title="Cards due now">
         <span className="setting-pill">{dueCount}</span>
       </Row>
       <Row title="Send a test notification">
@@ -459,10 +454,7 @@ function NotificationsSection({
           Test
         </button>
       </Row>
-      <p className="setting-note">
-        Reminders appear while Noesis is open or installed on your device. Noesis does not send push notifications from
-        a server.
-      </p>
+      <p className="setting-note">Reminders only appear while Noesis is open or installed.</p>
     </Group>
   )
 }
@@ -485,7 +477,7 @@ function PrivacySection({
       <Group title="Your data">
         <Row
           title="Where it lives"
-          detail="Books and notes stay in this browser. If you sign in, notes and books also sync to your private Noesis storage, and to any cloud provider you connect."
+          detail="Stored in this browser. If you sign in, it also syncs to your account and any cloud you connect."
         >
           <a className="secondary-button" href="/privacy" target="_blank" rel="noreferrer">
             Privacy policy

@@ -11,7 +11,6 @@ import {
 import {
   EXAMPLE_GOALS,
   addMaterials,
-  HOURS_PER_TOPIC,
   stageHours,
   withSchedule,
   milestoneDone,
@@ -257,10 +256,10 @@ export function PathPlanDetail({
                 <li>
                   {milestoneGuide(plan, next.milestone).books.length +
                   milestoneGuide(plan, next.milestone).resources.length
-                    ? 'Pick one of the materials listed for this stage and start with it.'
-                    : 'Press “Find materials” to get books and free resources for this stage, then start with one.'}
+                    ? 'Start with one of the materials below.'
+                    : 'Use Find materials to get books and links for this stage.'}
                 </li>
-                <li>Work through the topics in order. Tick one when you could explain it in your own words.</li>
+                <li>Work through the topics in order. Tick one when you could explain it yourself.</li>
                 <li>
                   {next.milestone.outcome
                     ? `You’re ready for the next stage when you can: ${next.milestone.outcome.replace(/^./, (c) => c.toLowerCase())}`
@@ -290,10 +289,8 @@ export function PathPlanDetail({
         ) : (
           <>
             <p className="plan-next-label">Path complete</p>
-            <h4>You’ve finished every topic.</h4>
-            <p className="plan-next-where">
-              Turn what you learned into review questions on the Review page so it sticks, then start another path.
-            </p>
+            <h4>All topics done.</h4>
+            <p className="plan-next-where">Make review questions from what you learned, then start another path.</p>
           </>
         )}
       </section>
@@ -520,7 +517,6 @@ export function PathPlanner({
             </span>
             <div>
               <h3>What do you want to learn?</h3>
-              <p>Start broad or specific. Noema will ask a few questions so the paths fit you.</p>
             </div>
           </div>
           <div className="planner-goal-body">
@@ -568,24 +564,6 @@ export function PathPlanner({
             </p>
           ) : null}
         </form>
-        <aside className="planner-why panel-card">
-          <h3>
-            <Lightbulb size={16} /> How these are chosen
-          </h3>
-          <ul>
-            {[
-              'Narrowed to what you actually want',
-              'A separate path and reading list for each focus',
-              'Real books found in a public catalogue',
-              'Weeks worked out from your hours per week',
-              'Free resources whose links were checked',
-            ].map((line) => (
-              <li key={line}>
-                <Check size={14} /> {line}
-              </li>
-            ))}
-          </ul>
-        </aside>
       </div>
 
       {clarification && (status === 'asking' || status === 'planning' || status === 'ready' || status === 'error') ? (
@@ -593,9 +571,9 @@ export function PathPlanner({
           <h3>
             {clarification.broad && clarification.topic
               ? `${clarification.topic} covers a lot. What do you want to focus on?`
-              : 'Which angles interest you?'}
+              : 'Pick a focus'}
           </h3>
-          <p>Pick one to see what it covers. Nothing is built until you press Build, so look around first.</p>
+          <p>Pick one to see what it covers.</p>
           <div className="planner-focuses">
             {clarification.focuses.map((focus, index) => {
               const on = picked === focus.title
@@ -686,16 +664,13 @@ export function PathPlanner({
         </section>
       ) : null}
 
-      {status === 'planning' ? <p className="planner-status">Noema is designing your paths…</p> : null}
+      {status === 'planning' ? <p className="planner-status">Building your path…</p> : null}
 
       {suggestion ? (
         <>
           <div className="planner-heading">
             <h3>Recommended paths</h3>
-            <p>
-              Time estimates assume {hours} hours a week and about {HOURS_PER_TOPIC} hours per topic unless a stage
-              needs more. Change the hours above and they update.
-            </p>
+            <p>Estimates assume {hours} hours a week. Change it above.</p>
           </div>
           <div className="planner-paths">
             {paths.map((path) => {
@@ -772,13 +747,12 @@ export function PathPlanner({
 
           <section className="planner-resources panel-card">
             <h3>Free resources</h3>
-            <p>Official and free ways to get started. Each link was checked.</p>
+
             <ResourceList resources={suggestion.resources} />
           </section>
           <p className="planner-footnote">
-            Paths are suggested by AI, so treat them as a starting point. Study hours per stage are Noema’s estimate;
-            the weeks come from dividing them by your hours per week. Book details come from Google Books and Open
-            Library. Store links open in a new tab, and prices can differ there.
+            Paths are AI suggestions. Study hours are estimates, and weeks are those hours divided by your hours per
+            week. Book details come from Google Books and Open Library.
           </p>
         </>
       ) : null}

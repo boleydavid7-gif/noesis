@@ -984,12 +984,11 @@ function ReaderWideSidebar({
     <aside className="reader-wide-sidebar" aria-label="Reading tools">
       <div className="reader-wide-sidebar-head">
         <div>
-          <p className="eyebrow">Study beside the page</p>
           <h2>Second Brain</h2>
         </div>
         <Brain size={18} />
       </div>
-      <p className="reader-wide-sidebar-copy">Capture ideas without leaving your reading space.</p>
+
       <div className="reader-wide-sidebar-actions">
         <button onClick={() => onNote('', 'highlight', location)}>
           <Highlighter size={14} /> Highlight

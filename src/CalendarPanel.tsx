@@ -160,7 +160,6 @@ export function CalendarPanel({
       >
         <div className="utility-panel-head">
           <div>
-            <p className="eyebrow">Calendar</p>
             <h2>{view.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close calendar">
@@ -401,7 +400,6 @@ export function CalendarPanel({
             )}
           </div>
         </div>
-        <p className="utility-panel-footnote">Your calendar is saved on this device.</p>
       </section>
     </div>
   )

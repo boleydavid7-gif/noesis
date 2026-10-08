@@ -63,9 +63,8 @@ export function WeatherPanel({
       >
         <div className="utility-panel-head">
           <div>
-            <p className="eyebrow">Weather</p>
             <h2>{settings.place ? placeLabel(settings.place) : 'Choose a location'}</h2>
-            <span className="utility-muted">Forecast from Open-Meteo. Your location is saved on this device.</span>
+            <span className="utility-muted">Forecast from Open-Meteo.</span>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close weather">
             <X size={18} />
