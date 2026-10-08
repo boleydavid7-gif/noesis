@@ -413,7 +413,7 @@ export function pickBook(records: BookRecord[], title: string, author: string): 
 export function buyLinks(record: Pick<BookRecord, 'title' | 'authors' | 'isbn10' | 'isbn13' | 'buyLink'>): BookLinks[] {
   const query = encodeURIComponent(record.isbn13 ?? `${record.title} ${record.authors[0] ?? ''}`.trim())
   const links: BookLinks[] = [
-    { store: 'Bookshop.org', url: `https://bookshop.org/search?keywords=${query}`, note: 'E-books are DRM-free' },
+    { store: 'Bookshop.org', url: `https://bookshop.org/search?keywords=${query}`, note: 'Some e-books are DRM-free' },
     {
       store: 'Amazon',
       url: record.isbn10 ? `https://www.amazon.com/dp/${record.isbn10}` : `https://www.amazon.com/s?k=${query}`,
