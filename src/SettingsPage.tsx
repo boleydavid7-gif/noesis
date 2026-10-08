@@ -15,6 +15,7 @@ import {
 } from './lib/settings'
 import {
   IMAGE_PRESETS,
+  SCENES,
   applyImages,
   cssForImage,
   readImages,
@@ -342,6 +343,17 @@ function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
           >
             Original
           </button>
+          {SCENES.map((scene) => (
+            <button
+              key={scene.id}
+              type="button"
+              aria-label={scene.label}
+              title={scene.label}
+              className={current === scene.id ? 'image-option image-option-on' : 'image-option'}
+              style={{ background: `center / cover url("${scene.banner}")`, minWidth: 64 }}
+              onClick={() => choose(scene.id)}
+            />
+          ))}
           {IMAGE_PRESETS.map((preset) => (
             <button
               key={preset.id}

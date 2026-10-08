@@ -5,6 +5,18 @@ export type ImageChoice = { slot: ImageSlot; value: string } // a preset name, o
 
 const KEY = 'noesis:images:v1'
 
+// Pictures kept with the app: a wide one for the banner and a tall one for the sidebar.
+export const SCENES: Array<{ id: string; label: string; banner: string; sidebar: string }> = [
+  {
+    id: 'city-night',
+    label: 'City at night',
+    banner: '/scenes/city-night-wide.webp',
+    sidebar: '/scenes/city-night-tall.webp',
+  },
+  { id: 'cabin', label: 'Cabin at sunrise', banner: '/scenes/cabin-wide.webp', sidebar: '/scenes/cabin-tall.webp' },
+  { id: 'forest', label: 'Forest stream', banner: '/scenes/forest-wide.webp', sidebar: '/scenes/forest-tall.webp' },
+]
+
 export const IMAGE_PRESETS: Array<{ id: string; label: string; css: string }> = [
   { id: 'dusk', label: 'Dusk', css: 'linear-gradient(135deg, #3b2a4d, #c1666b 62%, #f2b880)' },
   { id: 'ocean', label: 'Ocean', css: 'linear-gradient(135deg, #06283d, #1b6ca8 60%, #7fc4d6)' },
@@ -29,8 +41,10 @@ export function readImages(): SavedImages {
   }
 }
 
-export function cssForImage(value: string): string | undefined {
+export function cssForImage(value: string, slot: ImageSlot = 'banner'): string | undefined {
   if (value.startsWith('data:image/')) return `url("${value}")`
+  const scene = SCENES.find((item) => item.id === value)
+  if (scene) return `url("${slot === 'sidebar' ? scene.sidebar : scene.banner}")`
   return IMAGE_PRESETS.find((preset) => preset.id === value)?.css
 }
 
@@ -53,7 +67,7 @@ export function applyImages(root: HTMLElement = document.documentElement): void 
     ['banner', '--img-banner'],
     ['sidebar', '--img-sidebar'],
   ] as const) {
-    const css = saved[slot] ? cssForImage(saved[slot]) : undefined
+    const css = saved[slot] ? cssForImage(saved[slot], slot) : undefined
     if (css) root.style.setProperty(variable, css)
     else root.style.removeProperty(variable)
   }
