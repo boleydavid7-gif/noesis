@@ -2223,7 +2223,6 @@ function App() {
           <BookSection
             books={filteredBooks}
             onOpen={openSavedBook}
-            onImport={() => fileInput.current?.click()}
             onDelete={deleteBook}
             shelves={allShelves}
             onShelves={setBookShelves}
@@ -2231,6 +2230,7 @@ function App() {
             onEdit={(book) =>
               setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
             }
+            detailPane
           />
         </div>
       </Page>
@@ -3618,7 +3618,9 @@ function BookSection({
   onShelves,
   onSeries,
   onEdit,
+  detailPane,
 }: {
+  detailPane?: boolean
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
   onImport?: () => void
@@ -3628,8 +3630,13 @@ function BookSection({
   onSeries?: (book: LibraryBook, series: string, index?: number) => void
   onEdit?: (book: LibraryBook) => void
 }) {
+  const wide = useWideScreen()
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  // On a wide screen a click shows the book's details beside the shelf; Open reads it.
+  const split = Boolean(detailPane) && wide
+  const preview = split ? (books.find((book) => book.id === previewId) ?? books[0]) : undefined
   return (
-    <section className="section-block library-section">
+    <section className={'section-block library-section' + (split ? ' library-split' : '')}>
       <div className="section-heading">
         <div>
           <h2>My library</h2>
@@ -3643,43 +3650,96 @@ function BookSection({
       {books.length === 0 ? (
         <div className="empty-state">No books yet. Import a book file, or look in Explore.</div>
       ) : (
-        <div className="book-grid">
-          {books.map((book) => (
-            <div className="book-card-wrap" key={book.id}>
-              <button className="book-card" onClick={() => onOpen(book)}>
-                <div className="book-card-cover">
-                  <BookCover book={book} compact />
-                  <ProgressRing value={book.progress} />
-                  {book.accessType === 'borrow' ? (
-                    <span className="book-card-badge">Borrowed</span>
-                  ) : book.format === 'resource' ? (
-                    <span className="book-card-badge">Source</span>
-                  ) : null}
-                </div>
-                <div className="book-card-title">{book.title}</div>
-                <div className="book-card-author">{book.author}</div>
-                {book.review ? (
-                  <div className="book-card-review" title={book.review.line}>
-                    {'★'.repeat(book.review.stars)}
-                    {'☆'.repeat(5 - book.review.stars)}
-                    {book.review.line ? <span> {book.review.line}</span> : null}
+        <div className="library-split-body">
+          <div className="book-grid">
+            {books.map((book) => (
+              <div className={'book-card-wrap' + (preview?.id === book.id ? ' book-card-selected' : '')} key={book.id}>
+                <button className="book-card" onClick={() => (split ? setPreviewId(book.id) : onOpen(book))}>
+                  <div className="book-card-cover">
+                    <BookCover book={book} compact />
+                    <ProgressRing value={book.progress} />
+                    {book.accessType === 'borrow' ? (
+                      <span className="book-card-badge">Borrowed</span>
+                    ) : book.format === 'resource' ? (
+                      <span className="book-card-badge">Source</span>
+                    ) : null}
                   </div>
-                ) : null}
-              </button>
-              {onShelves ? (
-                <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} onSeries={onSeries} onEdit={onEdit} />
-              ) : null}
-              {onDelete ? (
-                <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
-                  <Trash2 size={13} />
+                  <div className="book-card-title">{book.title}</div>
+                  <div className="book-card-author">{book.author}</div>
+                  {book.review ? (
+                    <div className="book-card-review" title={book.review.line}>
+                      {'★'.repeat(book.review.stars)}
+                      {'☆'.repeat(5 - book.review.stars)}
+                      {book.review.line ? <span> {book.review.line}</span> : null}
+                    </div>
+                  ) : null}
                 </button>
+                {onShelves ? (
+                  <ShelfPicker
+                    book={book}
+                    all={shelves ?? []}
+                    onChange={onShelves}
+                    onSeries={onSeries}
+                    onEdit={onEdit}
+                  />
+                ) : null}
+                {onDelete ? (
+                  <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
+                    <Trash2 size={13} />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {preview ? (
+            <aside className="book-detail panel-card" aria-label="Book details">
+              <div className="book-detail-cover">
+                <BookCover book={preview} compact />
+              </div>
+              <h3>{preview.title}</h3>
+              <p className="book-detail-author">{preview.author}</p>
+              <div className="progress-track">
+                <span style={{ width: `${Math.round(preview.progress)}%` }} />
+              </div>
+              <small>
+                {Math.round(preview.progress)}% read
+                {preview.chapter ? ` · ${preview.chapter}` : ''}
+              </small>
+              {preview.series ? (
+                <small>
+                  {preview.series}
+                  {preview.seriesIndex ? ` · book ${preview.seriesIndex}` : ''}
+                </small>
               ) : null}
-            </div>
-          ))}
+              {preview.shelves?.length ? <small>On: {preview.shelves.join(', ')}</small> : null}
+              {preview.description ? <p className="book-detail-about">{preview.description.slice(0, 420)}</p> : null}
+              <div className="book-detail-actions">
+                <button className="primary-button" onClick={() => onOpen(preview)}>
+                  {preview.progress > 0 ? 'Continue reading' : 'Start reading'}
+                </button>
+                {onEdit ? (
+                  <button className="secondary-button" onClick={() => onEdit(preview)}>
+                    Edit details
+                  </button>
+                ) : null}
+              </div>
+            </aside>
+          ) : null}
         </div>
       )}
     </section>
   )
+}
+function useWideScreen() {
+  const query = '(min-width: 1000px)'
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const list = window.matchMedia(query)
+    const change = () => setWide(list.matches)
+    list.addEventListener('change', change)
+    return () => list.removeEventListener('change', change)
+  }, [])
+  return wide
 }
 function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
