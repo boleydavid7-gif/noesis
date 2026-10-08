@@ -1228,6 +1228,66 @@ async function proxyCatalogue(request: Request): Promise<Response> {
   })
 }
 
+// Lets the browser list a public WebDAV folder, or fetch one book from it, with the reader's own login.
+// The login is used for this one request and is not stored or logged.
+async function proxyWebdav(request: Request): Promise<Response> {
+  if (rateLimited(request, 'webdav', 60))
+    return json({ ok: false, error: 'Too many requests. Try again in a minute.' }, 429)
+  let body: { url?: string; op?: string; user?: string; pass?: string }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    return json({ ok: false, error: 'Send a JSON body.' }, 400)
+  }
+  const target = body.url ?? ''
+  if (!isPublicHttps(target)) return json({ ok: false, error: 'Use the public https address of the folder.' }, 400)
+  const headers: Record<string, string> = { 'user-agent': 'Noesis/1.0' }
+  if (body.user)
+    headers.authorization = `Basic ${btoa(unescape(encodeURIComponent(`${body.user}:${body.pass ?? ''}`)))}`
+  const listing = body.op !== 'get'
+  if (listing) {
+    headers.depth = '1'
+    headers['content-type'] = 'application/xml'
+  }
+  let response: Response
+  try {
+    response = await fetchWithTimeout(
+      target,
+      {
+        method: listing ? 'PROPFIND' : 'GET',
+        headers,
+        body: listing
+          ? '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>'
+          : undefined,
+        redirect: 'manual',
+      },
+      listing ? 15_000 : 60_000,
+    )
+  } catch {
+    return json({ ok: false, error: 'The server did not respond in time.' }, 502)
+  }
+  if (response.status === 401 || response.status === 403)
+    return json({ ok: false, error: 'The server did not accept that username and password.' }, 401)
+  if (response.status >= 300 && response.status < 400)
+    return json({ ok: false, error: 'The server redirected. Use its final address.' }, 502)
+  if (!response.ok) return json({ ok: false, error: `The server returned ${response.status}.` }, 502)
+  if (listing) {
+    const text = await response.text()
+    if (text.length > 3_000_000) return json({ ok: false, error: 'That folder is too large to list.' }, 413)
+    return new Response(text, { status: 200, headers: { 'content-type': 'application/xml; charset=utf-8' } })
+  }
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_RESOURCE_BYTES)
+    return json({ ok: false, error: 'That file is too large.' }, 413)
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      'content-type': response.headers.get('content-type') ?? 'application/octet-stream',
+      'cache-control': 'no-store',
+    },
+  })
+}
+
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -1290,6 +1350,10 @@ const worker = {
     if (url.pathname === '/api/materials') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return findMaterials(request, env)
+    }
+    if (url.pathname === '/api/webdav') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return proxyWebdav(request)
     }
     if (url.pathname === '/api/opds') {
       if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)

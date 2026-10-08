@@ -765,3 +765,44 @@ describe('opds proxy', () => {
     expect((await ask('https://books.example.com/', '7.9.4.5')).status).toBe(422)
   })
 })
+
+describe('webdav proxy', () => {
+  const ask = (body: unknown, ip: string) =>
+    call(
+      '/api/webdav',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': ip, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      {},
+    )
+
+  it('lists a folder with the login sent along', async () => {
+    const fetchMock = vi.fn(async () => new Response('<d:multistatus xmlns:d="DAV:"/>', { status: 207 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const response = await ask(
+      { url: 'https://cloud.example.com/dav/', op: 'list', user: 'me', pass: 'secret' },
+      '7.9.5.1',
+    )
+    expect(response.status).toBe(200)
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(init.method).toBe('PROPFIND')
+    expect((init.headers as Record<string, string>).authorization).toBe(`Basic ${btoa('me:secret')}`)
+  })
+
+  it('refuses private or plain-http addresses', async () => {
+    expect((await ask({ url: 'http://cloud.example.com/dav/', op: 'list' }, '7.9.5.2')).status).toBe(400)
+    expect((await ask({ url: 'https://10.0.0.5/dav/', op: 'list' }, '7.9.5.3')).status).toBe(400)
+  })
+
+  it('reports a wrong password plainly', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('no', { status: 401 })),
+    )
+    const response = await ask({ url: 'https://cloud.example.com/dav/', op: 'list', user: 'a', pass: 'b' }, '7.9.5.4')
+    expect(response.status).toBe(401)
+    expect(((await response.json()) as { error: string }).error).toMatch(/username and password/)
+  })
+})
