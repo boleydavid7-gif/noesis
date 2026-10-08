@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -51,6 +51,8 @@ import {
 import { openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
+import { PdfReader } from './PdfReader'
+import { parsePdfLocation } from './lib/pdfMarks'
 import { FONT_STACKS, READER_COLORS, type ReaderTheme, type Settings } from './lib/settings'
 
 type Note = BrainNote
@@ -238,7 +240,8 @@ export function Reader({
   const [toc, setToc] = useState<ReaderChapter[]>(chapterEntries(book.toc))
   const [chapterIndex, setChapterIndex] = useState(Math.max(0, book.chapterIndex ?? 0))
   const [chapterProgress, setChapterProgress] = useState(Math.max(0, Math.min(1, book.chapterProgress ?? 0)))
-  const [pdfUrl, setPdfUrl] = useState('')
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null)
+  const [pdfPage, setPdfPage] = useState(1)
   // Text size, page color, font and spacing come from Settings, so a change in
   // either place applies to every book.
   const { fontSize, theme: readerTheme } = reading
@@ -286,9 +289,9 @@ export function Reader({
     author: book.author,
     chapter: currentChapter.label,
     chapterIndex,
-    page: locationRef.current.page,
+    page: book.format === 'pdf' ? pdfPage : locationRef.current.page,
     href: locationRef.current.href ?? currentChapter.href,
-    cfi: locationRef.current.cfi,
+    cfi: book.format === 'pdf' ? `pdf:${pdfPage}` : locationRef.current.cfi,
   })
   const currentTutorContext = (): ReaderTutorContext => {
     const location = currentNoteLocation()
@@ -441,6 +444,19 @@ export function Reader({
     [],
   )
 
+  // Highlights on a PDF are placed from the page fractions saved with them.
+  const pdfHighlights = useMemo(
+    () =>
+      notes.flatMap((note) => {
+        const place = parsePdfLocation(note.cfi)
+        return note.bookId === book.id && note.kind === 'highlight' && place && place.rects.length
+          ? [{ id: note.id, color: note.color ?? ('yellow' as HighlightColor), page: place.page, rects: place.rects }]
+          : []
+      }),
+    [notes, book.id],
+  )
+  const pdfStart = parsePdfLocation(jumpLocation?.cfi)?.page ?? parsePdfLocation(book.cfi)?.page ?? 1
+
   // Highlights are drawn on the page in the colour they were saved with.
   const drawn = useRef(new Map<string, { cfi: string; color: HighlightColor }>())
   const highlightKey = notes
@@ -580,9 +596,8 @@ export function Reader({
         const data = await loadEpubFile(currentBook.id)
         if (!data) throw new Error('This EPUB is no longer stored on this device. Import it again to continue reading.')
         if (currentBook.format === 'pdf') {
-          const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }))
           if (!cancelled) {
-            setPdfUrl(url)
+            setPdfData(data)
             setLoading(false)
           }
           return
@@ -1296,7 +1311,26 @@ export function Reader({
         >
           <div className={'reader-frame-wrap ' + (book.format === 'epub' ? 'reader-frame-epub' : '')}>
             {book.format === 'pdf' ? (
-              <iframe className="pdf-frame" src={pdfUrl} title={'Reading ' + book.title} />
+              pdfData ? (
+                <PdfReader
+                  data={pdfData}
+                  book={book}
+                  highlights={pdfHighlights}
+                  startPage={pdfStart}
+                  jumpPage={parsePdfLocation(jumpLocation?.cfi)?.page ?? jumpLocation?.page}
+                  theme={readerTheme}
+                  onPage={(page, total) => {
+                    setPdfPage(page)
+                    onProgress((page / total) * 100, `pdf:${page}`, undefined, `Page ${page}`, page - 1, 0)
+                  }}
+                  onHighlight={onHighlight}
+                  onHighlightEdit={onHighlightEdit}
+                  onNote={(text, location) => onNote(text, 'note', location)}
+                  onAsk={(text, location) =>
+                    onAsk('Explain the selected passage', { ...location, selectedText: text } as ReaderTutorContext)
+                  }
+                />
+              ) : null
             ) : external ? (
               <iframe
                 className="web-frame"
