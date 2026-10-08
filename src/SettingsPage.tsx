@@ -125,6 +125,7 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
               { value: 'book', label: "Book's own" },
               { value: 'serif', label: 'Serif' },
               { value: 'sans', label: 'Sans' },
+              { value: 'easy', label: 'Easy-read' },
             ]}
           />
         </Row>
@@ -150,6 +151,18 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
               { value: 'paper', label: 'Paper' },
               { value: 'sepia', label: 'Sepia' },
               { value: 'night', label: 'Night' },
+              { value: 'contrast', label: 'High contrast' },
+            ]}
+          />
+        </Row>
+        <Row title="Letter spacing" detail="Wider spacing can make words easier to tell apart.">
+          <Segmented
+            label="Letter spacing"
+            value={reading.letterSpacing}
+            onChange={(value) => set('reading', 'letterSpacing', value)}
+            options={[
+              { value: 'normal', label: 'Normal' },
+              { value: 'wide', label: 'Wide' },
             ]}
           />
         </Row>

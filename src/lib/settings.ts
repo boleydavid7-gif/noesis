@@ -1,8 +1,9 @@
 // User preferences, stored locally. Every value here is read by the app, so a
 // setting that appears in the Settings page changes behaviour.
 
-export type ReaderTheme = 'paper' | 'sepia' | 'night'
-export type ReaderFont = 'book' | 'serif' | 'sans'
+export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
+export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy'
+export type LetterSpacing = 'normal' | 'wide'
 export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
 export type ParagraphStyle = 'book' | 'indent' | 'space'
@@ -22,6 +23,7 @@ export type Settings = {
     paragraphs: ParagraphStyle
     lineWidth: LineWidth
     dropCap: boolean
+    letterSpacing: LetterSpacing
   }
   appearance: { accent: AccentName; scenery: boolean; reduceMotion: boolean; compact: boolean }
   library: {
@@ -55,6 +57,7 @@ export const DEFAULT_SETTINGS: Settings = {
     paragraphs: 'book',
     lineWidth: 'full',
     dropCap: false,
+    letterSpacing: 'normal',
   },
   appearance: { accent: 'gold', scenery: true, reduceMotion: false, compact: false },
   library: {
@@ -119,10 +122,13 @@ export const FONT_STACKS: Record<ReaderFont, string | null> = {
   book: null, // keep the book's own typography
   serif: "Georgia, 'Times New Roman', serif",
   sans: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  // Fonts with open, clearly different letter shapes. Uses OpenDyslexic or Atkinson if installed.
+  easy: "OpenDyslexic, 'Atkinson Hyperlegible', Lexend, Verdana, Tahoma, sans-serif",
 }
 
 export const READER_COLORS: Record<ReaderTheme, { background: string; color: string }> = {
   night: { background: '#111a22', color: '#dce8f2' },
+  contrast: { background: '#000000', color: '#ffff66' },
   sepia: { background: '#f1e6d0', color: '#4b3b2c' },
   paper: { background: '#f6f2e9', color: '#233a4e' },
 }
@@ -160,8 +166,8 @@ export function sanitizeSettings(input: unknown): Settings {
   return {
     reading: {
       fontSize: Math.round(num(reading.fontSize, 85, 140, d.reading.fontSize) / 5) * 5,
-      theme: pick(reading.theme, ['paper', 'sepia', 'night'], d.reading.theme),
-      font: pick(reading.font, ['book', 'serif', 'sans'], d.reading.font),
+      theme: pick(reading.theme, ['paper', 'sepia', 'night', 'contrast'], d.reading.theme),
+      font: pick(reading.font, ['book', 'serif', 'sans', 'easy'], d.reading.font),
       lineHeight: Math.round(num(reading.lineHeight, 1.3, 2.2, d.reading.lineHeight) * 20) / 20,
       startWide: bool(reading.startWide, d.reading.startWide),
       speechRate: Math.round(num(reading.speechRate, 0.6, 1.6, d.reading.speechRate) * 10) / 10,
@@ -169,6 +175,7 @@ export function sanitizeSettings(input: unknown): Settings {
       paragraphs: pick(reading.paragraphs, ['book', 'indent', 'space'], d.reading.paragraphs),
       lineWidth: pick(reading.lineWidth, ['full', 'comfortable', 'narrow'], d.reading.lineWidth),
       dropCap: bool(reading.dropCap, d.reading.dropCap),
+      letterSpacing: pick(reading.letterSpacing, ['normal', 'wide'], d.reading.letterSpacing),
     },
     appearance: {
       accent: pick(appearance.accent, ['gold', 'blue', 'green', 'rose'], d.appearance.accent),
