@@ -632,3 +632,43 @@ describe('materials route', () => {
     expect((await ask({ goal: 'Pass A+' }, '7.8.1.2')).status).toBe(400)
   })
 })
+
+describe('quiz route', () => {
+  const gemini = (reply: unknown) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] })),
+      ),
+    )
+  const ask = (body: unknown, ip: string) =>
+    call(
+      '/api/quiz',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify(body) },
+      { GEMINI_API_KEY: 'k' },
+    )
+
+  it('asks a question about the topic', async () => {
+    gemini({ question: 'Why is carbon in methane sp3 hybridized?' })
+    const body = (await (await ask({ mode: 'question', goal: 'MCAT', topic: 'Hybridization' }, '7.9.2.1')).json()) as {
+      ok: boolean
+      question: string
+    }
+    expect(body.question).toContain('sp3')
+  })
+
+  it('marks an answer and keeps only a known verdict', async () => {
+    gemini({ verdict: 'mostly', feedback: 'Close.', ideal: 'Four equivalent bonds.' })
+    const body = (await (
+      await ask({ mode: 'grade', topic: 'Hybridization', question: 'Why sp3?', answer: 'Four bonds' }, '7.9.2.2')
+    ).json()) as { verdict: string; ideal: string }
+    expect(body.verdict).toBe('incorrect')
+    expect(body.ideal).toBe('Four equivalent bonds.')
+  })
+
+  it('needs a topic and an answer', async () => {
+    expect((await ask({ mode: 'question' }, '7.9.2.3')).status).toBe(400)
+    expect((await ask({ mode: 'grade', topic: 't', question: 'q', answer: '' }, '7.9.2.4')).status).toBe(400)
+  })
+})

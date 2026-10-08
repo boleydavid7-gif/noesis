@@ -406,6 +406,88 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, books, resources: working })
 }
 
+// A one-question check on a topic from a learning path: ask a question, then
+// judge the learner's answer. Stateless, so the page sends the question back.
+async function quizTopic(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'quiz',
+    20,
+    'Too many requests. Try again in a minute.',
+    'Sign in to be quizzed.',
+  )
+  if (refused) return refused
+  let input: {
+    mode?: unknown
+    goal?: unknown
+    stage?: unknown
+    topic?: unknown
+    question?: unknown
+    answer?: unknown
+    level?: unknown
+  }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  }
+  const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+  const topic = text(input.topic, 120)
+  if (!topic) return json({ ok: false, error: 'Tell Noema which topic to check.' }, 400)
+  const context = `Learner's goal: ${text(input.goal, 300)}\nStage: ${text(input.stage, 100)}\nTopic: ${topic}\nLevel: ${text(input.level, 40) || 'Beginner'}`
+
+  if (input.mode === 'grade') {
+    const question = text(input.question, 500)
+    const answer = text(input.answer, 1_500)
+    if (!question || answer.length < 2) return json({ ok: false, error: 'Write an answer first.' }, 400)
+    const result = await generate(env, {
+      system: [
+        'You mark one answer from a learner. Reply with JSON only: {"verdict":"correct"|"partly"|"incorrect","feedback":"","ideal":""}.',
+        '"feedback" is one or two plain, encouraging sentences saying what was right and what was missing. "ideal" is a short model answer of one to three sentences.',
+        'Judge understanding, not wording. Never invent facts.',
+      ].join(' '),
+      prompt: `${context}\nQuestion: ${question}\nLearner's answer: ${answer}`,
+      maxOutputTokens: 500,
+      temperature: 0.2,
+      json: true,
+    })
+    if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+    try {
+      const parsed = JSON.parse(result.text) as { verdict?: unknown; feedback?: unknown; ideal?: unknown }
+      const verdict = parsed.verdict === 'correct' || parsed.verdict === 'partly' ? parsed.verdict : 'incorrect'
+      return json({
+        ok: true,
+        verdict,
+        feedback: text(parsed.feedback, 400),
+        ideal: text(parsed.ideal, 600),
+      })
+    } catch {
+      return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+    }
+  }
+
+  const result = await generate(env, {
+    system: [
+      'You check whether a learner understands one topic. Reply with JSON only: {"question":""}.',
+      "Ask one clear question that tests understanding of the topic rather than recall of a definition. It must be answerable in two or three sentences by someone who has studied the topic at the learner's level.",
+    ].join(' '),
+    prompt: context,
+    maxOutputTokens: 200,
+    temperature: 0.7,
+    json: true,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  try {
+    const question = text((JSON.parse(result.text) as { question?: unknown }).question, 500)
+    return question
+      ? json({ ok: true, question })
+      : json({ ok: false, error: 'Noema could not write a question. Try again.' }, 502)
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+}
+
 // Turns a learner's goal into structured paths, plus books and free
 // resources to look up. Books are verified one by one through /api/book.
 async function planPath(request: Request, env: Env): Promise<Response> {
@@ -1083,6 +1165,10 @@ const worker = {
     if (url.pathname === '/api/materials') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return findMaterials(request, env)
+    }
+    if (url.pathname === '/api/quiz') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return quizTopic(request, env)
     }
     if (url.pathname === '/api/clarify') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)

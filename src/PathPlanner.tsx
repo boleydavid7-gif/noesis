@@ -1,10 +1,14 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star } from 'lucide-react'
+import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
+import { newCard, readReviewCards, writeReviewCards } from './lib/review'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import {
   AuthRequiredError,
   requestClarification,
+  requestGrade,
   requestMaterials,
+  requestQuestion,
+  type QuizGrade,
   requestSuggestion,
   resolveBooks,
   type Clarification,
@@ -193,16 +197,146 @@ function StudyWith({ plan, milestone }: { plan: PathPlan; milestone: PlanMilesto
   )
 }
 
+// A short check on one topic: Noema asks, the learner answers in their own words,
+// and a good answer can become a review card so it sticks.
+function TopicCheck({
+  plan,
+  stage,
+  topic,
+  onPassed,
+}: {
+  plan: PathPlan
+  stage: string
+  topic: string
+  onPassed: () => void
+}) {
+  const [state, setState] = useState<'idle' | 'asking' | 'answering' | 'grading' | 'graded'>('idle')
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState('')
+  const [grade, setGrade] = useState<QuizGrade | null>(null)
+  const [error, setError] = useState('')
+  const [cardSaved, setCardSaved] = useState(false)
+  const base = { goal: plan.goal, stage, topic, level: plan.level }
+
+  async function ask() {
+    setState('asking')
+    setError('')
+    setAnswer('')
+    setGrade(null)
+    setCardSaved(false)
+    try {
+      setQuestion(await requestQuestion(base))
+      setState('answering')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Noema could not write a question right now.')
+      setState('idle')
+    }
+  }
+  async function check() {
+    setState('grading')
+    setError('')
+    try {
+      setGrade(await requestGrade({ ...base, question, answer }))
+      setState('graded')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Noema could not check that right now.')
+      setState('answering')
+    }
+  }
+  function keepCard() {
+    if (!grade) return
+    const card = newCard({ question, answer: grade.ideal || answer }, { source: `${stage} · ${topic}` })
+    writeReviewCards([card, ...readReviewCards()])
+    setCardSaved(true)
+  }
+
+  if (state === 'idle')
+    return (
+      <div className="topic-check">
+        <button className="secondary-button" onClick={() => void ask()}>
+          <Sparkles size={14} /> Check yourself
+        </button>
+        {error ? (
+          <p className="weather-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    )
+  return (
+    <div className="topic-check topic-check-open">
+      <p className="topic-check-question">{state === 'asking' ? 'Writing a question…' : question}</p>
+      {state === 'answering' || state === 'grading' ? (
+        <>
+          <textarea
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+            rows={3}
+            placeholder="Answer in your own words"
+            aria-label="Your answer"
+            disabled={state === 'grading'}
+          />
+          {error ? (
+            <p className="weather-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className="plan-next-actions">
+            <button
+              className="primary-button"
+              onClick={() => void check()}
+              disabled={state === 'grading' || answer.trim().length < 2}
+            >
+              {state === 'grading' ? 'Checking…' : 'Check answer'}
+            </button>
+            <button className="text-button" onClick={() => setState('idle')}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : null}
+      {state === 'graded' && grade ? (
+        <>
+          <p className={`topic-check-verdict topic-check-${grade.verdict}`}>
+            {grade.verdict === 'correct' ? 'Correct.' : grade.verdict === 'partly' ? 'Partly right.' : 'Not quite.'}{' '}
+            {grade.feedback}
+          </p>
+          {grade.ideal ? (
+            <p className="topic-check-ideal">
+              <strong>A good answer:</strong> {grade.ideal}
+            </p>
+          ) : null}
+          <div className="plan-next-actions">
+            {grade.verdict !== 'incorrect' ? (
+              <button className="primary-button" onClick={onPassed}>
+                <Check size={14} /> Mark done
+              </button>
+            ) : null}
+            <button className="secondary-button" onClick={() => void ask()}>
+              Another question
+            </button>
+            <button className="secondary-button" onClick={keepCard} disabled={cardSaved}>
+              {cardSaved ? 'Added to review' : 'Add to review'}
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 // A saved path. It tells the learner where to begin and what comes next, opens
 // only the stage they are on, and attaches the right materials to each stage.
 export function PathPlanDetail({
   path,
   onChange,
   onAsk,
+  onNote,
 }: {
   path: LearningPath
   onChange: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
+  onNote?: (title: string, source: string) => void
 }) {
   const plan = path.plan
   const [finding, setFinding] = useState<string | null>(null)
@@ -275,6 +409,13 @@ export function PathPlanDetail({
                 {findError}
               </p>
             ) : null}
+            <TopicCheck
+              key={next.topic.id}
+              plan={plan}
+              stage={next.milestone.title}
+              topic={next.topic.label}
+              onPassed={() => tick(next.topic.id)}
+            />
             <div className="plan-next-actions">
               <button className="primary-button" onClick={() => tick(next.topic.id)}>
                 <Check size={14} /> Mark done
@@ -336,6 +477,16 @@ export function PathPlanDetail({
                       title="Ask Noema to explain this"
                     >
                       <Sparkles size={13} />
+                    </button>
+                  ) : null}
+                  {onNote ? (
+                    <button
+                      className="plan-ask"
+                      onClick={() => onNote(topic.label, `${path.title} · ${milestone.title}`)}
+                      aria-label={`Add a note about ${topic.label}`}
+                      title="Add a note"
+                    >
+                      <StickyNote size={13} />
                     </button>
                   ) : null}
                 </li>
