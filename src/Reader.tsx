@@ -144,6 +144,9 @@ export function Reader({
   onOpenNote,
   onAsk,
   onRecap,
+  autoRecap,
+  onAutoRecapped,
+
   onSaveWord,
   initialSearch,
   onBookmark,
@@ -165,7 +168,10 @@ export function Reader({
   onNote: ReaderNoteHandler
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
-  onRecap: () => void
+  onRecap: (readText: string) => void
+  autoRecap?: boolean
+  onAutoRecapped?: () => void
+
   onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
   initialSearch?: string
   onBookmark: () => void
@@ -376,6 +382,56 @@ export function Reader({
     },
     [],
   )
+
+  // The text read so far, taken from the open book up to the reader's exact place: the opening,
+  // for who and where, and the latest pages.
+  const readTextSoFar = async (): Promise<string> => {
+    const epub = epubRef.current
+    if (!epub) return ''
+    try {
+      await epub.loaded.spine
+      const items = spineSections(epub)
+      const href = (locationRef.current.href ?? currentChapter.href ?? '').split('#')[0]
+      let here = items.findIndex((item) => href && item.href && (item.href.includes(href) || href.includes(item.href)))
+      if (here < 0) here = Math.min(items.length - 1, Math.floor(clampFraction(book.progress / 100) * items.length))
+      const sectionText = async (index: number) => {
+        try {
+          const section = epub.spine.get(items[index].index)
+          const root = (await section.load(epub.load.bind(epub))) as unknown as Element
+          const text = normalizeReaderText((root.querySelector?.('body') ?? root).textContent ?? '')
+          section.unload()
+          return text
+        } catch {
+          return ''
+        }
+      }
+      const current = await sectionText(here)
+      const upTo = current.slice(0, Math.floor(current.length * clampFraction(chapterProgress)))
+      let tail = upTo
+      for (let index = here - 1; index >= 0 && tail.length < 9_000; index -= 1)
+        tail = `${await sectionText(index)}\n\n${tail}`
+      let head = ''
+      for (let index = 0; index < here && head.length < 2_500; index += 1) {
+        head += `${head ? '\n\n' : ''}${await sectionText(index)}`
+      }
+      const trimmedTail = tail.length > 9_000 ? tail.slice(-9_000) : tail
+      const trimmedHead = head.slice(0, 2_500)
+      return tail.length <= 9_000 || here === 0 ? trimmedTail : `${trimmedHead}\n\n[…]\n\n${trimmedTail}`
+    } catch {
+      return ''
+    }
+  }
+  const askRecap = async () => onRecap(await readTextSoFar())
+  const autoRecapRef = useLatest(askRecap)
+  useEffect(() => {
+    if (!autoRecap || loading || book.format !== 'epub') return
+    const timer = window.setTimeout(() => {
+      void autoRecapRef.current()
+      onAutoRecapped?.()
+    }, 1200)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRecap, loading])
 
   // The meaning of the selected word.
   const [define, setDefine] = useState<{
@@ -931,7 +987,12 @@ export function Reader({
               </span>
             ) : null}
             {book.format === 'epub' ? (
-              <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
+              <button
+                className="icon-button"
+                onClick={() => void askRecap()}
+                aria-label="Where was I?"
+                title="Where was I?"
+              >
                 <History size={16} />
               </button>
             ) : null}
