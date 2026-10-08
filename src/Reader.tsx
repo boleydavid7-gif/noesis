@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,11 +21,13 @@ import {
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import type { BrainNote, BrainNoteKind, BrainNoteLocation } from './lib/knowledge'
-import { openEpub } from './lib/epub'
-import { loadBookText, loadEpubFile, type LibraryBook } from './lib/library'
+import { openEpub, spineSections } from './lib/epub'
+import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 
 type Note = BrainNote
+type SearchHit = { cfi: string; excerpt: string; chapter: string }
+const MAX_SEARCH_HITS = 40
 export type NoteAction = 'highlight' | 'note' | 'question' | 'reflect' | 'connect'
 export type ReaderNoteHandler = (text: string, kind?: NoteAction, location?: BrainNoteLocation) => void
 
@@ -144,7 +146,11 @@ export function Reader({
   const [wideLayout, setWideLayout] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [bookText, setBookText] = useState('')
+  const [searchOutcome, setSearchOutcome] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] })
+  const activeQuery = searchOpen && book.format === 'epub' ? searchTerm.trim() : ''
+  const searchReady = activeQuery.length >= 2
+  const searching = searchReady && searchOutcome.query !== activeQuery
+  const searchResults = searchReady && !searching ? searchOutcome.hits : []
   const [pageTurn, setPageTurn] = useState<PageDirection | null>(null)
   const [pageNumber, setPageNumber] = useState<number | undefined>()
   const [wideCaptureKind, setWideCaptureKind] = useState<NoteAction>('highlight')
@@ -199,18 +205,6 @@ export function Reader({
     window.setTimeout(() => setPageTurn(null), 360)
   }
   const goToChapterRef = useLatest(goToChapter)
-  const searchCount = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    if (!query || !bookText) return 0
-    return bookText.toLowerCase().split(query).length - 1
-  }, [bookText, searchTerm])
-  const searchSnippet = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase()
-    const index = query && bookText ? bookText.toLowerCase().indexOf(query) : -1
-    return index >= 0
-      ? `${index > 90 ? '…' : ''}${bookText.slice(Math.max(0, index - 90), index + query.length + 170)}…`
-      : ''
-  }, [bookText, searchTerm])
   useEffect(() => {
     if (!wideLayout) return
     const previousOverflow = document.body.style.overflow
@@ -507,17 +501,52 @@ export function Reader({
     }
   }, [book.id, bookRef, readerCallbacksRef, wideLayoutRef, wideCaptureKindRef, jumpLocation])
   useEffect(() => {
-    if (book.format !== 'epub') return
+    const query = activeQuery
+    if (query.length < 2) return
     let active = true
-    void loadBookText(book.id)
-      .then((value) => {
-        if (active) setBookText(value ?? '')
-      })
-      .catch(() => undefined)
+    const timer = window.setTimeout(async () => {
+      const epub = epubRef.current
+      if (!epub) {
+        if (active) setSearchOutcome({ query, hits: [] })
+        return
+      }
+      const hits: SearchHit[] = []
+      try {
+        await epub.loaded.spine
+        for (const item of spineSections(epub)) {
+          if (!active || hits.length >= MAX_SEARCH_HITS) break
+          try {
+            const section = epub.spine.get(item.index)
+            await section.load(epub.load.bind(epub))
+            const found = section.find(query) as unknown as Array<{ cfi?: string; excerpt?: string }>
+            section.unload()
+            const chapterIndex = chaptersRef.current.findIndex((chapter) =>
+              item.href?.includes(chapter.href.split('#')[0]),
+            )
+            for (const match of found) {
+              if (match.cfi && match.excerpt) {
+                hits.push({
+                  cfi: match.cfi,
+                  excerpt: match.excerpt.trim(),
+                  chapter: chaptersRef.current[chapterIndex]?.label ?? `Section ${item.index + 1}`,
+                })
+              }
+              if (hits.length >= MAX_SEARCH_HITS) break
+            }
+          } catch {
+            // A section that cannot be searched should not stop the rest.
+          }
+        }
+      } catch {
+        // Search is an enhancement; the reader keeps working without it.
+      }
+      if (active) setSearchOutcome({ query, hits })
+    }, 350)
     return () => {
       active = false
+      window.clearTimeout(timer)
     }
-  }, [book.id, book.format])
+  }, [activeQuery, chaptersRef])
   useEffect(() => {
     const current = rendition.current
     if (!current || book.format !== 'epub') return
@@ -671,16 +700,32 @@ export function Reader({
             autoFocus
           />
           <span>
-            {searchTerm.trim()
-              ? bookText
-                ? searchCount + ' ' + (searchCount === 1 ? 'match' : 'matches')
-                : 'Preparing search…'
-              : 'Searches the imported text'}
+            {!searchReady
+              ? 'Searches the whole book'
+              : searching
+                ? 'Searching…'
+                : searchResults.length >= MAX_SEARCH_HITS
+                  ? `${MAX_SEARCH_HITS}+ matches`
+                  : `${searchResults.length} ${searchResults.length === 1 ? 'match' : 'matches'}`}
           </span>
         </div>
       ) : null}
-      {!wideLayout && book.format === 'epub' && searchOpen && searchSnippet ? (
-        <div className="reader-search-result">{searchSnippet}</div>
+      {!wideLayout && book.format === 'epub' && searchOpen && searchResults.length > 0 ? (
+        <ul className="reader-search-results" aria-label="Search results">
+          {searchResults.map((hit, index) => (
+            <li key={`${hit.cfi}-${index}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  void rendition.current?.display(hit.cfi)
+                }}
+              >
+                <strong>{hit.chapter}</strong>
+                <span>{hit.excerpt}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {!wideLayout && book.format === 'epub' ? (
         <div className="reader-settings">

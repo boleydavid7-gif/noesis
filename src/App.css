@@ -315,6 +315,10 @@
 .reader-search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; color: #8bc6f7; background: rgba(5, 19, 33, .7); }
 .reader-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: #edf6ff; background: transparent; font-size: 11px; }
 .reader-search span { color: var(--muted-2); font-size: 9px; white-space: nowrap; }
+.reader-search-results { max-height: 220px; margin: 0; padding: 0; overflow-y: auto; border: 1px solid var(--line); border-radius: 9px; list-style: none; background: rgba(5, 19, 33, .7); }
+.reader-search-results button { display: grid; width: 100%; gap: 3px; padding: 8px 11px; border: 0; border-bottom: 1px solid var(--line); color: #c8dced; background: transparent; font: inherit; font-size: 10px; line-height: 1.4; text-align: left; cursor: pointer; }
+.reader-search-results button:hover, .reader-search-results button:focus-visible { background: rgba(42, 105, 157, .18); }
+.reader-search-results strong { color: #8bc6f7; font-size: 9px; }
 .reader-search-result { overflow: hidden; padding: 9px 11px; border-left: 2px solid #5eb0f6; border-radius: 0 7px 7px 0; color: #c8dced; background: rgba(42, 105, 157, .12); font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
 .reader-settings { display: flex; align-items: center; gap: 10px; padding: 6px 2px 1px; color: var(--muted); font-size: 10px; }
 .reader-settings label { display: flex; align-items: center; gap: 6px; }
