@@ -54,7 +54,8 @@ import {
 import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } from './Reader'
 import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
-import { friendlyBookError, relevantExcerpt } from './lib/text'
+import { friendlyBookError } from './lib/text'
+import { retrievedContext } from './lib/retrieval'
 import { syncAccountLibrary } from './lib/accountLibrary'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import {
@@ -624,7 +625,7 @@ function App() {
       : ''
     const additionalBookText =
       selectedBook?.format === 'epub' && bookText
-        ? `Additional book context:\n${relevantExcerpt(bookText, question, activeContext?.visibleText ? 10_000 : 30_000)}`
+        ? `Additional book context:\n${retrievedContext(bookText, `${question} ${activeContext?.selectedText ?? ''}`, activeContext?.visibleText ? 10_000 : 24_000)}`
         : ''
     const bookContext = selectedBook
       ? [
