@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Download, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
 import { diaryDays, type DiaryEntry } from './lib/diary'
+import { formatHours, readingStats } from './lib/stats'
+import { renderYearCard } from './lib/yearCard'
+import type { LibraryBook } from './lib/library'
 import { relatedNotes } from './lib/related'
 import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
@@ -72,7 +75,9 @@ export function SecondBrainPage({
   onShare,
   onImportClippings,
   embed,
+  books = [],
 }: {
+  books?: Pick<LibraryBook, 'finished'>[]
   embed?: Embed
   diary: DiaryEntry[]
   bookmarklet: string
@@ -290,6 +295,7 @@ export function SecondBrainPage({
       ) : null}
       {tab === 'diary' ? (
         <section className="brain-diary panel-card" aria-label="Reading diary">
+          <YearStats diary={diary} notes={notes} books={books} />
           {diaryDays(diary, notes).length === 0 ? (
             <p className="brain-rail-empty">Your reading days will appear here as you read.</p>
           ) : (
@@ -535,6 +541,50 @@ export function SecondBrainPage({
           </section>
         </div>
       )}
+    </div>
+  )
+}
+
+function YearStats({
+  diary,
+  notes,
+  books,
+}: {
+  diary: DiaryEntry[]
+  notes: BrainNote[]
+  books: Pick<LibraryBook, 'finished'>[]
+}) {
+  const [year] = useState(() => new Date().getFullYear())
+  const stats = readingStats(diary, notes, books, year)
+  if (stats.days === 0) return null
+  return (
+    <div className="year-stats">
+      <h4>Your {stats.year} so far</h4>
+      <dl>
+        <div>
+          <dt>Time reading</dt>
+          <dd>{formatHours(stats.minutes)}</dd>
+        </div>
+        <div>
+          <dt>Days</dt>
+          <dd>{stats.days}</dd>
+        </div>
+        <div>
+          <dt>Streak</dt>
+          <dd>{stats.currentStreak}</dd>
+        </div>
+        <div>
+          <dt>Finished</dt>
+          <dd>{stats.booksFinished}</dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => void renderYearCard(stats).then((blob) => downloadBlob(blob, `noesis-${stats.year}.png`))}
+      >
+        Save as picture
+      </button>
     </div>
   )
 }
