@@ -32,7 +32,14 @@ export type Settings = {
     goal: { enabled: boolean; target: number; period: GoalPeriod }
   }
   backup: { autoSync: boolean }
-  ai: { enabled: boolean; length: AnswerLength; useReadingText: boolean; useNotes: boolean; avoidSpoilers: boolean }
+  ai: {
+    enabled: boolean
+    length: AnswerLength
+    useReadingText: boolean
+    useNotes: boolean
+    avoidSpoilers: boolean
+    onDevice: boolean
+  }
   notifications: { reviewReminders: boolean }
 }
 
@@ -58,7 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
     goal: { enabled: false, target: 12, period: 'year' },
   },
   backup: { autoSync: true },
-  ai: { enabled: true, length: 'balanced', useReadingText: true, useNotes: true, avoidSpoilers: true },
+  ai: { enabled: true, length: 'balanced', useReadingText: true, useNotes: true, avoidSpoilers: true, onDevice: false },
   notifications: { reviewReminders: false },
 }
 
@@ -187,6 +194,7 @@ export function sanitizeSettings(input: unknown): Settings {
       useReadingText: bool(ai.useReadingText, d.ai.useReadingText),
       useNotes: bool(ai.useNotes, d.ai.useNotes),
       avoidSpoilers: bool(ai.avoidSpoilers, d.ai.avoidSpoilers),
+      onDevice: bool(ai.onDevice, d.ai.onDevice),
     },
     notifications: { reviewReminders: bool(notifications.reviewReminders, d.notifications.reviewReminders) },
   }
