@@ -89,6 +89,8 @@ import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
+import { CommandBar } from './CommandBar'
+import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
@@ -300,6 +302,7 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
+  const [commandOpen, setCommandOpen] = useState(false)
   const [showDupes, setShowDupes] = useState(false)
   const [editing, setEditing] = useState<{
     book: LibraryBook
@@ -380,6 +383,55 @@ function App() {
     () => [...new Set(books.flatMap((book) => (book.series ? [book.series] : [])))].sort((a, b) => a.localeCompare(b)),
     [books],
   )
+  const commands = useMemo<Command[]>(() => {
+    const go = (label: string) => () => selectNav(label)
+    const list: Command[] = [
+      { id: 'go-home', label: 'Home', group: 'Go to', run: go('Home') },
+      { id: 'go-library', label: 'Library', group: 'Go to', run: go('My Library') },
+      { id: 'go-notes', label: 'Second Brain', group: 'Go to', keywords: 'notes highlights', run: go('Notes') },
+      { id: 'go-paths', label: 'Learning paths', group: 'Go to', keywords: 'plan study', run: go('Learning Paths') },
+      { id: 'go-review', label: 'Review', group: 'Go to', keywords: 'cards flashcards', run: go('Review') },
+      { id: 'go-explore', label: 'Explore', group: 'Go to', keywords: 'find free books search', run: go('Explore') },
+      { id: 'go-settings', label: 'Settings', group: 'Go to', run: () => openSettings('account') },
+      { id: 'do-note', label: 'Add a note', group: 'Do', keywords: 'capture write', run: () => openNotePanel() },
+      { id: 'do-noema', label: 'Ask Noema', group: 'Do', keywords: 'ai help', run: () => openNoemaPanel() },
+      {
+        id: 'do-import',
+        label: 'Add books',
+        group: 'Do',
+        keywords: 'import epub pdf upload',
+        run: () => fileInput.current?.click(),
+      },
+      {
+        id: 'do-timer',
+        label: focusState.running ? 'Pause the focus timer' : 'Start the focus timer',
+        group: 'Do',
+        keywords: 'focus pomodoro',
+        run: focusState.running ? pauseFocusTimer : startFocusTimer,
+      },
+    ]
+    for (const book of books)
+      list.push({
+        id: `book-${book.id}`,
+        label: book.title,
+        hint: book.author,
+        group: 'Books',
+        run: () => openSavedBook(book),
+      })
+    for (const note of notes.slice(0, 300))
+      list.push({
+        id: `note-${note.id}`,
+        label: note.title,
+        hint: note.body.slice(0, 80),
+        group: 'Notes',
+        keywords: note.body,
+        run: () => (note.bookId ? openNoteLocation(note) : selectNav('Notes')),
+      })
+    for (const path of paths)
+      list.push({ id: `path-${path.id}`, label: path.title, group: 'Paths', run: go('Learning Paths') })
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books, notes, paths, focusState.running])
   const hasFinished = books.some((book) => book.finished)
   const dupes = useMemo(() => duplicateGroups(books), [books])
   const allShelves = useMemo(
@@ -740,6 +792,17 @@ function App() {
     const shared = window.location.hash.match(/^#share=(.+)$/)
     if (shared) void decodeCollection(shared[1]).then((collection) => collection && setSharedView(collection))
     if (incoming || shared) window.history.replaceState(null, '', window.location.pathname)
+  }, [])
+  // Ctrl or Cmd + K opens the quick search from anywhere.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setCommandOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
   // Escape closes whichever popup is open.
   useEffect(() => {
@@ -2842,6 +2905,14 @@ function App() {
           >
             <Sparkles size={17} />
           </button>
+          <button
+            className="icon-button compact-tool-button"
+            onClick={() => setCommandOpen(true)}
+            aria-label="Search everything"
+            title="Search everything (Ctrl+K)"
+          >
+            <Search size={17} />
+          </button>
           <button className="account-top-button" onClick={() => openSettings('account')} aria-label="Open account">
             {displayName?.slice(0, 1).toUpperCase() || <UserRound size={16} />}
           </button>
@@ -2969,6 +3040,7 @@ function App() {
         ) : null}
         {createPortal(
           <>
+            {commandOpen ? <CommandBar commands={commands} onClose={() => setCommandOpen(false)} /> : null}
             {editing ? (
               <div className="brain-backdrop" data-overlay onMouseDown={() => setEditing(null)}>
                 <form
