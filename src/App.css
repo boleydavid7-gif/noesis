@@ -965,3 +965,111 @@ body { background: #060d14; }
 }
 .settings-panel .cloud-provider-grid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .settings-panel .cloud-provider-head p { font-size: 11px; }
+
+/* Left sidebar lockup */
+.brand-lockup { position: relative; flex-direction: column; justify-content: center; gap: 8px; padding: 26px 16px 22px; text-align: center; }
+.brand-lockup .noesis-mark { --mark-accent: var(--accent-mark, #e0b86b); filter: drop-shadow(0 0 14px rgba(224, 184, 107, .22)); }
+.brand-lockup strong { margin-top: 4px; color: var(--gold-soft, #ead4a2); font-family: Georgia, 'Times New Roman', serif; font-size: 23px; font-weight: 400; letter-spacing: .34em; text-indent: .34em; }
+.brand-lockup span { margin: 0; color: rgba(222, 232, 242, .72); font-size: 12px; letter-spacing: .06em; }
+.brand-lockup .sidebar-close { position: absolute; top: 10px; right: 10px; }
+
+/* Right sidebar */
+.desktop-context-sidebar { width: 300px; flex: 0 0 300px; gap: 14px; padding: 22px 16px 30px; }
+.desktop-context-sidebar .context-section { padding: 16px; border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), .14); border-radius: 14px; background: rgba(8, 20, 32, .62); }
+.desktop-context-sidebar .context-section-heading h2 { font-size: 17px; }
+.desktop-context-sidebar .context-intro { margin: 6px 0 12px; font-size: 11px; line-height: 1.5; }
+.desktop-context-sidebar .context-empty { margin: 10px 0 0; font-size: 12px; line-height: 1.5; }
+.context-plus { display: grid; place-items: center; width: 28px; height: 28px; padding: 0 !important; border: 1px solid var(--line-strong); border-radius: 50%; color: #e8eef5 !important; background: rgba(255, 255, 255, .05) !important; }
+.context-plus:hover { border-color: var(--accent-border, #d4ad68); }
+.focus-session { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), .16); border-radius: 12px; background: rgba(5, 14, 24, .6); }
+.focus-play { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 2px solid var(--gold-warm, #c7a36a); border-radius: 50%; color: var(--gold-soft, #ead4a2); background: transparent; }
+.focus-session small { display: block; color: var(--muted); font-size: 10px; }
+.focus-session strong { display: block; color: #f2ead9; font-size: 16px; font-weight: 700; }
+.focus-session span { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.focus-start { min-height: 36px; padding: 0 16px; font-size: 12px; }
+.desktop-context-sidebar .focus-list { display: grid; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
+.desktop-context-sidebar .focus-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; }
+.focus-item-main { display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; padding: 5px 0; color: inherit; background: transparent; font: inherit; text-align: left; }
+.focus-item-main span { overflow-wrap: anywhere; }
+.focus-item-main svg { flex: 0 0 15px; }
+.focus-item-remove { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border-radius: 50%; color: #6d829b; background: transparent; opacity: .55; }
+.focus-item:hover .focus-item-remove, .focus-item-remove:focus-visible, .focus-task-editor-row .focus-item-remove { opacity: 1; }
+.focus-item-remove:hover { color: #ffb4b4; background: rgba(255, 138, 138, .12); }
+.focus-add { display: flex; gap: 6px; margin-top: 10px; }
+.focus-add input { flex: 1; min-width: 0; min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; outline: 0; color: #edf4ff; background: rgba(5, 14, 24, .6); font-size: 12px; }
+.focus-add input:focus { border-color: var(--accent-border, #d4ad68); }
+.focus-add button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line-strong); border-radius: 9px; color: #e8eef5; background: rgba(255, 255, 255, .05); }
+.focus-add button:disabled { opacity: .4; cursor: default; }
+.focus-add-wide button { width: auto; padding: 0 14px; }
+.cal-list { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
+.cal-row { display: flex; align-items: center; gap: 8px; }
+.cal-check { display: grid; place-items: center; padding: 3px; color: #7f99a8; background: transparent; }
+.cal-check:hover { color: var(--gold-soft, #ead4a2); }
+.cal-main { display: grid; flex: 1; min-width: 0; gap: 1px; padding: 4px 0; color: inherit; background: transparent; text-align: left; }
+.cal-main small { color: var(--muted); font-size: 10px; }
+.cal-main span { display: flex; align-items: center; gap: 8px; overflow: hidden; color: #edf4ff; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.cal-main i, .cal-day-item strong i { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; }
+.cal-row-done .cal-main span, .cal-row-done strong { color: #7f99a8; text-decoration: line-through; }
+.weather-now { display: flex; align-items: center; gap: 12px; margin-top: 10px; color: var(--gold-soft, #ead4a2); }
+.weather-now strong { display: block; color: #fff; font-family: Georgia, serif; font-size: 34px; font-weight: 400; line-height: 1; }
+.weather-now span { color: var(--muted); font-size: 12px; }
+.weather-hilo { display: grid; margin-left: auto; text-align: right; }
+.weather-hilo span { color: #dbe8f0; font-size: 13px; }
+.weather-place { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+.weather-days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); list-style: none; }
+.weather-days li { display: grid; justify-items: center; gap: 5px; color: var(--gold-soft, #ead4a2); }
+.weather-days small { color: var(--muted); font-size: 11px; }
+.weather-days span { color: #dbe8f0; font-size: 12px; }
+.weather-setup { display: grid; gap: 8px; }
+.weather-setup-actions { display: flex; gap: 8px; }
+.weather-setup-actions .secondary-button { min-height: 34px; padding: 0 12px; font-size: 12px; }
+.weather-error { margin: 0; color: #ffb4b4; font-size: 12px; line-height: 1.5; }
+.quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.quick-actions button { display: grid; gap: 4px; padding: 14px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--gold-soft, #ead4a2); background: rgba(5, 14, 24, .5); text-align: left; }
+.quick-actions button:hover { border-color: var(--accent-border, #d4ad68); }
+.quick-actions strong { color: #f2ead9; font-size: 14px; }
+.quick-actions small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.focus-task-editor-row { display: flex; align-items: center; gap: 8px; }
+.focus-task-editor-row input[type='text'], .focus-task-editor-row input:not([type]) { flex: 1; min-width: 0; }
+
+/* Calendar and weather panels */
+.cal-panel { width: min(100%, 860px); }
+.cal-body { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.cal-day { position: relative; }
+.calendar-day { align-content: center; gap: 2px; }
+.calendar-day-selected { border-color: var(--accent-border, #d4ad68); background: rgba(var(--accent-rgb, 220, 194, 142), .22); }
+.cal-dots { display: flex; min-height: 6px; gap: 2px; }
+.cal-dots i { width: 5px; height: 5px; border-radius: 50%; }
+.cal-side { display: grid; gap: 12px; min-width: 0; }
+.cal-day-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cal-day-head h3, .cal-form h3 { margin: 0; color: #f2eadb; font-family: Georgia, serif; font-size: 18px; font-weight: 500; }
+.cal-day-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cal-day-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(5, 14, 24, .5); }
+.cal-day-item strong { display: flex; align-items: center; gap: 8px; color: #edf4ff; font-size: 14px; }
+.cal-day-item small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.cal-day-item p { margin: 6px 0 0; color: #aab9c1; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.cal-item-actions { display: flex; gap: 2px; }
+.cal-item-actions button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 8px; color: var(--muted); background: transparent; }
+.cal-item-actions button:hover { color: #fff; background: rgba(255, 255, 255, .07); }
+.cal-form { display: grid; gap: 10px; }
+.cal-form label, .weather-search label { display: grid; gap: 5px; color: #aab9c1; font-size: 11px; }
+.cal-form input, .cal-form select, .cal-form textarea, .weather-search input { min-height: 36px; padding: 8px 10px; border: 1px solid rgba(160, 192, 216, .16); border-radius: 8px; outline: 0; color: #edf4ff; background: rgba(5, 14, 24, .65); font: inherit; font-size: 13px; color-scheme: dark; }
+.cal-form textarea { resize: vertical; }
+.cal-form input:focus, .cal-form select:focus, .cal-form textarea:focus, .weather-search input:focus { border-color: var(--accent-border, #d4ad68); }
+.cal-form-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+.cal-form-actions { display: flex; gap: 8px; }
+.weather-search label > span { display: flex; gap: 8px; }
+.weather-search input { flex: 1; min-width: 0; }
+.weather-results { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.weather-results button { display: grid; width: 100%; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: #edf4ff; background: rgba(5, 14, 24, .5); text-align: left; }
+.weather-results button:hover { border-color: var(--accent-border, #d4ad68); }
+.weather-results small { color: var(--muted); font-size: 11px; }
+.weather-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+  .cal-body { grid-template-columns: 1fr; }
+  .cal-form-row { grid-auto-flow: row; }
+}
+.focus-session { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; }
+.focus-session small { white-space: nowrap; }
+.focus-session strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-start { padding: 0 12px; }

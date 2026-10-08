@@ -66,6 +66,11 @@
           <td>Finding free books and articles</td>
         </tr>
         <tr>
+          <td>A city you search for, or your approximate coordinates if you choose “Detect my location”</td>
+          <td>You set up the weather forecast</td>
+          <td>Showing your local forecast. Your location is saved only on your device.</td>
+        </tr>
+        <tr>
           <td>Technical request data such as IP address and browser type</td>
           <td>You use the site</td>
           <td>Delivering the service, rate limiting, and preventing abuse</td>
@@ -110,6 +115,7 @@
         <li><strong>Cloudflare</strong> hosts the site and server code and processes request data such as IP addresses.</li>
         <li><strong>Supabase</strong> provides sign-in, note storage, and library file storage for signed-in users.</li>
         <li><strong>Google (Gemini API)</strong> generates Noema answers and review questions.</li>
+        <li><strong>Open-Meteo</strong> receives the city name or coordinates you choose for the weather forecast. If you use “Detect my location”, your browser asks for permission first, and <strong>BigDataCloud</strong> may receive your coordinates to turn them into a place name. Neither is contacted until you set up the forecast.</li>
         <li><strong>Open Library, Project Gutenberg, OpenAlex, Crossref, and the Internet Archive</strong> receive your search terms when you use Explore. Files you import from them are fetched through our server, which only retrieves content from approved free-resource sites.</li>
       </ul>
       <p>These providers have their own privacy policies. We do not sell your personal information or share it for advertising.</p>
