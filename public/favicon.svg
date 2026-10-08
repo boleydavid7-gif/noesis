@@ -7,10 +7,9 @@
   </defs>
   <rect width="64" height="64" rx="17" fill="url(#noesis-bg)"/>
   <g transform="translate(3.2 4.2) scale(0.9)">
-    <path d="M9 24.5c8.5-3 16.2-2.1 23 3.6v27.2c-6.8-5.5-14.5-6.7-23-3.7V24.5Z" fill="none" stroke="#dceeff" stroke-width="2.6" stroke-linejoin="round"/>
-    <path d="M55 24.5c-8.5-3-16.2-2.1-23 3.6v27.2c6.8-5.5 14.5-6.7 23-3.7V24.5Z" fill="none" stroke="#dceeff" stroke-width="2.6" stroke-linejoin="round"/>
-    <path d="M32 28.1v27.2" fill="none" stroke="#dceeff" stroke-width="2.1" stroke-linecap="round"/>
-    <path d="M32 27C32 19 34.5 11.5 41 4.5" fill="none" stroke="#e0b86b" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M9 24.5c8.5-3 13.6-2.1 19.6 3.6v27.2c-5.6-5.5-11.2-6.7-19.6-3.7V24.5Z" fill="none" stroke="#dceeff" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M55 24.5c-8.5-3-13.6-2.1-19.6 3.6v27.2c5.6-5.5 11.2-6.7 19.6-3.7V24.5Z" fill="none" stroke="#dceeff" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M32 55.3V27C32 19 34.5 11.5 41 4.5" fill="none" stroke="#e0b86b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
     <g fill="#e0b86b" stroke="none">
       <path transform="translate(32.6 20.4) rotate(-131) scale(1)" d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"/>
       <path transform="translate(33.3 17.6) rotate(-22) scale(1)" d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"/>

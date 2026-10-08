@@ -270,23 +270,23 @@ function NoesisMark({ size = 22 }: { size?: number }) {
     <svg className="noesis-mark" width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
       <g transform="translate(3.2 4.2) scale(.9)">
         <path
-          d="M9 24.5c8.5-3 16.2-2.1 23 3.6v27.2c-6.8-5.5-14.5-6.7-23-3.7V24.5Z"
+          d="M9 24.5c8.5-3 13.6-2.1 19.6 3.6v27.2c-5.6-5.5-11.2-6.7-19.6-3.7V24.5Z"
           stroke="currentColor"
           strokeWidth="2.6"
           strokeLinejoin="round"
         />
         <path
-          d="M55 24.5c-8.5-3-16.2-2.1-23 3.6v27.2c6.8-5.5 14.5-6.7 23-3.7V24.5Z"
+          d="M55 24.5c-8.5-3-13.6-2.1-19.6 3.6v27.2c5.6-5.5 11.2-6.7 19.6-3.7V24.5Z"
           stroke="currentColor"
           strokeWidth="2.6"
           strokeLinejoin="round"
         />
-        <path d="M32 28.1v27.2" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
         <path
-          d="M32 27C32 19 34.5 11.5 41 4.5"
+          d="M32 55.3V27C32 19 34.5 11.5 41 4.5"
           stroke="var(--mark-accent, #d5ab61)"
           strokeWidth="1.7"
           strokeLinecap="round"
+          strokeLinejoin="round"
         />
         <g fill="var(--mark-accent, #d5ab61)">
           <path
