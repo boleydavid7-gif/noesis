@@ -891,6 +891,24 @@ export function Reader({
         ) : null}
       </div>
       {wideLayout ? (
+        <ReaderWideSidebar
+          book={book}
+          notes={bookNotes}
+          location={{
+            bookId: book.id,
+            bookTitle: book.title,
+            author: book.author,
+            chapter: currentChapter.label,
+            chapterIndex,
+            page: pageNumber,
+            href: currentChapter.href,
+            cfi: book.cfi,
+          }}
+          onNote={onNote}
+          onAsk={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
+        />
+      ) : null}
+      {wideLayout ? (
         <div className="reader-wide-footer">
           <button
             className="reader-page-button"
@@ -932,5 +950,76 @@ export function Reader({
         </div>
       ) : null}
     </section>
+  )
+}
+
+function ReaderWideSidebar({
+  book,
+  notes,
+  location,
+  onNote,
+  onAsk,
+}: {
+  book: LibraryBook
+  notes: Note[]
+  location: BrainNoteLocation
+  onNote: ReaderNoteHandler
+  onAsk: () => void
+}) {
+  return (
+    <aside className="reader-wide-sidebar" aria-label="Reading tools">
+      <div className="reader-wide-sidebar-head">
+        <div>
+          <p className="eyebrow">Study beside the page</p>
+          <h2>Second Brain</h2>
+        </div>
+        <Brain size={18} />
+      </div>
+      <p className="reader-wide-sidebar-copy">Capture ideas without leaving your reading space.</p>
+      <div className="reader-wide-sidebar-actions">
+        <button onClick={() => onNote('', 'highlight', location)}>
+          <Highlighter size={14} /> Highlight
+        </button>
+        <button onClick={() => onNote('', 'note', location)}>
+          <FileText size={14} /> Note
+        </button>
+        <button onClick={() => onNote('', 'question', location)}>
+          <MessageCircleQuestion size={14} /> Question
+        </button>
+        <button onClick={() => onNote('', 'reflect', location)}>
+          <Lightbulb size={14} /> Reflect
+        </button>
+      </div>
+      <div className="reader-wide-sidebar-section">
+        <div className="reader-wide-sidebar-label">
+          <span>From this book</span>
+          <small>{notes.length}</small>
+        </div>
+        {notes.length ? (
+          notes.slice(0, 4).map((note) => (
+            <article className="reader-wide-note" key={note.id}>
+              <strong>{note.title}</strong>
+              <p>{note.body}</p>
+              <small>
+                {note.chapter || book.chapter || 'Current location'}
+                {note.page ? ` · p. ${note.page}` : ''}
+              </small>
+            </article>
+          ))
+        ) : (
+          <p className="reader-wide-empty">Your captured thoughts will stay connected to this chapter.</p>
+        )}
+      </div>
+      <div className="reader-wide-tutor">
+        <div>
+          <Sparkles size={15} />
+          <strong>Noema</strong>
+        </div>
+        <p>Ask about the page you are reading.</p>
+        <button className="secondary-button" onClick={onAsk}>
+          Ask Noema <ArrowRight size={13} />
+        </button>
+      </div>
+    </aside>
   )
 }

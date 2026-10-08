@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowLeft,
   ArrowRight,
   BookOpen,
   Brain,
@@ -20,6 +21,8 @@ import {
   Menu,
   MessageCircleQuestion,
   MoreVertical,
+  Pause,
+  Play,
   Plus,
   RotateCcw,
   Search,
@@ -67,9 +70,11 @@ import {
   consumeCloudOAuthRedirect,
   disconnectCloudProvider,
   listCloudProviders,
+  loadCloudProviderConfig,
   readCloudConnections,
   type CloudConnection,
   type CloudProviderId,
+  type CloudProviderInfo,
 } from './lib/cloudProviders'
 import { syncCloudState } from './lib/cloudSync'
 import { writeLocalNotes } from './lib/knowledge'
@@ -109,9 +114,22 @@ type Resource = {
   format: string
   kind: 'book' | 'article'
 }
+type FocusTask = { label: string; done: boolean }
+type FocusState = {
+  title: string
+  tasks: FocusTask[]
+  durationMinutes: number
+  elapsedSeconds: number
+  startedAt?: number
+  running: boolean
+}
+type UtilityOverlay = 'calendar' | 'weather' | null
+type WeatherSettings = { location: string; unit: 'F' | 'C' }
 
 const PATHS_KEY = 'noesis:paths:v1'
 const PROFILE_NAME_KEY = 'noesis:profile:first-name:v1'
+const FOCUS_KEY = 'noesis:focus:v1'
+const WEATHER_KEY = 'noesis:weather:v1'
 const navItems = [
   { label: 'Home', text: 'Home', icon: Home },
   { label: 'My Library', text: 'Library', icon: Library },
@@ -134,6 +152,73 @@ function readPaths(): LearningPath[] {
 }
 function writePaths(paths: LearningPath[]) {
   localStorage.setItem(PATHS_KEY, JSON.stringify(paths))
+}
+const defaultFocusState = (): FocusState => ({
+  title: 'Today’s focus',
+  tasks: [
+    { label: 'Read for 30 minutes', done: false },
+    { label: 'Capture 2 key ideas', done: false },
+    { label: 'Reflect on one chapter', done: false },
+    { label: 'Make one connection', done: false },
+  ],
+  durationMinutes: 30,
+  elapsedSeconds: 0,
+  running: false,
+})
+function readFocusState(): FocusState {
+  try {
+    const value = JSON.parse(localStorage.getItem(FOCUS_KEY) ?? 'null') as Partial<FocusState> | null
+    if (!value || !Array.isArray(value.tasks)) return defaultFocusState()
+    return {
+      ...defaultFocusState(),
+      ...value,
+      tasks: value.tasks
+        .filter((task): task is FocusTask =>
+          Boolean(task && typeof task === 'object' && typeof task.label === 'string'),
+        )
+        .map((task) => ({ label: task.label, done: Boolean(task.done) })),
+    }
+  } catch {
+    return defaultFocusState()
+  }
+}
+function writeFocusState(value: FocusState) {
+  try {
+    localStorage.setItem(FOCUS_KEY, JSON.stringify(value))
+  } catch {
+    /* local storage can be unavailable */
+  }
+}
+function focusRemainingSeconds(value: FocusState, now = Date.now()): number {
+  const elapsed =
+    value.elapsedSeconds + (value.running && value.startedAt ? Math.floor((now - value.startedAt) / 1000) : 0)
+  return Math.max(0, value.durationMinutes * 60 - elapsed)
+}
+function formatTimer(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds))
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`
+}
+function weatherLabel(value: number, unit: WeatherSettings['unit']): string {
+  const temperature = unit === 'C' ? Math.round(((value - 32) * 5) / 9) : Math.round(value)
+  return `${temperature}°${unit}`
+}
+function readWeatherSettings(): WeatherSettings {
+  try {
+    const value = JSON.parse(localStorage.getItem(WEATHER_KEY) ?? 'null') as Partial<WeatherSettings> | null
+    return {
+      location: typeof value?.location === 'string' ? value.location : 'Reading retreat',
+      unit: value?.unit === 'C' ? 'C' : 'F',
+    }
+  } catch {
+    return { location: 'Reading retreat', unit: 'F' }
+  }
+}
+function writeWeatherSettings(value: WeatherSettings) {
+  try {
+    localStorage.setItem(WEATHER_KEY, JSON.stringify(value))
+  } catch {
+    /* local storage can be unavailable */
+  }
 }
 function greetingFor(date: Date): string {
   const hour = date.getHours()
@@ -253,11 +338,17 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [authBusy, setAuthBusy] = useState(false)
   const [cloudConnections, setCloudConnections] = useState<CloudConnection[]>(() => readCloudConnections())
+  const [cloudProviders, setCloudProviders] = useState<CloudProviderInfo[]>(() => listCloudProviders())
   const [cloudSyncing, setCloudSyncing] = useState(false)
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine)
   const cloudReady = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
+  const [utilityOverlay, setUtilityOverlay] = useState<UtilityOverlay>(null)
+  const [focusState, setFocusState] = useState<FocusState>(() => readFocusState())
+  const [focusNow, setFocusNow] = useState(() => Date.now())
+  const [weatherSettings, setWeatherSettings] = useState<WeatherSettings>(() => readWeatherSettings())
+  const [weatherTemperature] = useState<number | null>(56)
   const authUserRef = useLatest(authUser)
   const notesRef = useLatest(notes)
   const authUserId = authUser?.id
@@ -279,10 +370,37 @@ function App() {
     : 0
   const timeGreeting = greetingFor(now)
   const displayName = displayNameFor(authUser, profileFirstName)
+  const focusRemaining = focusRemainingSeconds(focusState, focusNow)
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(timer)
   }, [])
+  useEffect(() => {
+    let cancelled = false
+    void loadCloudProviderConfig().then((providers) => {
+      if (!cancelled) setCloudProviders(providers)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  useEffect(() => {
+    writeFocusState(focusState)
+  }, [focusState])
+  useEffect(() => {
+    if (!focusState.running) return
+    const timer = window.setInterval(() => setFocusNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [focusState.running])
+  useEffect(() => {
+    if (focusState.running && focusRemaining <= 0)
+      setFocusState((current) => ({
+        ...current,
+        running: false,
+        elapsedSeconds: current.durationMinutes * 60,
+        startedAt: undefined,
+      }))
+  }, [focusState.running, focusRemaining])
   useEffect(() => {
     const onOnline = () => setOnline(true)
     const onOffline = () => setOnline(false)
@@ -453,6 +571,43 @@ function App() {
   function showNotice(message: string) {
     setNotice(message)
     window.setTimeout(() => setNotice(''), 3800)
+  }
+  function updateFocusState(updater: (current: FocusState) => FocusState) {
+    setFocusState((current) => updater(current))
+  }
+  function startFocusTimer() {
+    updateFocusState((current) => ({
+      ...current,
+      running: focusRemainingSeconds(current) > 0,
+      startedAt: Date.now(),
+      elapsedSeconds: current.durationMinutes * 60 - focusRemainingSeconds(current),
+    }))
+  }
+  function pauseFocusTimer() {
+    updateFocusState((current) => ({
+      ...current,
+      running: false,
+      startedAt: undefined,
+      elapsedSeconds: current.durationMinutes * 60 - focusRemainingSeconds(current),
+    }))
+  }
+  function resetFocusTimer() {
+    updateFocusState((current) => ({ ...current, running: false, startedAt: undefined, elapsedSeconds: 0 }))
+  }
+  function setFocusDuration(minutes: number) {
+    updateFocusState((current) => ({
+      ...current,
+      durationMinutes: Math.max(1, minutes),
+      elapsedSeconds: 0,
+      startedAt: undefined,
+      running: false,
+    }))
+  }
+  function toggleFocusTask(index: number) {
+    updateFocusState((current) => ({
+      ...current,
+      tasks: current.tasks.map((task, taskIndex) => (taskIndex === index ? { ...task, done: !task.done } : task)),
+    }))
   }
   function selectNav(label: string) {
     setMobileNavOpen(false)
@@ -855,8 +1010,13 @@ function App() {
     cloudReady.current = false
     showNotice('Cloud provider disconnected. Your local library is unchanged.')
   }
-  async function syncNow() {
-    const connection = cloudConnection
+  async function syncNow(providerId?: CloudProviderId) {
+    const connection = providerId
+      ? cloudConnectionForUser(
+          cloudConnections.filter((item) => item.provider === providerId),
+          authUserId,
+        )
+      : cloudConnection
     if (!connection) {
       showNotice('Sign in and connect the same provider to sync your books.')
       return
@@ -870,7 +1030,9 @@ function App() {
       writeLibraryBooks(merged.books)
       writeLocalNotes(merged.notes)
       writePaths(merged.paths as LearningPath[])
-      showNotice('Cloud sync completed.')
+      showNotice(
+        `${connection.provider === 'google-drive' ? 'Google Drive' : connection.provider === 'onedrive' ? 'OneDrive' : 'Dropbox'} sync completed.`,
+      )
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : 'Cloud sync failed.')
     } finally {
@@ -945,6 +1107,115 @@ function App() {
       showNotice(reason instanceof Error ? reason.message : 'Could not sign out.')
     }
   }
+  function focusPage() {
+    const completed = focusState.tasks.filter((task) => task.done).length
+    return (
+      <Page
+        title={focusState.title}
+        subtitle="Choose one quiet intention, set a timer, and let the reading session begin."
+      >
+        <div className="focus-workspace">
+          <section className="focus-plan panel-card">
+            <div className="focus-panel-heading">
+              <div>
+                <p className="eyebrow">Your intention</p>
+                <h3>Set today’s focus</h3>
+              </div>
+              <button className="text-button" type="button" onClick={resetFocusTimer}>
+                Reset timer
+              </button>
+            </div>
+            <label className="focus-title-field">
+              Focus title
+              <input
+                value={focusState.title}
+                onChange={(event) => updateFocusState((current) => ({ ...current, title: event.target.value }))}
+              />
+            </label>
+            <div className="focus-task-editor">
+              {focusState.tasks.map((task, index) => (
+                <label className="focus-task-editor-row" key={`${task.label}-${index}`}>
+                  <input type="checkbox" checked={task.done} onChange={() => toggleFocusTask(index)} />
+                  <input
+                    value={task.label}
+                    onChange={(event) =>
+                      updateFocusState((current) => ({
+                        ...current,
+                        tasks: current.tasks.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, label: event.target.value } : item,
+                        ),
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <button
+              className="secondary-button focus-add-task"
+              type="button"
+              onClick={() =>
+                updateFocusState((current) => ({
+                  ...current,
+                  tasks: [...current.tasks, { label: 'New focus step', done: false }],
+                }))
+              }
+            >
+              <Plus size={14} /> Add focus step
+            </button>
+            <small className="focus-completion">
+              {completed} of {focusState.tasks.length} steps complete
+            </small>
+          </section>
+          <section className="focus-timer-panel panel-card">
+            <div className="focus-panel-heading">
+              <div>
+                <p className="eyebrow">Reading timer</p>
+                <h3>Protect the session</h3>
+              </div>
+              <select
+                value={focusState.durationMinutes}
+                onChange={(event) => setFocusDuration(Number(event.target.value))}
+                aria-label="Focus duration"
+              >
+                <option value="15">15 minutes</option>
+                <option value="25">25 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="45">45 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+            </div>
+            <div className={`focus-timer-display ${focusState.running ? 'focus-timer-running' : ''}`}>
+              {formatTimer(focusRemaining)}
+            </div>
+            <p className="focus-timer-status">
+              {focusState.running
+                ? 'Focus session in progress'
+                : focusRemaining < focusState.durationMinutes * 60
+                  ? 'Session paused'
+                  : 'Ready when you are.'}
+            </p>
+            <div className="focus-timer-actions">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={focusState.running ? pauseFocusTimer : startFocusTimer}
+              >
+                {focusState.running ? <Pause size={15} /> : <Play size={15} />}
+                {focusState.running
+                  ? 'Pause'
+                  : focusRemaining < focusState.durationMinutes * 60
+                    ? 'Resume'
+                    : 'Start focus'}
+              </button>
+              <button className="secondary-button" type="button" onClick={resetFocusTimer}>
+                <RotateCcw size={15} /> Reset
+              </button>
+            </div>
+          </section>
+        </div>
+      </Page>
+    )
+  }
   function homePage() {
     const current = books.find((book) => book.progress > 0 && book.progress < 100) ?? books[0]
     return (
@@ -997,6 +1268,12 @@ function App() {
             <small>by Proairetos</small>
           </div>
         </section>
+        <FocusHomeWidget
+          focus={focusState}
+          remaining={focusRemaining}
+          onOpen={() => selectNav('Focus')}
+          onToggle={focusState.running ? pauseFocusTimer : startFocusTimer}
+        />
         <ReadingShelfSection
           books={filteredBooks.slice(0, 6)}
           onOpen={openSavedBook}
@@ -1261,8 +1538,9 @@ function App() {
           <div>
             <h3>Live cloud sync</h3>
             <p>
-              Your Noesis account can sync the library manifest and each EPUB/PDF automatically. Connect Google Drive,
-              OneDrive, or Dropbox only if you also want an independent personal-cloud copy.
+              Noesis syncs your library manifest, notes, paths, and each local EPUB as separate files. When you sign in
+              on another device and connect the same provider, your reading data and books are restored without a ZIP
+              archive.
             </p>
             <small>
               {!online
@@ -1278,7 +1556,7 @@ function App() {
           </div>
         </section>
         <section className="cloud-provider-grid">
-          {listCloudProviders().map((provider) => {
+          {cloudProviders.map((provider) => {
             const connection = signedIn
               ? cloudConnectionForUser(
                   cloudConnections.filter((item) => item.provider === provider.id),
@@ -1310,7 +1588,7 @@ function App() {
                   <div className="cloud-provider-actions">
                     <button
                       className="secondary-button"
-                      onClick={() => void syncNow()}
+                      onClick={() => void syncNow(provider.id)}
                       disabled={cloudSyncing || !online}
                     >
                       <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
@@ -1335,7 +1613,7 @@ function App() {
                 )}
                 {!provider.configured ? (
                   <p className="cloud-provider-note">
-                    Add the provider client ID/app key as a Cloudflare build variable, then redeploy.
+                    Add the provider client ID/app key as a Cloudflare build or Worker variable, then redeploy.
                   </p>
                 ) : null}
               </article>
@@ -1477,6 +1755,8 @@ function App() {
       />
     ) : activeNav === 'Home' ? (
       homePage()
+    ) : activeNav === 'Focus' ? (
+      focusPage()
     ) : activeNav === 'My Library' ? (
       libraryPage()
     ) : activeNav === 'Learning Paths' ? (
@@ -1725,6 +2005,19 @@ function App() {
             onClose={() => setOverlay(null)}
           />
         ) : null}
+        {utilityOverlay === 'calendar' ? <CalendarOverlay now={now} onClose={() => setUtilityOverlay(null)} /> : null}
+        {utilityOverlay === 'weather' ? (
+          <WeatherOverlay
+            settings={weatherSettings}
+            temperature={weatherTemperature}
+            onSave={(next) => {
+              setWeatherSettings(next)
+              writeWeatherSettings(next)
+              setUtilityOverlay(null)
+            }}
+            onClose={() => setUtilityOverlay(null)}
+          />
+        ) : null}
         {notice ? (
           <div className="toast-notice">
             <Sparkles size={15} /> {notice}
@@ -1732,48 +2025,265 @@ function App() {
         ) : null}
       </main>
       {activeNav !== 'Read' ? (
-        <DesktopContextSidebar now={now} notes={notes} onOpenNotes={() => setOverlay('brain')} />
+        <DesktopContextSidebar
+          now={now}
+          notes={notes}
+          focus={focusState}
+          remaining={focusRemaining}
+          weather={weatherSettings}
+          weatherTemperature={weatherTemperature}
+          onOpenNotes={() => setOverlay('brain')}
+          onOpenFocus={() => selectNav('Focus')}
+          onToggleFocus={focusState.running ? pauseFocusTimer : startFocusTimer}
+          onToggleTask={toggleFocusTask}
+          onOpenCalendar={() => setUtilityOverlay('calendar')}
+          onOpenWeather={() => setUtilityOverlay('weather')}
+        />
       ) : null}
     </div>
   )
 }
 
-function DesktopContextSidebar({ now, notes, onOpenNotes }: { now: Date; notes: Note[]; onOpenNotes: () => void }) {
-  const [focusItems, setFocusItems] = useState([false, false, false, false])
+function FocusHomeWidget({
+  focus,
+  remaining,
+  onOpen,
+  onToggle,
+}: {
+  focus: FocusState
+  remaining: number
+  onOpen: () => void
+  onToggle: () => void
+}) {
+  const completed = focus.tasks.filter((task) => task.done).length
+  return (
+    <section className="focus-home-widget panel-card">
+      <button className="focus-home-main" onClick={onOpen}>
+        <div>
+          <p className="eyebrow">Today’s focus</p>
+          <h3>{focus.title}</h3>
+          <span>
+            {completed} of {focus.tasks.length} steps complete
+          </span>
+        </div>
+        <strong>{formatTimer(remaining)}</strong>
+      </button>
+      <div className="focus-home-actions">
+        <button className="primary-button" onClick={onToggle}>
+          {focus.running ? <Pause size={14} /> : <Play size={14} />}
+          {focus.running ? 'Pause timer' : remaining < focus.durationMinutes * 60 ? 'Resume timer' : 'Start timer'}
+        </button>
+        <button className="secondary-button" onClick={onOpen}>
+          Open focus <ArrowRight size={14} />
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function CalendarOverlay({ now, onClose }: { now: Date; onClose: () => void }) {
+  const [viewDate, setViewDate] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
+  const year = viewDate.getFullYear()
+  const month = viewDate.getMonth()
+  const firstDay = new Date(year, month, 1).getDay()
+  const days = new Date(year, month + 1, 0).getDate()
+  const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
+  return (
+    <div className="utility-backdrop" data-overlay onMouseDown={onClose}>
+      <section className="utility-panel calendar-panel" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="utility-panel-head">
+          <div>
+            <p className="eyebrow">Reading calendar</p>
+            <h2>{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close calendar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="calendar-toolbar">
+          <button
+            className="icon-button"
+            onClick={() => setViewDate(new Date(year, month - 1, 1))}
+            aria-label="Previous month"
+          >
+            <ArrowLeft size={15} />
+          </button>
+          <button className="text-button" onClick={() => setViewDate(new Date(now.getFullYear(), now.getMonth(), 1))}>
+            Today
+          </button>
+          <button
+            className="icon-button"
+            onClick={() => setViewDate(new Date(year, month + 1, 1))}
+            aria-label="Next month"
+          >
+            <ArrowRight size={15} />
+          </button>
+        </div>
+        <div className="calendar-grid calendar-weekdays">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <div className="calendar-grid calendar-days">
+          {Array.from({ length: firstDay }, (_, index) => (
+            <span className="calendar-day calendar-day-empty" key={`empty-${index}`} />
+          ))}
+          {Array.from({ length: days }, (_, index) => {
+            const day = index + 1
+            const key = `${year}-${month}-${day}`
+            return (
+              <button
+                key={key}
+                className={`calendar-day ${key === todayKey ? 'calendar-day-today' : ''}`}
+                onClick={onClose}
+              >
+                {day}
+              </button>
+            )
+          })}
+        </div>
+        <p className="utility-panel-footnote">Use your focus page to set a reading session for today.</p>
+      </section>
+    </div>
+  )
+}
+
+function WeatherOverlay({
+  settings,
+  temperature,
+  onSave,
+  onClose,
+}: {
+  settings: WeatherSettings
+  temperature: number | null
+  onSave: (settings: WeatherSettings) => void
+  onClose: () => void
+}) {
+  const [draft, setDraft] = useState(settings)
+  return (
+    <div className="utility-backdrop" data-overlay onMouseDown={onClose}>
+      <section className="utility-panel weather-panel" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="utility-panel-head">
+          <div>
+            <p className="eyebrow">Reading weather</p>
+            <h2>{weatherLabel(temperature ?? 56, draft.unit)}</h2>
+            <span className="utility-muted">{draft.location || 'Your reading retreat'}</span>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close weather">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="weather-current">
+          <CloudSun size={32} />
+          <div>
+            <strong>Quiet skies</strong>
+            <span>Set your preferred place and units for this sidebar.</span>
+          </div>
+        </div>
+        <label>
+          Location
+          <input
+            value={draft.location}
+            onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+            placeholder="City or reading retreat"
+          />
+        </label>
+        <label>
+          Temperature units
+          <select
+            value={draft.unit}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, unit: event.target.value as WeatherSettings['unit'] }))
+            }
+          >
+            <option value="F">Fahrenheit</option>
+            <option value="C">Celsius</option>
+          </select>
+        </label>
+        <button className="primary-button" onClick={() => onSave(draft)}>
+          <Settings size={15} /> Save weather settings
+        </button>
+      </section>
+    </div>
+  )
+}
+
+function DesktopContextSidebar({
+  now,
+  notes,
+  focus,
+  remaining,
+  weather,
+  weatherTemperature,
+  onOpenNotes,
+  onOpenFocus,
+  onToggleFocus,
+  onToggleTask,
+  onOpenCalendar,
+  onOpenWeather,
+}: {
+  now: Date
+  notes: Note[]
+  focus: FocusState
+  remaining: number
+  weather: WeatherSettings
+  weatherTemperature: number | null
+  onOpenNotes: () => void
+  onOpenFocus: () => void
+  onToggleFocus: () => void
+  onToggleTask: (index: number) => void
+  onOpenCalendar: () => void
+  onOpenWeather: () => void
+}) {
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(now)
   const highlights = notes.filter((note) => note.kind === 'highlight').slice(0, 3)
   const questions = notes.filter((note) => note.kind === 'question').length
   const reflections = notes.filter((note) => note.kind === 'idea' || note.kind === 'connection').length
-  const focusLabels = ['Read for 30 minutes', 'Capture 2 key ideas', 'Reflect on one chapter', 'Make one connection']
   return (
     <aside className="desktop-context-sidebar" aria-label="Daily reading context">
       <div className="context-date-row">
-        <span>
+        <button className="context-date-button" onClick={onOpenCalendar} aria-label="Open calendar">
           <CalendarDays size={12} /> {dateLabel}
-        </span>
-        <span>
-          <CloudSun size={14} /> 56°
-        </span>
+        </button>
+        <button className="context-weather-button" onClick={onOpenWeather} aria-label="Open weather settings">
+          <CloudSun size={14} /> {weatherLabel(weatherTemperature ?? 56, weather.unit)}
+        </button>
       </div>
       <section className="context-section context-focus">
         <div className="context-section-heading">
-          <h2>Today’s focus</h2>
-          <MoreVertical size={14} />
+          <button className="context-heading-button" onClick={onOpenFocus}>
+            <h2>{focus.title}</h2>
+            <ArrowRight size={12} />
+          </button>
+          <button className="context-more-button" onClick={onOpenFocus} aria-label="Open focus settings">
+            <MoreVertical size={14} />
+          </button>
         </div>
         <p className="context-intro">Make reading part of the day, one quiet session at a time.</p>
         <div className="focus-list">
-          {focusLabels.map((label, index) => (
+          {focus.tasks.map((task, index) => (
             <button
-              key={label}
-              className={focusItems[index] ? 'focus-item focus-item-done' : 'focus-item'}
-              onClick={() =>
-                setFocusItems((items) => items.map((done, itemIndex) => (itemIndex === index ? !done : done)))
-              }
+              key={`${task.label}-${index}`}
+              className={task.done ? 'focus-item focus-item-done' : 'focus-item'}
+              onClick={() => onToggleTask(index)}
             >
-              {focusItems[index] ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-              <span>{label}</span>
+              {task.done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+              <span>{task.label}</span>
             </button>
           ))}
+        </div>
+        <div className="context-focus-timer">
+          <span>
+            {focus.running
+              ? `Focus running · ${formatTimer(remaining)}`
+              : remaining < focus.durationMinutes * 60
+                ? `Paused · ${formatTimer(remaining)}`
+                : `${focus.durationMinutes} minute timer`}
+          </span>
+          <button onClick={onToggleFocus}>
+            {focus.running ? <Pause size={12} /> : <Play size={12} />}
+            {focus.running ? 'Pause' : 'Start'}
+          </button>
         </div>
       </section>
       <section className="context-section">

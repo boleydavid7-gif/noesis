@@ -9,6 +9,12 @@ type Env = {
   TUTOR_REQUIRE_AUTH?: string
   // When set, /api/models is only served to requests sending this token.
   ADMIN_TOKEN?: string
+  VITE_GOOGLE_DRIVE_CLIENT_ID?: string
+  VITE_ONEDRIVE_CLIENT_ID?: string
+  VITE_DROPBOX_APP_KEY?: string
+  GOOGLE_DRIVE_CLIENT_ID?: string
+  ONEDRIVE_CLIENT_ID?: string
+  DROPBOX_APP_KEY?: string
 }
 
 const MAX_QUESTION_LENGTH = 2_000
@@ -355,6 +361,14 @@ async function proxyResource(request: Request): Promise<Response> {
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === '/api/config' && request.method === 'GET') {
+      return json({
+        ok: true,
+        googleDriveClientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim() || '',
+        oneDriveClientId: env.VITE_ONEDRIVE_CLIENT_ID?.trim() || env.ONEDRIVE_CLIENT_ID?.trim() || '',
+        dropboxAppKey: env.VITE_DROPBOX_APP_KEY?.trim() || env.DROPBOX_APP_KEY?.trim() || '',
+      })
+    }
     if (url.pathname === '/api/health' && request.method === 'GET') {
       return json({ ok: true, worker: 'noesis-dev', geminiConfigured: Boolean(env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()) })
     }
