@@ -3,6 +3,14 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 
 export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note' | 'connection'
 
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'
+export const HIGHLIGHT_COLORS: Array<{ id: HighlightColor; label: string; css: string }> = [
+  { id: 'yellow', label: 'Yellow', css: '#f2d46b' },
+  { id: 'green', label: 'Green', css: '#86d19a' },
+  { id: 'blue', label: 'Blue', css: '#7fb8f2' },
+  { id: 'pink', label: 'Pink', css: '#ef9ab0' },
+]
+
 export type BrainNoteLocation = {
   bookId?: string
   bookTitle?: string
@@ -33,6 +41,7 @@ export type BrainNote = {
   cfi?: string
   tags?: string[]
   quote?: string // the passage a note was written about
+  color?: HighlightColor
 }
 
 const STORAGE_KEY = 'noesis:second-brain:v1'
@@ -128,6 +137,7 @@ function fromRemote(row: Record<string, unknown>): BrainNote {
     cfi: typeof saved.cfi === 'string' ? saved.cfi : undefined,
     tags: Array.isArray(saved.tags) ? saved.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
     quote: typeof saved.quote === 'string' ? saved.quote : undefined,
+    color: HIGHLIGHT_COLORS.some((item) => item.id === saved.color) ? saved.color : undefined,
   }
 }
 

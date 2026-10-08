@@ -4,7 +4,7 @@ import { diaryDays, type DiaryEntry } from './lib/diary'
 import { relatedNotes } from './lib/related'
 import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
-import type { BrainNote, BrainNoteKind } from './lib/knowledge'
+import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteKind, type HighlightColor } from './lib/knowledge'
 
 type TabId = 'all' | BrainNoteKind | 'elsewhere' | 'words' | 'diary'
 const TABS: Array<{ id: TabId; label: string }> = [
@@ -86,6 +86,7 @@ export function SecondBrainPage({
   onOpenNote: (note: BrainNote) => void
 }) {
   const [tab, setTab] = useState<TabId>('all')
+  const [colorFilter, setColorFilter] = useState<HighlightColor | ''>('')
   const [captureOpen, setCaptureOpen] = useState(false)
   const clippingsInput = useRef<HTMLInputElement | null>(null)
   const bookmarkletLink = useRef<HTMLAnchorElement | null>(null)
@@ -102,6 +103,7 @@ export function SecondBrainPage({
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return notes
+      .filter((note) => !colorFilter || note.color === colorFilter)
       .filter((note) =>
         tab === 'all' || tab === 'diary'
           ? true
@@ -123,7 +125,7 @@ export function SecondBrainPage({
             ? b.createdAt.localeCompare(a.createdAt)
             : stamp(b).localeCompare(stamp(a)),
       )
-  }, [notes, tab, query, sort])
+  }, [notes, tab, query, sort, colorFilter])
 
   const selected = selectedId && selectedId !== NEW ? (notes.find((note) => note.id === selectedId) ?? null) : null
   const keywordRelated = useMemo(() => (selected ? relatedNotes(selected, notes) : []), [selected, notes])
@@ -198,6 +200,20 @@ export function SecondBrainPage({
             </button>
           ))}
         </div>
+        {notes.some((note) => note.color) ? (
+          <span className="brain-page-colors" role="group" aria-label="Filter by highlight colour">
+            {HIGHLIGHT_COLORS.map((item) => (
+              <button
+                key={item.id}
+                className={'brain-color-dot' + (colorFilter === item.id ? ' brain-color-dot-on' : '')}
+                style={{ background: item.css }}
+                aria-label={`${item.label} highlights`}
+                aria-pressed={colorFilter === item.id}
+                onClick={() => setColorFilter(colorFilter === item.id ? '' : item.id)}
+              />
+            ))}
+          </span>
+        ) : null}
         <span className="brain-page-bar-actions">
           <button
             className="secondary-button"
@@ -344,7 +360,15 @@ export function SecondBrainPage({
                       className={`brain-page-item${selectedId === note.id ? ' brain-page-item-active' : ''}`}
                       onClick={() => pick(note)}
                     >
-                      <strong>{note.title}</strong>
+                      <strong>
+                        {note.color ? (
+                          <i
+                            className="brain-item-dot"
+                            style={{ background: HIGHLIGHT_COLORS.find((item) => item.id === note.color)?.css }}
+                          />
+                        ) : null}
+                        {note.title}
+                      </strong>
                       <span>{note.body}</span>
                       <small>
                         {KIND_LABEL[note.kind]} · {sourceLine(note)} · {when(stamp(note))}

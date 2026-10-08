@@ -54,6 +54,7 @@ import {
   type BrainNote,
   type BrainNoteKind,
   type BrainNoteLocation,
+  type HighlightColor,
 } from './lib/knowledge'
 import { epubBookFromParsed, openEpub, parseEpub, pdfBookFromSource, recapText } from './lib/epub'
 import {
@@ -890,6 +891,27 @@ function App() {
     }
     await askNoema(RECAP_QUESTION, undefined, { book, recap: true, readText })
   }
+  function saveHighlight(text: string, color: HighlightColor, location: BrainNoteLocation) {
+    void addNote({
+      title: 'Highlight',
+      body: text,
+      source: location.bookTitle
+        ? `${location.bookTitle}${location.chapter ? ` · ${location.chapter}` : ''}`
+        : 'Noesis',
+      kind: 'highlight',
+      tags: [],
+      location,
+      color,
+      quiet: true,
+    })
+    showNotice('Highlighted.')
+  }
+  function changeHighlight(noteId: string, color: HighlightColor | null) {
+    const note = notes.find((item) => item.id === noteId)
+    if (!note) return
+    if (color === null) removeNote(note)
+    else void editNote({ ...note, color, updated: new Date().toISOString(), synced: undefined })
+  }
   function saveWord(word: string, definition: string, location: BrainNoteLocation) {
     void addNote({
       title: word,
@@ -1130,6 +1152,8 @@ function App() {
     tags: string[]
     location?: BrainNoteLocation
     quote?: string
+    color?: HighlightColor
+    quiet?: boolean
   }): Promise<Note> {
     const note: Note = {
       id: `local-${crypto.randomUUID()}`,
@@ -1140,16 +1164,18 @@ function App() {
       createdAt: new Date().toISOString(),
       tags: fields.tags.length ? fields.tags : undefined,
       quote: fields.quote,
+      color: fields.color,
 
       ...fields.location,
     }
     setNotes((current) => [note, ...current])
     const destination = await persistNote(note)
-    showNotice(
-      destination === 'remote'
-        ? 'Saved to your Second Brain.'
-        : 'Saved on this device. It will sync when Supabase is available.',
-    )
+    if (!fields.quiet)
+      showNotice(
+        destination === 'remote'
+          ? 'Saved to your Second Brain.'
+          : 'Saved on this device. It will sync when Supabase is available.',
+      )
     return note
   }
   // Keeps one of Noema's answers as a note, optionally going straight on to review questions for it.
@@ -2559,6 +2585,8 @@ function App() {
         onAsk={openNoemaPanel}
         onRecap={() => void recap(selectedBook)}
         onSaveWord={saveWord}
+        onHighlight={saveHighlight}
+        onHighlightEdit={changeHighlight}
         initialSearch={readerSearch}
         onBookmark={() => toggleBookmark(selectedBook.id)}
         reading={settings.reading}
