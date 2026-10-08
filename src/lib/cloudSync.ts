@@ -1,4 +1,4 @@
-import { loadEpubFile, saveBookText, saveEpubFile, type LibraryBook } from './library'
+import { loadEpubFile, readLibraryBooks, saveBookText, saveEpubFile, writeLibraryBooks, type LibraryBook } from './library'
 import { parseEpub } from './epub'
 import type { BrainNote } from './knowledge'
 import { readCloudFile, writeCloudFile, type CloudConnection } from './cloudProviders'
@@ -80,13 +80,18 @@ async function uploadLocalBooks(connection: CloudConnection, books: LibraryBook[
 }
 
 export async function syncCloudState(connection: CloudConnection, local: CloudSyncState): Promise<CloudSyncState> {
+  // React state can be briefly stale during auth transitions. Read the durable
+  // local catalog as well so a sign-out/sign-in cycle can never replace a
+  // library with an empty in-memory value.
+  const durableLocalBooks = mergeById(readLibraryBooks(), local.books)
   const remote = await readManifest(connection)
   const merged: CloudSyncState = remote
-    ? { books: mergeById(local.books, remote.books), notes: mergeById(local.notes, remote.notes), paths: mergePaths(local.paths, remote.paths) }
-    : local
+    ? { books: mergeById(durableLocalBooks, remote.books), notes: mergeById(local.notes, remote.notes), paths: mergePaths(local.paths, remote.paths) }
+    : { ...local, books: durableLocalBooks }
   const manifest: CloudManifest = { version: 2, updatedAt: new Date().toISOString(), ...merged }
   await writeCloudFile(connection, 'manifest.json', jsonBlob(manifest), 'application/json')
   await uploadLocalBooks(connection, merged.books)
   await restoreRemoteBooks(connection, merged.books)
+  writeLibraryBooks(merged.books)
   return merged
 }
