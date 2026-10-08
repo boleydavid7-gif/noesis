@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "name": "rain",
+    "title": "Rain and thunder",
+    "author": "ezwa",
+    "license": "Public domain",
+    "url": "https://commons.wikimedia.org/wiki/File:Rain_and_thunder_(1).ogg"
+  },
+  {
+    "name": "fire",
+    "title": "Fire of the forge",
+    "author": "Work With Sounds / La Fonderie",
+    "license": "CC BY 4.0",
+    "url": "https://commons.wikimedia.org/wiki/File:WWS_Fireoftheforge.ogg"
+  }
+]
