@@ -672,3 +672,37 @@ describe('quiz route', () => {
     expect((await ask({ mode: 'grade', topic: 't', question: 'q', answer: '' }, '7.9.2.4')).status).toBe(400)
   })
 })
+
+describe('define route', () => {
+  const ask = (word: string, ip: string) =>
+    call(`/api/define?word=${encodeURIComponent(word)}`, { headers: { 'cf-connecting-ip': ip } }, {})
+
+  it('returns the first meanings of a word', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                phonetic: '/ˈɛfəmərəl/',
+                meanings: [{ partOfSpeech: 'adjective', definitions: [{ definition: 'Lasting a very short time.' }] }],
+              },
+            ]),
+          ),
+      ),
+    )
+    const body = (await (await ask('ephemeral', '7.9.3.1')).json()) as { found: boolean; meanings: unknown[] }
+    expect(body.found).toBe(true)
+    expect(body.meanings).toHaveLength(1)
+  })
+
+  it('says so when a word is not found, and rejects more than one word', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 404 })),
+    )
+    expect(((await (await ask('zzzxq', '7.9.3.2')).json()) as { found: boolean }).found).toBe(false)
+    expect((await ask('two words', '7.9.3.3')).status).toBe(400)
+  })
+})

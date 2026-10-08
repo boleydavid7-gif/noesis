@@ -1,15 +1,21 @@
-import { useMemo, useState } from 'react'
-import { BookOpen, Image, Plus, Search, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, Download, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
+import { diaryDays, type DiaryEntry } from './lib/diary'
+import { relatedNotes } from './lib/related'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import type { BrainNote, BrainNoteKind } from './lib/knowledge'
 
-const TABS: Array<{ id: 'all' | BrainNoteKind; label: string }> = [
+type TabId = 'all' | BrainNoteKind | 'elsewhere' | 'words' | 'diary'
+const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'all', label: 'All notes' },
   { id: 'highlight', label: 'Highlights' },
   { id: 'note', label: 'Quick notes' },
   { id: 'idea', label: 'Reflections' },
   { id: 'question', label: 'Questions' },
   { id: 'connection', label: 'Connections' },
+  { id: 'elsewhere', label: 'Elsewhere' },
+  { id: 'words', label: 'Words' },
+  { id: 'diary', label: 'Diary' },
 ]
 const KIND_LABEL: Record<BrainNoteKind, string> = {
   highlight: 'Highlight',
@@ -59,14 +65,31 @@ export function SecondBrainPage({
   onCreate,
   onDelete,
   onOpenNote,
+  diary,
+  bookmarklet,
+  onExport,
+  onShare,
+  onImportClippings,
 }: {
+  diary: DiaryEntry[]
+  bookmarklet: string
+  onExport: () => void
+  onShare: (notes: BrainNote[]) => void
+  onImportClippings: (file: File) => void
   notes: BrainNote[]
   onSave: (note: BrainNote) => void
   onCreate: (draft: { title: string; body: string; source: string; kind: BrainNoteKind; tags: string[] }) => void
   onDelete: (note: BrainNote) => void
   onOpenNote: (note: BrainNote) => void
 }) {
-  const [tab, setTab] = useState<'all' | BrainNoteKind>('all')
+  const [tab, setTab] = useState<TabId>('all')
+  const [captureOpen, setCaptureOpen] = useState(false)
+  const clippingsInput = useRef<HTMLInputElement | null>(null)
+  const bookmarkletLink = useRef<HTMLAnchorElement | null>(null)
+  useEffect(() => {
+    // React won't render a javascript: address, so the button is given its address directly.
+    bookmarkletLink.current?.setAttribute('href', bookmarklet)
+  }, [bookmarklet, captureOpen])
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<Sort>('modified')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -76,7 +99,15 @@ export function SecondBrainPage({
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return notes
-      .filter((note) => tab === 'all' || note.kind === tab)
+      .filter((note) =>
+        tab === 'all' || tab === 'diary'
+          ? true
+          : tab === 'elsewhere'
+            ? !note.bookId && !(note.tags ?? []).includes('word')
+            : tab === 'words'
+              ? (note.tags ?? []).includes('word')
+              : note.kind === tab,
+      )
       .filter(
         (note) =>
           !q ||
@@ -92,6 +123,7 @@ export function SecondBrainPage({
   }, [notes, tab, query, sort])
 
   const selected = selectedId && selectedId !== NEW ? (notes.find((note) => note.id === selectedId) ?? null) : null
+  const related = useMemo(() => (selected ? relatedNotes(selected, notes) : []), [selected, notes])
   const editing = selected !== null || selectedId === NEW
   const dirty = selected ? JSON.stringify(draft) !== JSON.stringify(draftOf(selected)) : draft.body.trim() !== ''
 
@@ -143,186 +175,319 @@ export function SecondBrainPage({
             </button>
           ))}
         </div>
-        <button className="primary-button" onClick={startNew}>
-          <Plus size={15} /> Add note
-        </button>
+        <span className="brain-page-bar-actions">
+          <button
+            className="secondary-button"
+            onClick={() => setCaptureOpen((value) => !value)}
+            aria-expanded={captureOpen}
+          >
+            <Upload size={14} /> Bring in notes
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => onShare(shown)}
+            disabled={shown.length === 0 || tab === 'diary'}
+          >
+            <Share2 size={14} /> Share
+          </button>
+          <button className="secondary-button" onClick={onExport}>
+            <Download size={14} /> Export
+          </button>
+          <button className="primary-button" onClick={startNew}>
+            <Plus size={15} /> Add note
+          </button>
+        </span>
       </div>
-      <div className="brain-page-body">
-        <section className="brain-page-list panel-card" aria-label="Your notes">
-          <div className="brain-page-search">
-            <div className="field-with-icon">
-              <Search size={15} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search notes, books, tags…"
-                aria-label="Search notes"
-              />
-            </div>
-            <select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Sort notes">
-              <option value="modified">Last modified</option>
-              <option value="created">Date created</option>
-              <option value="title">Title</option>
-            </select>
-          </div>
-          <small className="brain-page-count">
-            {shown.length} {shown.length === 1 ? 'note' : 'notes'}
-          </small>
-          {shown.length === 0 ? (
-            <p className="brain-rail-empty">
-              {notes.length === 0
-                ? 'Select text while reading, or press Add note, to start your Second Brain.'
-                : 'No notes match that.'}
+      {captureOpen ? (
+        <section className="brain-capture panel-card" aria-label="Bring in notes from elsewhere">
+          <div>
+            <strong>From your phone</strong>
+            <p>
+              Install Noesis, then use Share in any app or browser and choose Noesis. The text and link arrive as a
+              note.
             </p>
+          </div>
+          <div>
+            <strong>From your computer’s browser</strong>
+            <p>
+              Drag this button to your bookmarks bar. On any page, select some text and press it.
+              <br />
+              <a
+                ref={bookmarkletLink}
+                className="brain-bookmarklet"
+                onClick={(event) => event.preventDefault()}
+                draggable
+              >
+                Save to Noesis
+              </a>
+            </p>
+          </div>
+          <div>
+            <strong>From a Kindle</strong>
+            <p>
+              Connect it to a computer, find “My Clippings.txt”, and import it here. Highlights and notes come in under
+              their books.
+            </p>
+            <button className="secondary-button" onClick={() => clippingsInput.current?.click()}>
+              Import Kindle highlights
+            </button>
+            <input
+              ref={clippingsInput}
+              type="file"
+              accept=".txt,text/plain"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) onImportClippings(file)
+                event.target.value = ''
+              }}
+            />
+          </div>
+          <div>
+            <strong>Anything else</strong>
+            <p>Press Add note and paste text. If the source is a web address, it stays a link you can click.</p>
+          </div>
+        </section>
+      ) : null}
+      {tab === 'diary' ? (
+        <section className="brain-diary panel-card" aria-label="Reading diary">
+          {diaryDays(diary, notes).length === 0 ? (
+            <p className="brain-rail-empty">Your reading days will appear here as you read.</p>
           ) : (
-            <ul>
-              {shown.map((note) => (
-                <li key={note.id}>
-                  <button
-                    className={`brain-page-item${selectedId === note.id ? ' brain-page-item-active' : ''}`}
-                    onClick={() => pick(note)}
-                  >
-                    <strong>{note.title}</strong>
-                    <span>{note.body}</span>
-                    <small>
-                      {KIND_LABEL[note.kind]} · {sourceLine(note)} · {when(stamp(note))}
-                    </small>
-                    {note.tags?.length ? (
-                      <em>
-                        {note.tags.slice(0, 4).map((tag) => (
-                          <i key={tag}>#{tag}</i>
-                        ))}
-                      </em>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            diaryDays(diary, notes)
+              .slice(0, 60)
+              .map((day) => (
+                <div className="brain-diary-day" key={day.day}>
+                  <h4>
+                    {new Date(`${day.day}T12:00:00`).toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </h4>
+                  <ul>
+                    {day.reading.map((entry) => (
+                      <li key={entry.bookId}>
+                        Read <strong>{entry.title}</strong> for {Math.max(1, Math.round(entry.minutes))} min
+                        <small>
+                          {' '}
+                          · {Math.round(entry.from)}% → {Math.round(entry.to)}%
+                        </small>
+                      </li>
+                    ))}
+                    {day.notes.map((note) => (
+                      <li key={note.id}>
+                        Saved {note.kind === 'idea' ? 'a reflection' : `a ${note.kind}`}: <em>{note.title}</em>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
           )}
         </section>
-        <section className="brain-page-editor panel-card" aria-label="Note editor">
-          {editing ? (
-            <>
-              <div className="brain-page-editor-head">
-                <span className="plan-pill">{selected ? KIND_LABEL[selected.kind] : 'New note'}</span>
-                <span className="brain-page-links">
-                  {selected ? (
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        void renderQuoteCard(selected.body, sourceLine(selected))
-                          .then((blob) => downloadBlob(blob, 'noesis-quote.png'))
-                          .catch(() => undefined)
-                      }
-                    >
-                      <Image size={13} /> Quote card
-                    </button>
-                  ) : null}
-                  {selected?.bookId ? (
-                    <button className="text-button" onClick={() => onOpenNote(selected)}>
-                      <BookOpen size={13} /> Open in book
-                    </button>
-                  ) : null}
-                </span>
-              </div>
-              <label>
-                Title
+      ) : (
+        <div className="brain-page-body">
+          <section className="brain-page-list panel-card" aria-label="Your notes">
+            <div className="brain-page-search">
+              <div className="field-with-icon">
+                <Search size={15} />
                 <input
-                  value={draft.title}
-                  onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                  placeholder="Quick note"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search notes, books, tags…"
+                  aria-label="Search notes"
                 />
-              </label>
-              <div className="brain-page-row">
+              </div>
+              <select value={sort} onChange={(event) => setSort(event.target.value as Sort)} aria-label="Sort notes">
+                <option value="modified">Last modified</option>
+                <option value="created">Date created</option>
+                <option value="title">Title</option>
+              </select>
+            </div>
+            <small className="brain-page-count">
+              {shown.length} {shown.length === 1 ? 'note' : 'notes'}
+            </small>
+            {shown.length === 0 ? (
+              <p className="brain-rail-empty">
+                {notes.length === 0
+                  ? 'Select text while reading, or press Add note, to start your Second Brain.'
+                  : 'No notes match that.'}
+              </p>
+            ) : (
+              <ul>
+                {shown.map((note) => (
+                  <li key={note.id}>
+                    <button
+                      className={`brain-page-item${selectedId === note.id ? ' brain-page-item-active' : ''}`}
+                      onClick={() => pick(note)}
+                    >
+                      <strong>{note.title}</strong>
+                      <span>{note.body}</span>
+                      <small>
+                        {KIND_LABEL[note.kind]} · {sourceLine(note)} · {when(stamp(note))}
+                      </small>
+                      {note.tags?.length ? (
+                        <em>
+                          {note.tags.slice(0, 4).map((tag) => (
+                            <i key={tag}>#{tag}</i>
+                          ))}
+                        </em>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="brain-page-editor panel-card" aria-label="Note editor">
+            {editing ? (
+              <>
+                <div className="brain-page-editor-head">
+                  <span className="plan-pill">{selected ? KIND_LABEL[selected.kind] : 'New note'}</span>
+                  <span className="brain-page-links">
+                    {selected ? (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          void renderQuoteCard(selected.body, sourceLine(selected))
+                            .then((blob) => downloadBlob(blob, 'noesis-quote.png'))
+                            .catch(() => undefined)
+                        }
+                      >
+                        <Image size={13} /> Quote card
+                      </button>
+                    ) : null}
+                    {selected?.bookId ? (
+                      <button className="text-button" onClick={() => onOpenNote(selected)}>
+                        <BookOpen size={13} /> Open in book
+                      </button>
+                    ) : null}
+                  </span>
+                </div>
                 <label>
-                  Type
-                  <select
-                    value={draft.kind}
-                    onChange={(event) => setDraft({ ...draft, kind: event.target.value as BrainNoteKind })}
-                  >
-                    {(Object.keys(KIND_LABEL) as BrainNoteKind[]).map((kind) => (
-                      <option key={kind} value={kind}>
-                        {KIND_LABEL[kind]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Source
+                  Title
                   <input
-                    value={draft.source}
-                    onChange={(event) => setDraft({ ...draft, source: event.target.value })}
-                    readOnly={Boolean(selected?.bookId)}
-                    placeholder="Book, chapter, or link"
+                    value={draft.title}
+                    onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                    placeholder="Quick note"
                   />
                 </label>
-              </div>
-              <label>
-                Content
-                <textarea
-                  value={draft.body}
-                  onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-                  rows={10}
-                  placeholder="Write an idea, question, or highlighted passage…"
-                />
-              </label>
-              <label>
-                Tags
-                <input
-                  value={draft.tags}
-                  onChange={(event) => setDraft({ ...draft, tags: event.target.value })}
-                  placeholder="habits, progress (separate with commas)"
-                />
-              </label>
-              <div className="brain-page-actions">
+                <div className="brain-page-row">
+                  <label>
+                    Type
+                    <select
+                      value={draft.kind}
+                      onChange={(event) => setDraft({ ...draft, kind: event.target.value as BrainNoteKind })}
+                    >
+                      {(Object.keys(KIND_LABEL) as BrainNoteKind[]).map((kind) => (
+                        <option key={kind} value={kind}>
+                          {KIND_LABEL[kind]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Source
+                    <input
+                      value={draft.source}
+                      onChange={(event) => setDraft({ ...draft, source: event.target.value })}
+                      readOnly={Boolean(selected?.bookId)}
+                      placeholder="Book, chapter, or link"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Content
+                  <textarea
+                    value={draft.body}
+                    onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                    rows={10}
+                    placeholder="Write an idea, question, or highlighted passage…"
+                  />
+                </label>
+                <label>
+                  Tags
+                  <input
+                    value={draft.tags}
+                    onChange={(event) => setDraft({ ...draft, tags: event.target.value })}
+                    placeholder="habits, progress (separate with commas)"
+                  />
+                </label>
                 {selected ? (
-                  confirmDelete ? (
-                    <span className="brain-page-confirm">
-                      Delete this note?
-                      <button
-                        className="secondary-button"
-                        onClick={() => {
-                          onDelete(selected)
-                          setSelectedId(null)
-                          setConfirmDelete(false)
-                        }}
-                      >
-                        Yes, delete
+                  <>
+                    {/^https?:\/\//i.test(selected.source) ? (
+                      <a className="text-button" href={selected.source} target="_blank" rel="noreferrer noopener">
+                        Open the source
+                      </a>
+                    ) : null}
+                    {selected.quote ? <blockquote className="reader-note-quote">{selected.quote}</blockquote> : null}
+                    {related.length > 0 ? (
+                      <div className="brain-related">
+                        <strong>Related</strong>
+                        <ul>
+                          {related.map(({ note, shared }) => (
+                            <li key={note.id}>
+                              <button className="text-button" onClick={() => pick(note)}>
+                                {note.title}
+                              </button>
+                              <small> · {shared.join(', ')}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+                <div className="brain-page-actions">
+                  {selected ? (
+                    confirmDelete ? (
+                      <span className="brain-page-confirm">
+                        Delete this note?
+                        <button
+                          className="secondary-button"
+                          onClick={() => {
+                            onDelete(selected)
+                            setSelectedId(null)
+                            setConfirmDelete(false)
+                          }}
+                        >
+                          Yes, delete
+                        </button>
+                        <button className="text-button" onClick={() => setConfirmDelete(false)}>
+                          Keep
+                        </button>
+                      </span>
+                    ) : (
+                      <button className="text-button" onClick={() => setConfirmDelete(true)}>
+                        <Trash2 size={13} /> Delete
                       </button>
-                      <button className="text-button" onClick={() => setConfirmDelete(false)}>
-                        Keep
-                      </button>
-                    </span>
+                    )
                   ) : (
-                    <button className="text-button" onClick={() => setConfirmDelete(true)}>
-                      <Trash2 size={13} /> Delete
+                    <span />
+                  )}
+                  <span className="brain-page-save">
+                    <button
+                      className="text-button"
+                      disabled={!dirty}
+                      onClick={() => (selected ? setDraft(draftOf(selected)) : setDraft(emptyDraft()))}
+                    >
+                      Discard changes
                     </button>
-                  )
-                ) : (
-                  <span />
-                )}
-                <span className="brain-page-save">
-                  <button
-                    className="text-button"
-                    disabled={!dirty}
-                    onClick={() => (selected ? setDraft(draftOf(selected)) : setDraft(emptyDraft()))}
-                  >
-                    Discard changes
-                  </button>
-                  <button className="primary-button" disabled={!dirty || draft.body.trim().length < 2} onClick={save}>
-                    Save note
-                  </button>
-                </span>
+                    <button className="primary-button" disabled={!dirty || draft.body.trim().length < 2} onClick={save}>
+                      Save note
+                    </button>
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="brain-page-placeholder">
+                <BookOpen size={22} />
+                <p>Pick a note to read or edit it, or add a new one.</p>
               </div>
-            </>
-          ) : (
-            <div className="brain-page-placeholder">
-              <BookOpen size={22} />
-              <p>Pick a note to read or edit it, or add a new one.</p>
-            </div>
-          )}
-        </section>
-      </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   )
 }

@@ -70,6 +70,11 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
+import { parseClippings } from './lib/clippings'
+import { readDiary } from './lib/diary'
+import { notesToZip } from './lib/exportNotes'
+import { bookmarkletCode, decodeCollection, encodeCollection, readIncoming, type SharedCollection } from './lib/share'
+import { excerpt, searchLibrary, searchPhrase, type LibraryHit } from './lib/librarySearch'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
@@ -288,6 +293,8 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
+  const [readerSearch, setReaderSearch] = useState('')
+  const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
@@ -666,6 +673,22 @@ function App() {
     }
   }, [])
   const closeUtility = useCallback(() => setUtilityOverlay(null), [])
+  // Something shared into Noesis from another app or a web page.
+  useEffect(() => {
+    const incoming = readIncoming(window.location.search)
+    if (incoming) {
+      setNoteDraft({
+        title: incoming.title,
+        body: incoming.text,
+        source: incoming.url || incoming.title || 'Shared',
+        kind: 'note',
+      })
+      setOverlay('brain')
+    }
+    const shared = window.location.hash.match(/^#share=(.+)$/)
+    if (shared) void decodeCollection(shared[1]).then((collection) => collection && setSharedView(collection))
+    if (incoming || shared) window.history.replaceState(null, '', window.location.pathname)
+  }, [])
   // Escape closes whichever popup is open.
   useEffect(() => {
     if (!overlay) return
@@ -806,6 +829,87 @@ function App() {
     openNoemaPanel(RECAP_QUESTION)
     void askNoema(RECAP_QUESTION, undefined, { book, recap: true })
   }
+  function saveWord(word: string, definition: string, location: BrainNoteLocation) {
+    void addNote({
+      title: word,
+      body: definition,
+      source: location.bookTitle ?? 'Noesis',
+      kind: 'note',
+      tags: ['word'],
+      location,
+    })
+  }
+  // Opens a book at a passage found by searching the whole library.
+  function openAtPassage(bookId: string, phrase: string) {
+    setReaderSearch(phrase)
+    setReaderJump(null)
+    setSelectedBookId(bookId)
+    setActiveNav('Read')
+  }
+  async function askAboutHits(question: string, hits: LibraryHit[]) {
+    const extra = hits
+      .slice(0, 6)
+      .map((hit) => `From “${hit.title}” by ${hit.author}:\n${hit.text.slice(0, 900)}`)
+      .join('\n\n')
+    setNoemaUseContext(false)
+    openNoemaPanel(question)
+    await askNoema(question, undefined, {
+      extra: `Answer using only these passages from the learner's own books, and name the book each idea comes from.\n\n${extra}`,
+    })
+  }
+  async function exportNotes() {
+    try {
+      downloadBlob(await notesToZip(notes, readDiary()), 'noesis-notes.zip')
+      showNotice('Exported your notes as Markdown files.')
+    } catch {
+      showNotice('Could not export your notes.')
+    }
+  }
+  async function shareNotes(items: Note[]) {
+    const quotes = items
+      .filter((note) => note.body.trim())
+      .slice(0, 25)
+      .map((note) => ({
+        text: (note.quote || note.body).trim(),
+        source: note.bookTitle ? `${note.bookTitle}${note.author ? `, ${note.author}` : ''}` : note.source,
+      }))
+    const link = `${window.location.origin}/#share=${await encodeCollection({ title: 'Passages from Noesis', quotes })}`
+    try {
+      await navigator.clipboard.writeText(link)
+      showNotice(`Link copied. It carries ${quotes.length} ${quotes.length === 1 ? 'passage' : 'passages'}.`)
+    } catch {
+      window.prompt('Copy this link', link)
+    }
+  }
+  async function importClippings(file: File) {
+    const clips = parseClippings(await file.text())
+    if (clips.length === 0) {
+      showNotice('No highlights found. Choose the “My Clippings.txt” file from your Kindle.')
+      return
+    }
+    const have = new Set(notes.map((note) => `${note.bookTitle ?? ''}|${note.body.trim()}`))
+    const fresh = clips.filter((clip) => !have.has(`${clip.bookTitle}|${clip.body.trim()}`))
+    const created: Note[] = fresh.map((clip) => ({
+      id: `local-${crypto.randomUUID()}`,
+      kind: clip.kind === 'note' ? 'note' : 'highlight',
+      title: clip.bookTitle.slice(0, 60),
+      body: clip.body,
+      source: [clip.bookTitle, clip.author, clip.location].filter(Boolean).join(' · '),
+      createdAt: clip.addedAt ?? new Date().toISOString(),
+      bookTitle: clip.bookTitle,
+      author: clip.author || undefined,
+      tags: ['kindle'],
+    }))
+    const next = [...created, ...notes]
+    setNotes(next)
+    writeLocalNotes(next)
+    if (authUser && !isAnonymousUser(authUser)) void syncPendingNotes(next).then(setNotes)
+    showNotice(
+      created.length === clips.length
+        ? `Brought in ${created.length} highlights and notes.`
+        : `Brought in ${created.length}. ${clips.length - created.length} were already here.`,
+    )
+  }
   function openTopicNote(title: string, source: string) {
     setNoteDraft({ title, body: '', source, kind: 'note' })
     setUtilityOverlay(null)
@@ -915,6 +1019,7 @@ function App() {
       return
     }
     setNoteDraft({ title: '', body: '', source: '', kind: 'note' })
+    setOverlay(null)
     await addNote({ ...noteDraft, body, tags: [] })
   }
   async function addNote(fields: {
@@ -924,6 +1029,7 @@ function App() {
     kind: BrainNoteKind
     tags: string[]
     location?: BrainNoteLocation
+    quote?: string
   }): Promise<Note> {
     const note: Note = {
       id: `local-${crypto.randomUUID()}`,
@@ -933,6 +1039,8 @@ function App() {
       source: fields.source.trim() || 'Noesis',
       createdAt: new Date().toISOString(),
       tags: fields.tags.length ? fields.tags : undefined,
+      quote: fields.quote,
+
       ...fields.location,
     }
     setNotes((current) => [note, ...current])
@@ -947,12 +1055,22 @@ function App() {
   // Keeps one of Noema's answers as a note, optionally going straight on to review questions for it.
   async function keepNoemaAnswer(makeCards: boolean) {
     const topic = tutorPrompt.match(/“([^”]{3,80})”/)?.[1]
+    const passage = tutorContext?.selectedText?.trim()
+    const location = tutorContext
+      ? (({ visibleText, selectedText, ...place }) => {
+          void visibleText
+          void selectedText
+          return place
+        })(tutorContext)
+      : undefined
     const note = await addNote({
       title: topic ?? (tutorPrompt.trim().slice(0, 60) || 'From Noema'),
       body: tutorReply,
       source: tutorContext?.bookTitle ? `Noema · ${tutorContext.bookTitle}` : 'Noema',
       kind: 'note',
       tags: [],
+      location,
+      quote: passage ? passage.slice(0, 600) : undefined,
     })
     if (makeCards) {
       setReviewStartNote(note.id)
@@ -974,7 +1092,7 @@ function App() {
   async function askNoema(
     prompt: string,
     readingContext?: ReaderTutorContext,
-    options?: { book?: LibraryBook; recap?: boolean },
+    options?: { book?: LibraryBook; recap?: boolean; extra?: string },
   ) {
     const activeBook = options?.book ?? selectedBook
     const question = prompt.trim()
@@ -1053,7 +1171,12 @@ function App() {
       const response = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({ question, book: bookContext, context: contextText, length: settings.ai.length }),
+        body: JSON.stringify({
+          question,
+          book: [bookContext, options?.extra].filter(Boolean).join('\n\n'),
+          context: contextText,
+          length: settings.ai.length,
+        }),
       })
       const result = (await response.json()) as { ok?: boolean; text?: string; error?: string }
       if (!response.ok || !result.ok) throw new Error(result.error || 'Noema could not answer right now.')
@@ -1722,6 +1845,7 @@ function App() {
             </button>
           </div>
         </div>
+        <LibraryDeepSearch books={books} onOpen={openAtPassage} onAsk={askAboutHits} />
         {allShelves.length > 0 ? (
           <div className="shelf-chips" role="tablist" aria-label="Shelves">
             {['', ...allShelves].map((name) => (
@@ -1814,6 +1938,11 @@ function App() {
     return (
       <Page title="Second Brain" subtitle="">
         <SecondBrainPage
+          diary={readDiary()}
+          bookmarklet={bookmarkletCode(window.location.origin)}
+          onExport={() => void exportNotes()}
+          onShare={(items) => void shareNotes(items)}
+          onImportClippings={(file) => void importClippings(file)}
           notes={notes}
           onSave={(note) => void editNote(note)}
           onCreate={(fields) => void addNote(fields)}
@@ -2267,6 +2396,8 @@ function App() {
         onOpenNote={openNoteLocation}
         onAsk={openNoemaPanel}
         onRecap={() => recap(selectedBook)}
+        onSaveWord={saveWord}
+        initialSearch={readerSearch}
         onBookmark={() => toggleBookmark(selectedBook.id)}
         reading={settings.reading}
         onReadingChange={(patch) => updateSettings({ ...settings, reading: { ...settings.reading, ...patch } })}
@@ -2540,6 +2671,47 @@ function App() {
         ) : null}
         {createPortal(
           <>
+            {sharedView ? (
+              <div className="brain-backdrop" data-overlay onMouseDown={() => setSharedView(null)}>
+                <section className="noema-panel shared-panel" onMouseDown={(event) => event.stopPropagation()}>
+                  <button className="icon-button noema-close" onClick={() => setSharedView(null)} aria-label="Close">
+                    <X size={18} />
+                  </button>
+                  <h2>{sharedView.title}</h2>
+                  <div className="shared-quotes">
+                    {sharedView.quotes.map((quote, index) => (
+                      <blockquote key={index}>
+                        {quote.text}
+                        <small>{quote.source}</small>
+                      </blockquote>
+                    ))}
+                  </div>
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      const created: Note[] = sharedView.quotes.map((quote) => ({
+                        id: `local-${crypto.randomUUID()}`,
+                        kind: 'highlight',
+                        title: quote.source.slice(0, 60) || 'Shared passage',
+                        body: quote.text,
+                        source: quote.source || 'Shared with me',
+                        createdAt: new Date().toISOString(),
+                        tags: ['shared'],
+                      }))
+                      const next = [...created, ...notes]
+                      setNotes(next)
+                      writeLocalNotes(next)
+                      setSharedView(null)
+                      showNotice(
+                        `Saved ${created.length} ${created.length === 1 ? 'passage' : 'passages'} to your notes.`,
+                      )
+                    }}
+                  >
+                    Save to my notes
+                  </button>
+                </section>
+              </div>
+            ) : null}
             {recovering ? (
               <div className="brain-backdrop" data-overlay>
                 <form className="recovery-panel panel-card" onSubmit={(event) => void saveNewPassword(event)}>
@@ -2697,6 +2869,75 @@ function SuggestedSection({ resources, onExplore }: { resources: Resource[]; onE
   )
 }
 // Lets the reader put a book on shelves of their own making.
+// Searches the text inside every book, on the device. Noema is only asked when you press the button.
+function LibraryDeepSearch({
+  books,
+  onOpen,
+  onAsk,
+}: {
+  books: LibraryBook[]
+  onOpen: (bookId: string, phrase: string) => void
+  onAsk: (question: string, hits: LibraryHit[]) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<LibraryHit[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const searchable = books.filter((book) => book.format === 'epub')
+  if (searchable.length === 0) return null
+  async function run(event: React.FormEvent) {
+    event.preventDefault()
+    if (query.trim().length < 3) return
+    setBusy(true)
+    try {
+      setHits(await searchLibrary(searchable, query, loadBookText))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="deep-search panel-card">
+      <form onSubmit={(event) => void run(event)}>
+        <div className="field-with-icon">
+          <Search size={15} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Ask your library, e.g. why do habits fail?"
+            aria-label="Search inside your books"
+          />
+        </div>
+        <button className="secondary-button" type="submit" disabled={busy || query.trim().length < 3}>
+          {busy ? 'Searching…' : 'Search inside books'}
+        </button>
+      </form>
+      {hits ? (
+        hits.length === 0 ? (
+          <p className="context-empty">Nothing in your books matches that.</p>
+        ) : (
+          <>
+            <ul className="deep-search-hits">
+              {hits.map((hit, index) => (
+                <li key={`${hit.bookId}-${index}`}>
+                  <strong>
+                    {hit.title} <small>{hit.author}</small>
+                  </strong>
+                  <p>{excerpt(hit.text, query)}</p>
+                  <button className="text-button" onClick={() => onOpen(hit.bookId, searchPhrase(hit.text, query))}>
+                    Open in book
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button className="text-button" onClick={() => onAsk(query.trim(), hits)}>
+              <Sparkles size={13} /> Ask Noema about these passages
+            </button>
+          </>
+        )
+      ) : null}
+    </section>
+  )
+}
+
 function ShelfPicker({
   book,
   all,
