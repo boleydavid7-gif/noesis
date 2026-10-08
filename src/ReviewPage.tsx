@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { authHeaders } from './lib/auth'
 import { markRemoved } from './lib/tombstones'
 import type { BrainNote } from './lib/knowledge'
@@ -30,7 +30,11 @@ export function ReviewPage({
   notes,
   onNotice,
   onChanged,
+  startWith,
+  onStarted,
 }: {
+  startWith?: string | null
+  onStarted?: () => void
   notes: BrainNote[]
   onNotice: (message: string) => void
   onChanged?: () => void
@@ -47,6 +51,15 @@ export function ReviewPage({
     [cards, due],
   )
   const sources = useMemo(() => notes.filter((note) => note.body.trim().length >= 40).slice(0, 20), [notes])
+
+  // Arriving from a Noema answer: start drafting questions for that note straight away.
+  useEffect(() => {
+    if (!startWith) return
+    const note = notes.find((item) => item.id === startWith)
+    if (note) void draftFor(note)
+    onStarted?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function save(next: ReviewCard[]) {
     setCards(next)
