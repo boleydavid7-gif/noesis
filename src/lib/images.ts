@@ -27,6 +27,11 @@ export const SCENES: Array<{ id: string; label: string; banner?: string; sidebar
     sidebar: '/scenes/city-sunset-tall.webp',
   },
   { id: 'reef', label: 'Coral reef', fadeTop: true, sidebar: '/scenes/reef-tall.webp' },
+  { id: 'moon-beach', label: 'Moonlit shore', fadeTop: true, sidebar: '/scenes/moon-beach-tall.webp' },
+  { id: 'dusk-city', label: 'City at dusk', fadeTop: true, sidebar: '/scenes/dusk-city-tall.webp' },
+  { id: 'misty-pines', label: 'Misty pines', fadeTop: true, sidebar: '/scenes/misty-pines-tall.webp' },
+  { id: 'sunset-beach', label: 'Sunset beach', fadeTop: true, sidebar: '/scenes/sunset-beach-tall.webp' },
+  { id: 'sunrise-city', label: 'City sunrise', fadeTop: true, sidebar: '/scenes/sunrise-city-tall.webp' },
   { id: 'forest', label: 'Forest stream', banner: '/scenes/forest-wide.webp', sidebar: '/scenes/forest-tall.webp' },
 ]
 
@@ -89,9 +94,17 @@ export function applyImages(root: HTMLElement = document.documentElement): void 
   }
   // A picture with a pale top fades into the app's own colour instead of showing as a white block.
   const fade = SCENES.some((scene) => scene.fadeTop && scene.id === saved.sidebar)
-  if (fade)
-    root.style.setProperty('--sidebar-mask', 'linear-gradient(180deg, transparent 0%, transparent 22%, #000 62%)')
-  else root.style.removeProperty('--sidebar-mask')
+  if (fade) {
+    root.style.setProperty('--sidebar-mask', 'linear-gradient(180deg, transparent 0%, transparent 45%, #000 80%)')
+    // The scenery sits low in these pictures, so the shade over them is lighter.
+    root.style.setProperty(
+      '--sidebar-shade',
+      'linear-gradient(180deg, rgba(3, 9, 16, 0.2) 0%, rgba(3, 9, 16, 0.15) 60%, rgba(3, 9, 16, 0) 82%, rgba(3, 9, 16, 0.25) 100%)',
+    )
+  } else {
+    root.style.removeProperty('--sidebar-mask')
+    root.style.removeProperty('--sidebar-shade')
+  }
 }
 
 // Shrinks a chosen photo so it fits in local storage.
