@@ -5,6 +5,7 @@
   "compatibility_date": "2026-10-06",
   "vars": {
     "GEMINI_TUTOR_MODEL": "gemini-2.5-flash",
+    "TUTOR_REQUIRE_AUTH": "true",
     "VITE_DROPBOX_APP_KEY": "sx9m3fqvqa9s9oe",
     "VITE_ONEDRIVE_CLIENT_ID": "cff5be64-2952-42d0-a434-d569f62c7dd1",
     "VITE_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_FPe82WH-6DgriZj9e0FwJA_2ehBLYuV",
