@@ -1,7 +1,7 @@
 // Suggestions for what to read next, drawn from the reader's own notes and finished books.
 // Runs on the device and uses no AI.
 
-import type { LibraryBook } from './library'
+import { isStarted, type LibraryBook } from './library'
 import { tokenize } from './retrieval'
 
 type NoteLike = { title: string; body: string; tags?: string[] }
@@ -53,7 +53,7 @@ export type Step = { id: string; label: string; done: boolean }
 export function onboardingSteps(input: { books: LibraryBook[]; noteCount: number; pathCount: number }): Step[] {
   return [
     { id: 'add', label: 'Add a book', done: input.books.length > 0 },
-    { id: 'read', label: 'Start reading it', done: input.books.some((book) => book.progress > 0) },
+    { id: 'read', label: 'Start reading it', done: input.books.some((book) => isStarted(book)) },
     { id: 'note', label: 'Save a highlight or note', done: input.noteCount > 0 },
     { id: 'plan', label: 'Plan something you want to learn', done: input.pathCount > 0 },
   ]

@@ -59,6 +59,7 @@ import {
 import { epubBookFromParsed, openEpub, parseEpub, pdfBookFromSource, recapText } from './lib/epub'
 import {
   loadBookText,
+  isStarted,
   loadEpubFile,
   readLibraryBooks,
   removeLibraryBook,
@@ -781,7 +782,7 @@ function App() {
     const page = params.get('page')
     if (params.get('continue') === '1') {
       const current = readLibraryBooks()
-        .filter((book) => book.progress > 0 && book.progress < 100)
+        .filter((book) => isStarted(book) && book.progress < 100)
         .sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))[0]
       if (current) {
         setSelectedBookId(current.id)
@@ -981,7 +982,9 @@ function App() {
   }
   function saveHighlight(text: string, color: HighlightColor, location: BrainNoteLocation) {
     void addNote({
-      title: 'Highlight',
+      title:
+        text.trim().split(/\s+/).slice(0, 7).join(' ') + (text.trim().split(/\s+/).length > 7 ? '…' : '') ||
+        'Highlight',
       body: text,
       source: location.bookTitle
         ? `${location.bookTitle}${location.chapter ? ` · ${location.chapter}` : ''}`
@@ -1931,7 +1934,7 @@ function App() {
     )
   }
   function homePage() {
-    const current = books.find((book) => book.progress > 0 && book.progress < 100) ?? books[0]
+    const current = books.find((book) => isStarted(book) && book.progress < 100) ?? books[0]
     return (
       <div className="reading-home">
         <section className="home-reading-hero">
@@ -2320,7 +2323,7 @@ function App() {
     )
   }
   function progressPage() {
-    const readCount = books.filter((book) => book.progress > 0).length
+    const readCount = books.filter((book) => isStarted(book)).length
     return (
       <Page title="Progress" subtitle="">
         <div className="metric-grid">
@@ -4004,7 +4007,7 @@ function ReadingShelfSection({
   }
   const shelf =
     mode === 'reading'
-      ? books.filter((book) => book.progress > 0).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
+      ? books.filter((book) => isStarted(book)).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
       : [...books].sort((a, b) => (b.added ?? b.updated ?? '').localeCompare(a.added ?? a.updated ?? ''))
   return (
     <section className="section-block shelf-section">
