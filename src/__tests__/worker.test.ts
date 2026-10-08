@@ -706,3 +706,33 @@ describe('define route', () => {
     expect((await ask('two words', '7.9.3.3')).status).toBe(400)
   })
 })
+
+describe('Standard Ebooks search', () => {
+  it('reads an OPDS entry into a result with an EPUB download', async () => {
+    const { parseStandardEbooks } = await import('../worker')
+    const xml = `<feed><entry>
+      <id>https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice</id>
+      <title>Pride and Prejudice</title>
+      <author><name>Jane Austen</name><uri>https://standardebooks.org/ebooks/jane-austen</uri></author>
+      <published>2014-05-25T00:00:00Z</published>
+      <summary type="text">A Regency-era novel &amp; more.</summary>
+      <link href="https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/cover-thumbnail.jpg" rel="http://opds-spec.org/image/thumbnail" type="image/jpeg"/>
+      <link href="https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=feed" length="1" rel="http://opds-spec.org/acquisition/open-access" title="Recommended compatible epub" type="application/epub+zip" />
+      <link href="https://standardebooks.org/x.azw3" rel="http://opds-spec.org/acquisition/open-access" title="Amazon Kindle azw3" type="application/x-mobipocket-ebook" />
+    </entry></feed>`
+    const [book] = parseStandardEbooks(xml)
+    expect(book).toMatchObject({
+      title: 'Pride and Prejudice',
+      author: 'Jane Austen',
+      year: 2014,
+      source: 'Standard Ebooks',
+      format: 'EPUB',
+      free: true,
+      description: 'A Regency-era novel & more.',
+    })
+    expect(book.downloadUrl).toBe(
+      'https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub',
+    )
+    expect(book.coverUrl).toContain('cover-thumbnail.jpg')
+  })
+})

@@ -851,6 +851,47 @@ type SearchResult = {
   kind: 'book' | 'article'
 }
 
+// Reads a Standard Ebooks OPDS feed (Workers have no XML parser, so the few fields needed are pulled out directly).
+export function parseStandardEbooks(xml: string): SearchResult[] {
+  const unescape = (value: string) =>
+    value
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;|&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+  const tag = (block: string, name: string) =>
+    unescape(block.match(new RegExp(`<${name}[^>]*>([^<]*)</${name}>`))?.[1]?.trim() ?? '')
+  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].slice(0, 8).flatMap((match): SearchResult[] => {
+    const block = match[1]
+    const title = tag(block, 'title')
+    const sourceUrl = tag(block, 'id')
+    const epub = [...block.matchAll(/<link\s+([^>]*)\/?>/g)]
+      .map((link) => link[1])
+      .find((attributes) => /application\/epub\+zip/.test(attributes) && /compatible epub/i.test(attributes))
+    const href = epub?.match(/href="([^"]+)"/)?.[1]
+    if (!title || !sourceUrl || !href) return []
+    const cover = block.match(/<link\s+href="([^"]+)"\s+rel="http:\/\/opds-spec\.org\/image\/thumbnail"/)?.[1]
+    const year = Number.parseInt(tag(block, 'published').slice(0, 4), 10)
+    return [
+      {
+        id: sourceUrl,
+        title,
+        author: tag(block.match(/<author>([\s\S]*?)<\/author>/)?.[1] ?? '', 'name') || 'Unknown author',
+        year: Number.isFinite(year) ? year : undefined,
+        coverUrl: cover,
+        description: tag(block, 'summary').slice(0, 400) || undefined,
+        source: 'Standard Ebooks',
+        sourceUrl,
+        downloadUrl: unescape(href).replace('?source=feed', ''),
+        free: true,
+        format: 'EPUB',
+        kind: 'book',
+      },
+    ]
+  })
+}
+
 async function searchFreeResources(request: Request): Promise<Response> {
   if (rateLimited(request, 'search', 30))
     return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
@@ -1005,6 +1046,12 @@ async function searchFreeResources(request: Request): Promise<Response> {
           })
       })
       .catch(() => [] as SearchResult[])
+    // Standard Ebooks: public-domain classics, carefully made, with no DRM.
+    const standard = fetchWithTimeout(`https://standardebooks.org/feeds/opds/all?query=${encoded}`, {
+      headers: { accept: 'application/atom+xml' },
+    })
+      .then(async (response) => (response.ok ? parseStandardEbooks(await response.text()) : []))
+      .catch(() => [] as SearchResult[])
     const archive = fetchWithTimeout(
       `https://archive.org/advancedsearch.php?q=${encodeURIComponent(`${query} AND mediatype:texts`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&fl[]=description&fl[]=collection&rows=12&page=1&output=json`,
       { headers: { accept: 'application/json' } },
@@ -1050,21 +1097,20 @@ async function searchFreeResources(request: Request): Promise<Response> {
           })
       })
       .catch(() => [] as SearchResult[])
-    const [library, gutenbergResults, academicResults, academicFallbackResults, archiveResults] = await Promise.all([
-      openLibrary,
-      gutenberg,
-      academic,
-      academicFallback,
-      archive,
-    ])
+    const [library, gutenbergResults, academicResults, academicFallbackResults, archiveResults, standardResults] =
+      await Promise.all([openLibrary, gutenberg, academic, academicFallback, archive, standard])
     const academicResultsToUse = academicResults.length > 0 ? academicResults : academicFallbackResults
-    return json({ ok: true, results: [...gutenbergResults, ...academicResultsToUse, ...archiveResults, ...library] })
+    return json({
+      ok: true,
+      results: [...standardResults, ...gutenbergResults, ...academicResultsToUse, ...archiveResults, ...library],
+    })
   } catch {
     return json({ ok: false, error: 'Free-resource search is temporarily unavailable.' }, 502)
   }
 }
 
 const RESOURCE_HOSTS = [
+  'standardebooks.org',
   'gutenberg.org',
   'archive.org',
   'arxiv.org',

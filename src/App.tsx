@@ -71,6 +71,7 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
+import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
 import { notesToZip } from './lib/exportNotes'
@@ -2169,6 +2170,29 @@ function App() {
               ))}
             </div>
           )}
+        </section>
+        <section className="resource-section drm-sources" aria-label="More places for DRM-free books">
+          <div className="section-heading">
+            <div>
+              <h2>More places for books you can import</h2>
+              <p>
+                These sell or share books without DRM
+                {resourceQuery.trim() ? `, searching for “${resourceQuery.trim()}”` : ''}. Download the EPUB, then add
+                it to your library.
+              </p>
+            </div>
+          </div>
+          <ul>
+            {DRM_FREE_SOURCES.map((source) => (
+              <li key={source.name}>
+                <a href={source.url(resourceQuery.trim())} target="_blank" rel="noreferrer noopener">
+                  <strong>{source.name}</strong>
+                  <small>{source.note}</small>
+                </a>
+                <em>{source.always ? 'No DRM' : 'Check each book'}</em>
+              </li>
+            ))}
+          </ul>
         </section>
       </Page>
     )
