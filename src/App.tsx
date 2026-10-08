@@ -73,6 +73,7 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
+import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
@@ -299,6 +300,14 @@ function App() {
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
+  const [showDupes, setShowDupes] = useState(false)
+  const [editing, setEditing] = useState<{
+    book: LibraryBook
+    title: string
+    author: string
+    cover?: string
+    coverCleared: boolean
+  } | null>(null)
   const [finishPrompt, setFinishPrompt] = useState<string | null>(null)
   const [finishStars, setFinishStars] = useState(0)
   const [finishLine, setFinishLine] = useState('')
@@ -327,6 +336,7 @@ function App() {
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine)
   const cloudReady = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  const folderInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
   const [utilityOverlay, setUtilityOverlay] = useState<UtilityOverlay>(null)
   const [focusState, setFocusState] = useState<FocusState>(() => readFocusState())
@@ -371,6 +381,7 @@ function App() {
     [books],
   )
   const hasFinished = books.some((book) => book.finished)
+  const dupes = useMemo(() => duplicateGroups(books), [books])
   const allShelves = useMemo(
     () => [...new Set(books.flatMap((book) => book.shelves ?? []))].sort((a, b) => a.localeCompare(b)),
     [books],
@@ -1005,46 +1016,83 @@ function App() {
     setUtilityOverlay(null)
     setOverlay('noema')
   }
-  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    const isEpub = file.name.toLowerCase().endsWith('.epub')
-    const isPdf = file.name.toLowerCase().endsWith('.pdf')
-    if (!isEpub && !isPdf) {
+  // Reads one EPUB or PDF into the library. Returns null for files that are not books or are already here.
+  async function importOne(file: File): Promise<LibraryBook | 'duplicate' | null> {
+    const name = file.name.toLowerCase()
+    const isEpub = name.endsWith('.epub')
+    const isPdf = name.endsWith('.pdf')
+    if (!isEpub && !isPdf) return null
+    if (readLibraryBooks().some((item) => item.fileName === file.name && item.fileSize === file.size))
+      return 'duplicate'
+    const data = await file.arrayBuffer()
+    const parsed = isEpub ? await parseEpub(data, file.name) : null
+    const book = parsed
+      ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed)
+      : pdfBookFromSource(
+          `pdf-${crypto.randomUUID()}`,
+          file.name,
+          file.size,
+          file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '),
+          'Imported PDF',
+        )
+    await saveEpubFile(book.id, data)
+    if (settings.library.indexText && parsed?.text) await saveBookText(book.id, parsed.text)
+    setBooks(upsertLibraryBook(book))
+    return book
+  }
+  async function importFiles(files: File[]) {
+    const usable = files.filter((file) => /\.(epub|pdf)$/i.test(file.name))
+    if (usable.length === 0) {
       showNotice('Noesis imports EPUB and PDF files.')
       return
     }
-    try {
-      const data = await file.arrayBuffer()
-      const parsed = isEpub ? await parseEpub(data, file.name) : null
-      const book = parsed
-        ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed)
-        : pdfBookFromSource(
-            `pdf-${crypto.randomUUID()}`,
-            file.name,
-            file.size,
-            file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '),
-            'Imported PDF',
-          )
-      await saveEpubFile(book.id, data)
-      if (settings.library.indexText && parsed?.text) await saveBookText(book.id, parsed.text)
-      const nextBooks = upsertLibraryBook(book)
-      setBooks(nextBooks)
-      if (settings.backup.autoSync && authUser && !isAnonymousUser(authUser)) {
-        void syncAccountLibrary(nextBooks)
-          .then((synced) => {
-            setBooks(synced)
-            markSynced()
-          })
-          .catch(() => undefined)
+    const added: LibraryBook[] = []
+    let already = 0
+    let failed = 0
+    for (const [index, file] of usable.entries()) {
+      if (usable.length > 1) showNotice(`Adding ${index + 1} of ${usable.length}…`)
+      try {
+        const result = await importOne(file)
+        if (result === 'duplicate') already += 1
+        else if (result) added.push(result)
+      } catch (reason) {
+        failed += 1
+        if (usable.length === 1) showNotice(friendlyBookError(reason, 'Could not read that file.'))
       }
-      setSelectedBookId(book.id)
-      setActiveNav('Read')
-      showNotice(`${book.title} was added to your library.`)
-    } catch (reason) {
-      showNotice(friendlyBookError(reason, 'Could not read that file.'))
     }
+    const nextBooks = readLibraryBooks()
+    setBooks(nextBooks)
+    if (added.length > 0 && settings.backup.autoSync && authUser && !isAnonymousUser(authUser)) {
+      void syncAccountLibrary(nextBooks)
+        .then((synced) => {
+          setBooks(synced)
+          markSynced()
+        })
+        .catch(() => undefined)
+    }
+    if (usable.length === 1) {
+      if (added[0]) {
+        setSelectedBookId(added[0].id)
+        setActiveNav('Read')
+        showNotice(`${added[0].title} was added to your library.`)
+      } else if (already) showNotice('That book is already in your library.')
+      return
+    }
+    setActiveNav('My Library')
+    showNotice(
+      [
+        `Added ${added.length} ${added.length === 1 ? 'book' : 'books'}.`,
+        already ? `${already} already in your library.` : '',
+        failed ? `${failed} could not be read.` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
+  }
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(event.target.files ?? [])]
+    event.target.value = ''
+    await importFiles(files)
   }
   function updateBookProgress(
     id: string,
@@ -1954,77 +2002,128 @@ function App() {
         title="My library"
         subtitle={`${books.length} ${books.length === 1 ? 'title' : 'titles'} saved on this device.`}
       >
-        <div className="page-toolbar">
-          <div className="field-with-icon">
-            <Search size={15} />
-            <input
-              value={libraryQuery}
-              onChange={(event) => setLibraryQuery(event.target.value)}
-              placeholder="Search your library"
-            />
-          </div>
-          <div className="page-toolbar-actions">
-            <select
-              className="library-sort"
-              value={librarySort}
-              onChange={(event) => setLibrarySort(event.target.value as LibrarySort)}
-              aria-label="Sort library"
-            >
-              <option value="recent">Recently added</option>
-              <option value="title">Title</option>
-              <option value="progress">Progress</option>
-            </select>
-            <button className="primary-button" onClick={() => fileInput.current?.click()}>
-              <Upload size={15} /> Add a book
-            </button>
-          </div>
-        </div>
-        <LibraryDeepSearch books={books} onOpen={openAtPassage} onAsk={askAboutHits} byMeaning={settings.ai.onDevice} />
-        {allShelves.length + allSeries.length > 0 || hasFinished ? (
-          <div className="shelf-chips" role="tablist" aria-label="Shelves">
-            {[
-              { key: '', label: 'All books' },
-              ...allShelves.map((name) => ({ key: `shelf:${name}`, label: name })),
-              ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
-              ...(hasFinished ? [{ key: 'finished', label: 'Finished' }] : []),
-            ].map((chip) => (
-              <button
-                key={chip.key || 'all'}
-                role="tab"
-                aria-selected={shelfFilter === chip.key}
-                className={shelfFilter === chip.key ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
-                onClick={() => setShelfFilter(chip.key)}
+        <div
+          className="library-drop"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes('Files')) event.preventDefault()
+          }}
+          onDrop={(event) => {
+            if (!event.dataTransfer.files.length) return
+            event.preventDefault()
+            void importFiles([...event.dataTransfer.files])
+          }}
+        >
+          <div className="page-toolbar">
+            <div className="field-with-icon">
+              <Search size={15} />
+              <input
+                value={libraryQuery}
+                onChange={(event) => setLibraryQuery(event.target.value)}
+                placeholder="Search your library"
+              />
+            </div>
+            <div className="page-toolbar-actions">
+              <select
+                className="library-sort"
+                value={librarySort}
+                onChange={(event) => setLibrarySort(event.target.value as LibrarySort)}
+                aria-label="Sort library"
               >
-                {chip.label}
+                <option value="recent">Recently added</option>
+                <option value="title">Title</option>
+                <option value="progress">Progress</option>
+              </select>
+              <button className="primary-button" onClick={() => fileInput.current?.click()}>
+                <Upload size={15} /> Add books
               </button>
-            ))}
+              <button className="secondary-button" onClick={() => folderInput.current?.click()}>
+                <Folder size={15} /> Import a folder
+              </button>
+            </div>
           </div>
-        ) : null}
-        {shelfFilter.startsWith('series:')
-          ? (() => {
-              const next = filteredBooks.find((book) => !book.finished && book.progress < 99)
-              return next ? (
-                <div className="series-next panel-card">
-                  <span>
-                    Next in this series: <strong>{next.title}</strong>
-                    {next.seriesIndex ? ` (#${next.seriesIndex})` : ''}
-                  </span>
-                  <button className="secondary-button" onClick={() => openSavedBook(next)}>
-                    {next.progress > 0 ? 'Continue' : 'Start'}
-                  </button>
+          {dupes.length > 0 ? (
+            <div className="dupes-banner panel-card">
+              <span>
+                {dupes.length} {dupes.length === 1 ? 'book looks' : 'books look'} like duplicates.
+              </span>
+              <button className="text-button" onClick={() => setShowDupes((value) => !value)}>
+                {showDupes ? 'Hide' : 'Review'}
+              </button>
+            </div>
+          ) : null}
+          {showDupes
+            ? dupes.map((group) => (
+                <div className="dupes-group panel-card" key={group.map((book) => book.id).join('-')}>
+                  <strong>{group[0].title}</strong>
+                  {group.map((book) => (
+                    <div className="dupes-row" key={book.id}>
+                      <span>
+                        {book.author} · {Math.round(book.progress)}% read
+                        {book.fileSize ? ` · ${(book.fileSize / 1_048_576).toFixed(1)} MB` : ''}
+                      </span>
+                      <button className="text-button" onClick={() => deleteBook(book)}>
+                        Remove this copy
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ) : null
-            })()
-          : null}
-        <BookSection
-          books={filteredBooks}
-          onOpen={openSavedBook}
-          onImport={() => fileInput.current?.click()}
-          onDelete={deleteBook}
-          shelves={allShelves}
-          onShelves={setBookShelves}
-          onSeries={setBookSeries}
-        />
+              ))
+            : null}
+          <LibraryDeepSearch
+            books={books}
+            onOpen={openAtPassage}
+            onAsk={askAboutHits}
+            byMeaning={settings.ai.onDevice}
+          />
+          {allShelves.length + allSeries.length > 0 || hasFinished ? (
+            <div className="shelf-chips" role="tablist" aria-label="Shelves">
+              {[
+                { key: '', label: 'All books' },
+                ...allShelves.map((name) => ({ key: `shelf:${name}`, label: name })),
+                ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
+                ...(hasFinished ? [{ key: 'finished', label: 'Finished' }] : []),
+              ].map((chip) => (
+                <button
+                  key={chip.key || 'all'}
+                  role="tab"
+                  aria-selected={shelfFilter === chip.key}
+                  className={shelfFilter === chip.key ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
+                  onClick={() => setShelfFilter(chip.key)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {shelfFilter.startsWith('series:')
+            ? (() => {
+                const next = filteredBooks.find((book) => !book.finished && book.progress < 99)
+                return next ? (
+                  <div className="series-next panel-card">
+                    <span>
+                      Next in this series: <strong>{next.title}</strong>
+                      {next.seriesIndex ? ` (#${next.seriesIndex})` : ''}
+                    </span>
+                    <button className="secondary-button" onClick={() => openSavedBook(next)}>
+                      {next.progress > 0 ? 'Continue' : 'Start'}
+                    </button>
+                  </div>
+                ) : null
+              })()
+            : null}
+          <BookSection
+            books={filteredBooks}
+            onOpen={openSavedBook}
+            onImport={() => fileInput.current?.click()}
+            onDelete={deleteBook}
+            shelves={allShelves}
+            onShelves={setBookShelves}
+            onSeries={setBookSeries}
+            onEdit={(book) =>
+              setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
+            }
+          />
+        </div>
       </Page>
     )
   }
@@ -2802,7 +2901,16 @@ function App() {
           className="visually-hidden"
           type="file"
           accept=".epub,.pdf,application/epub+zip,application/pdf"
+          multiple
           onChange={handleImport}
+        />
+        <input
+          ref={folderInput}
+          className="visually-hidden"
+          type="file"
+          multiple
+          onChange={handleImport}
+          {...{ webkitdirectory: '', directory: '' }}
         />
         <input
           ref={backupInput}
@@ -2861,6 +2969,93 @@ function App() {
         ) : null}
         {createPortal(
           <>
+            {editing ? (
+              <div className="brain-backdrop" data-overlay onMouseDown={() => setEditing(null)}>
+                <form
+                  className="recovery-panel panel-card"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    const { book, title, author, cover, coverCleared } = editing
+                    setBooks(
+                      upsertLibraryBook({
+                        ...book,
+                        title: title.trim() || book.title,
+                        author: author.trim() || book.author,
+                        coverDataUrl: coverCleared ? undefined : (cover ?? book.coverDataUrl),
+                        coverUrl: coverCleared || cover ? undefined : book.coverUrl,
+                        updated: new Date().toISOString(),
+                      }),
+                    )
+                    setEditing(null)
+                    showNotice('Book details saved.')
+                  }}
+                >
+                  <h2>Edit book</h2>
+                  <label>
+                    Title
+                    <input
+                      value={editing.title}
+                      onChange={(event) => setEditing({ ...editing, title: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Author
+                    <input
+                      value={editing.author}
+                      onChange={(event) => setEditing({ ...editing, author: event.target.value })}
+                    />
+                  </label>
+                  <div className="edit-cover">
+                    <BookCover
+                      book={{
+                        ...editing.book,
+                        coverDataUrl: editing.coverCleared ? undefined : (editing.cover ?? editing.book.coverDataUrl),
+                        coverUrl: editing.coverCleared || editing.cover ? undefined : editing.book.coverUrl,
+                      }}
+                      compact
+                    />
+                    <span>
+                      <label className="secondary-button edit-cover-pick">
+                        Choose a cover
+                        <input
+                          type="file"
+                          accept="image/*"
+                          hidden
+                          onChange={(event) => {
+                            const file = event.target.files?.[0]
+                            event.target.value = ''
+                            if (!file) return
+                            resizeCover(file)
+                              .then((cover) =>
+                                setEditing((current) => current && { ...current, cover, coverCleared: false }),
+                              )
+                              .catch((reason) =>
+                                showNotice(reason instanceof Error ? reason.message : 'Could not use that picture.'),
+                              )
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => setEditing({ ...editing, cover: undefined, coverCleared: true })}
+                      >
+                        Remove cover
+                      </button>
+                    </span>
+                  </div>
+                  <div className="recovery-actions">
+                    <button className="primary-button" type="submit">
+                      Save
+                    </button>
+                    <button type="button" className="text-button" onClick={() => setEditing(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : null}
             {finishPrompt ? (
               <div className="brain-backdrop" data-overlay onMouseDown={() => closeFinishPrompt(false)}>
                 <form
@@ -3192,7 +3387,9 @@ function ShelfPicker({
   all,
   onChange,
   onSeries,
+  onEdit,
 }: {
+  onEdit?: (book: LibraryBook) => void
   book: LibraryBook
   all: string[]
   onChange: (book: LibraryBook, shelves: string[]) => void
@@ -3226,6 +3423,17 @@ function ShelfPicker({
       </button>
       {open ? (
         <div className="shelf-picker-pop">
+          {onEdit ? (
+            <button
+              className="text-button shelf-edit"
+              onClick={() => {
+                setOpen(false)
+                onEdit(book)
+              }}
+            >
+              Edit title, author and cover
+            </button>
+          ) : null}
           {all.map((name) => (
             <label key={name}>
               <input type="checkbox" checked={mine.includes(name)} onChange={() => toggle(name)} /> {name}
@@ -3289,6 +3497,7 @@ function BookSection({
   shelves,
   onShelves,
   onSeries,
+  onEdit,
 }: {
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
@@ -3297,6 +3506,7 @@ function BookSection({
   shelves?: string[]
   onShelves?: (book: LibraryBook, shelves: string[]) => void
   onSeries?: (book: LibraryBook, series: string, index?: number) => void
+  onEdit?: (book: LibraryBook) => void
 }) {
   return (
     <section className="section-block library-section">
@@ -3337,7 +3547,7 @@ function BookSection({
                 ) : null}
               </button>
               {onShelves ? (
-                <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} onSeries={onSeries} />
+                <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} onSeries={onSeries} onEdit={onEdit} />
               ) : null}
               {onDelete ? (
                 <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>

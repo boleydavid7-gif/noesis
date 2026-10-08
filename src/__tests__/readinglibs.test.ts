@@ -109,3 +109,37 @@ describe('markdown export', () => {
     expect(slug('???')).toBe('note')
   })
 })
+
+import { duplicateGroups } from '../lib/libraryTools'
+import type { LibraryBook } from '../lib/library'
+
+describe('duplicateGroups', () => {
+  const book = (id: string, title: string, author: string, fileSize?: number): LibraryBook => ({
+    id,
+    title,
+    author,
+    progress: 0,
+    chapter: '',
+    updated: `2026-01-0${id}T00:00:00Z`,
+    cover: title,
+    format: 'epub',
+    fileSize,
+  })
+  it('groups the same book added twice, even with different capitalisation or "The"', () => {
+    const groups = duplicateGroups([
+      book('1', 'The Hobbit', 'J. R. R. Tolkien'),
+      book('2', 'Hobbit', 'j r r tolkien'),
+      book('3', 'Dune', 'Frank Herbert'),
+    ])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].map((item) => item.id)).toEqual(['1', '2'])
+  })
+  it('groups by title and file size when the author is missing', () => {
+    expect(
+      duplicateGroups([book('1', 'Notes', 'Imported PDF', 500), book('2', 'Notes', 'Imported PDF', 500)]),
+    ).toHaveLength(1)
+  })
+  it('leaves different books alone', () => {
+    expect(duplicateGroups([book('1', 'A', 'x', 1), book('2', 'B', 'x', 1)])).toEqual([])
+  })
+})
