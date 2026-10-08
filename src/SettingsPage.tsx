@@ -159,6 +159,18 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             label="Open books in wide layout"
           />
         </Row>
+        <Row title="Listening speed" detail="For read-aloud in the reader.">
+          <Segmented
+            label="Listening speed"
+            value={String(reading.speechRate)}
+            onChange={(value) => set('reading', 'speechRate', Number(value))}
+            options={[
+              { value: '0.8', label: 'Slow' },
+              { value: '1', label: 'Normal' },
+              { value: '1.3', label: 'Fast' },
+            ]}
+          />
+        </Row>
         <div
           className="reading-preview"
           style={{
@@ -286,6 +298,48 @@ function LibrarySection({
             label="Index book text"
           />
         </Row>
+        <Row title="Notes on Home" detail="Show one of your saved notes now and then.">
+          <Toggle
+            checked={settings.library.resurface}
+            onChange={(value) => set('library', 'resurface', value)}
+            label="Show a saved note on Home"
+          />
+        </Row>
+        <Row title="Reading goal" detail="Your own target. Nothing is shown unless you turn it on.">
+          <Toggle
+            checked={settings.library.goal.enabled}
+            onChange={(value) => set('library', 'goal', { ...settings.library.goal, enabled: value })}
+            label="Reading goal"
+          />
+        </Row>
+        {settings.library.goal.enabled ? (
+          <Row title="Books to finish">
+            <span className="setting-goal">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={settings.library.goal.target}
+                onChange={(event) =>
+                  set('library', 'goal', {
+                    ...settings.library.goal,
+                    target: Math.max(1, Math.min(365, Number(event.target.value) || 1)),
+                  })
+                }
+                aria-label="Books to finish"
+              />
+              <Segmented
+                label="Goal period"
+                value={settings.library.goal.period}
+                onChange={(value) => set('library', 'goal', { ...settings.library.goal, period: value })}
+                options={[
+                  { value: 'month', label: 'a month' },
+                  { value: 'year', label: 'a year' },
+                ]}
+              />
+            </span>
+          </Row>
+        ) : null}
         <Row title="Confirm before removing a book">
           <Toggle
             checked={settings.library.confirmDelete}
@@ -382,6 +436,13 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
             checked={ai.useReadingText}
             onChange={(value) => set('ai', 'useReadingText', value)}
             label="Share the page I'm reading"
+          />
+        </Row>
+        <Row title="Avoid spoilers" detail="Answers only use the part of the book you've read.">
+          <Toggle
+            checked={ai.avoidSpoilers}
+            onChange={(value) => set('ai', 'avoidSpoilers', value)}
+            label="Avoid spoilers"
           />
         </Row>
         <Row title="My notes" detail="Your Second Brain notes, so answers can connect to what you've saved.">

@@ -6,22 +6,42 @@ export type ReaderFont = 'book' | 'serif' | 'sans'
 export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
 export type AnswerLength = 'concise' | 'balanced' | 'detailed'
+export type GoalPeriod = 'month' | 'year'
 
 export type Settings = {
-  reading: { fontSize: number; theme: ReaderTheme; font: ReaderFont; lineHeight: number; startWide: boolean }
+  reading: {
+    fontSize: number
+    theme: ReaderTheme
+    font: ReaderFont
+    lineHeight: number
+    startWide: boolean
+    speechRate: number
+  }
   appearance: { accent: AccentName; scenery: boolean; reduceMotion: boolean; compact: boolean }
-  library: { defaultSort: LibrarySortSetting; indexText: boolean; confirmDelete: boolean }
+  library: {
+    defaultSort: LibrarySortSetting
+    indexText: boolean
+    confirmDelete: boolean
+    resurface: boolean
+    goal: { enabled: boolean; target: number; period: GoalPeriod }
+  }
   backup: { autoSync: boolean }
-  ai: { enabled: boolean; length: AnswerLength; useReadingText: boolean; useNotes: boolean }
+  ai: { enabled: boolean; length: AnswerLength; useReadingText: boolean; useNotes: boolean; avoidSpoilers: boolean }
   notifications: { reviewReminders: boolean }
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  reading: { fontSize: 100, theme: 'paper', font: 'book', lineHeight: 1.65, startWide: false },
+  reading: { fontSize: 100, theme: 'paper', font: 'book', lineHeight: 1.65, startWide: false, speechRate: 1 },
   appearance: { accent: 'gold', scenery: true, reduceMotion: false, compact: false },
-  library: { defaultSort: 'recent', indexText: true, confirmDelete: true },
+  library: {
+    defaultSort: 'recent',
+    indexText: true,
+    confirmDelete: true,
+    resurface: true,
+    goal: { enabled: false, target: 12, period: 'year' },
+  },
   backup: { autoSync: true },
-  ai: { enabled: true, length: 'balanced', useReadingText: true, useNotes: true },
+  ai: { enabled: true, length: 'balanced', useReadingText: true, useNotes: true, avoidSpoilers: true },
   notifications: { reviewReminders: false },
 }
 
@@ -107,6 +127,8 @@ export function sanitizeSettings(input: unknown): Settings {
   const reading = obj(root.reading)
   const appearance = obj(root.appearance)
   const library = obj(root.library)
+  const goal = obj(library.goal)
+
   const backup = obj(root.backup)
   const ai = obj(root.ai)
   const notifications = obj(root.notifications)
@@ -118,6 +140,7 @@ export function sanitizeSettings(input: unknown): Settings {
       font: pick(reading.font, ['book', 'serif', 'sans'], d.reading.font),
       lineHeight: Math.round(num(reading.lineHeight, 1.3, 2.2, d.reading.lineHeight) * 20) / 20,
       startWide: bool(reading.startWide, d.reading.startWide),
+      speechRate: Math.round(num(reading.speechRate, 0.6, 1.6, d.reading.speechRate) * 10) / 10,
     },
     appearance: {
       accent: pick(appearance.accent, ['gold', 'blue', 'green', 'rose'], d.appearance.accent),
@@ -129,6 +152,12 @@ export function sanitizeSettings(input: unknown): Settings {
       defaultSort: pick(library.defaultSort, ['recent', 'title', 'progress'], d.library.defaultSort),
       indexText: bool(library.indexText, d.library.indexText),
       confirmDelete: bool(library.confirmDelete, d.library.confirmDelete),
+      resurface: bool(library.resurface, d.library.resurface),
+      goal: {
+        enabled: bool(goal.enabled, d.library.goal.enabled),
+        target: Math.round(num(goal.target, 1, 365, d.library.goal.target)),
+        period: pick(goal.period, ['month', 'year'], d.library.goal.period),
+      },
     },
     backup: { autoSync: bool(backup.autoSync, d.backup.autoSync) },
     ai: {
@@ -136,6 +165,7 @@ export function sanitizeSettings(input: unknown): Settings {
       length: pick(ai.length, ['concise', 'balanced', 'detailed'], d.ai.length),
       useReadingText: bool(ai.useReadingText, d.ai.useReadingText),
       useNotes: bool(ai.useNotes, d.ai.useNotes),
+      avoidSpoilers: bool(ai.avoidSpoilers, d.ai.avoidSpoilers),
     },
     notifications: { reviewReminders: bool(notifications.reviewReminders, d.notifications.reviewReminders) },
   }
