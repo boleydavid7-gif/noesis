@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useContext, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star } from 'lucide-react'
+import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import { requestClarification, requestSuggestion, resolveBooks, type Clarification } from './lib/pathClient'
 import {
   EXAMPLE_GOALS,
@@ -38,6 +39,43 @@ function Timeline({ milestones }: { milestones: PlanMilestone[] }) {
   )
 }
 
+// Searches open sources for a free copy of the book, only when asked, and lets the
+// learner open or import it straight into the reader.
+function FreeCopyFinder({ book }: { book: ResolvedBook }) {
+  const open = useContext(FreeCopyContext)
+  const [state, setState] = useState<'idle' | 'looking' | 'done' | 'error'>('idle')
+  const [copies, setCopies] = useState<FreeCopy[]>([])
+  if (!open) return null
+  async function look() {
+    setState('looking')
+    try {
+      setCopies(await findFreeCopies(book))
+      setState('done')
+    } catch {
+      setState('error')
+    }
+  }
+  return (
+    <div className="plan-freecopy">
+      {state === 'idle' ? (
+        <button className="text-button" onClick={() => void look()}>
+          Find a free copy
+        </button>
+      ) : null}
+      {state === 'looking' ? <small>Searching open libraries…</small> : null}
+      {state === 'error' ? <small>The search is unavailable right now.</small> : null}
+      {state === 'done' && copies.length === 0 ? (
+        <small>No free copy found. It is probably still in copyright. Buy a DRM-free copy to import it.</small>
+      ) : null}
+      {copies.map((copy) => (
+        <button key={copy.id} className="secondary-button" onClick={() => void open(copy)}>
+          {copy.readerUrl ? 'Read in Noesis' : 'Import'} · {copy.source}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function BookCard({ book, rank }: { book: ResolvedBook; rank?: number }) {
   return (
     <article className="plan-book">
@@ -71,10 +109,13 @@ export function BookCard({ book, rank }: { book: ResolvedBook; rank?: number }) 
                 <a href={link.url} target="_blank" rel="noreferrer noopener">
                   {link.store} <ExternalLink size={11} />
                 </a>
+                {link.note ? <small>{link.note}</small> : null}
               </li>
             ))}
+            <li className="plan-buy-note">Only DRM-free EPUB or PDF files can be imported into Noesis.</li>
           </ul>
         </details>
+        <FreeCopyFinder book={book} />
         {book.freeUrl ? (
           <a className="plan-free" href={book.freeUrl} target="_blank" rel="noreferrer noopener">
             Free copy
@@ -645,7 +686,7 @@ export function PathPlanner({
                           </li>
                         ))}
                       </ul>
-                      {own.length > 5 ? (
+                      {own.length > 0 ? (
                         <div className="plan-books">
                           {own.map((book, index) => (
                             <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} rank={index + 1} />

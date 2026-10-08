@@ -16,7 +16,7 @@ export type PlanMilestone = {
 
 export type PlanResource = { title: string; publisher: string; url: string; kind: string; note?: string }
 
-export type BookLinks = { store: string; url: string }
+export type BookLinks = { store: string; url: string; note?: string }
 export type RatingSource = { source: string; average: number; count: number }
 export type ResolvedBook = {
   title: string
@@ -383,14 +383,20 @@ export function pickBook(records: BookRecord[], title: string, author: string): 
 export function buyLinks(record: Pick<BookRecord, 'title' | 'authors' | 'isbn10' | 'isbn13' | 'buyLink'>): BookLinks[] {
   const query = encodeURIComponent(record.isbn13 ?? `${record.title} ${record.authors[0] ?? ''}`.trim())
   const links: BookLinks[] = [
-    { store: 'Bookshop.org', url: `https://bookshop.org/search?keywords=${query}` },
+    { store: 'Bookshop.org', url: `https://bookshop.org/search?keywords=${query}`, note: 'E-books are DRM-free' },
     {
       store: 'Amazon',
       url: record.isbn10 ? `https://www.amazon.com/dp/${record.isbn10}` : `https://www.amazon.com/s?k=${query}`,
+      note: 'Kindle copies can’t be imported',
     },
   ]
-  if (record.buyLink && isPublicHttps(record.buyLink)) links.push({ store: 'Google Play Books', url: record.buyLink })
-  links.push({ store: 'Find in a library', url: `https://search.worldcat.org/search?q=${query}` })
+  if (record.buyLink && isPublicHttps(record.buyLink))
+    links.push({ store: 'Google Play Books', url: record.buyLink, note: 'Can’t be imported' })
+  links.push({
+    store: 'Find in a library',
+    url: `https://search.worldcat.org/search?q=${query}`,
+    note: 'Borrow for free',
+  })
   return links
 }
 

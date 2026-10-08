@@ -6836,3 +6836,23 @@ body {
   font-size: 13px;
   line-height: 1.45;
 }
+.plan-freecopy {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.plan-freecopy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.buy-menu li small {
+  display: block;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.buy-menu .plan-buy-note {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
