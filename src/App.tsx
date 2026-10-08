@@ -2018,6 +2018,10 @@ function App() {
             onClose={() => setUtilityOverlay(null)}
           />
         ) : null}
+        <footer className="legal-footer">
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </footer>
         {notice ? (
           <div className="toast-notice">
             <Sparkles size={15} /> {notice}

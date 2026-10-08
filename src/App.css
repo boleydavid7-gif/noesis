@@ -889,3 +889,7 @@ body { background: #060d14; }
 .review-draft { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
 .review-draft label { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 .review-draft textarea { min-height: 54px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; color: inherit; background: rgba(5, 19, 33, .55); font: inherit; font-size: 12px; resize: vertical; }
+
+.legal-footer { display: flex; justify-content: center; gap: 18px; padding: 24px 0 32px; font-size: 11px; }
+.legal-footer a { color: var(--muted); text-decoration: none; }
+.legal-footer a:hover { color: #fff; text-decoration: underline; }
