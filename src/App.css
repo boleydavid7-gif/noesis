@@ -20,6 +20,9 @@
 .brand-row strong { display: block; font-family: var(--display); font-size: 19px; letter-spacing: .08em; }
 .brand-row span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
 .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid rgba(142, 203, 255, .52); border-radius: 10px; color: #c8e4ff; background: linear-gradient(145deg, rgba(78, 155, 255, .34), rgba(26, 65, 106, .32)); box-shadow: 0 0 24px rgba(67, 151, 239, .24); }
+.noesis-mark { display: block; flex: 0 0 auto; overflow: visible; }
+.brand-mark .noesis-mark { --mark-accent: #e0b86b; }
+.home-hero-mark .noesis-mark { --mark-accent: #e5bd70; filter: drop-shadow(0 0 12px rgba(224, 184, 107, .28)); }
 .main-nav { display: grid; gap: 4px; padding: 22px 10px; }
 .nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border: 1px solid transparent; border-radius: 10px; color: var(--muted); background: transparent; font-size: 13px; letter-spacing: .01em; text-align: left; transition: .2s ease; }
 .nav-item:hover { color: #e6f1ff; background: rgba(90, 145, 205, .1); }
