@@ -46,6 +46,37 @@ const configs: Record<CloudProviderId, { clientId: string; scopes: string; authU
   },
 }
 
+/**
+ * Cloudflare can expose these public OAuth identifiers at runtime. This keeps
+ * provider setup working when a host does not pass VITE_* values into the
+ * Vite build environment. Build-time values still work as a fallback.
+ */
+export async function loadCloudProviderConfig(): Promise<CloudProviderInfo[]> {
+  if (typeof window === 'undefined') return listCloudProviders()
+  try {
+    const response = await fetch('/api/config', { cache: 'no-store' })
+    if (response.ok) {
+      const body = await response.json() as {
+        googleDriveClientId?: unknown
+        oneDriveClientId?: unknown
+        dropboxAppKey?: unknown
+      }
+      const runtimeValues: Record<CloudProviderId, unknown> = {
+        'google-drive': body.googleDriveClientId,
+        onedrive: body.oneDriveClientId,
+        dropbox: body.dropboxAppKey,
+      }
+      for (const id of Object.keys(configs) as CloudProviderId[]) {
+        const value = runtimeValues[id]
+        if (typeof value === 'string' && value.trim()) configs[id].clientId = value.trim()
+      }
+    }
+  } catch {
+    // The build-time configuration remains usable when runtime config is unavailable.
+  }
+  return listCloudProviders()
+}
+
 const providerDetails: Record<CloudProviderId, Omit<CloudProviderInfo, 'configured'>> = {
   'google-drive': { id: 'google-drive', label: 'Google Drive', description: 'Your Drive app folder', setupUrl: 'https://console.cloud.google.com/apis/credentials' },
   onedrive: { id: 'onedrive', label: 'OneDrive', description: 'Your OneDrive app folder', setupUrl: 'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade' },
