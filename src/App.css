@@ -644,7 +644,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: conic-gradient(#4aa8ff var(--progress), rgba(120, 163, 204, 0.18) 0);
+  background: conic-gradient(var(--gold-warm, #c7a36a) var(--progress), rgba(120, 163, 204, 0.18) 0);
   box-shadow: 0 4px 13px rgba(0, 0, 0, 0.32);
 }
 .progress-ring::before {
@@ -8526,4 +8526,63 @@ body {
 .checklist-card .text-button,
 .read-next-card .text-button {
   font-size: 14px;
+}
+
+.library-split-body {
+  display: block;
+}
+@media (min-width: 1000px) {
+  .library-split .library-split-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+    align-items: start;
+  }
+  .library-split .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  .book-card-selected .book-card-cover {
+    outline: 2px solid var(--gold-warm, #c7a36a);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+.book-detail {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+.book-detail h3 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 20px;
+}
+.book-detail-cover {
+  width: 58%;
+  aspect-ratio: 2 / 3;
+  margin-inline: auto;
+}
+.book-detail-cover > * {
+  height: 100%;
+}
+.book-detail-author {
+  margin: 0;
+  opacity: 0.75;
+}
+.book-detail-about {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+.book-detail-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.deep-search {
+  margin-top: 10px;
 }
