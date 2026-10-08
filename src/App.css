@@ -7881,3 +7881,9 @@ body {
 .reader-define em {
   color: var(--muted);
 }
+.setting-credits {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  font-size: 12px;
+}

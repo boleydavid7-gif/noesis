@@ -577,7 +577,22 @@ function PrivacySection({
   )
 }
 
+type SoundCredit = { name: string; title: string; author: string; license: string; url: string }
+
 function AboutSection() {
+  const [credits, setCredits] = useState<SoundCredit[]>([])
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/audio/ambient/credits.json')
+      .then((response) => (response.ok ? response.json() : []))
+      .then((list: unknown) => {
+        if (!cancelled && Array.isArray(list)) setCredits(list as SoundCredit[])
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
   return (
     <Group title="Noesis">
       <Row title="Version" detail={`Built ${__BUILD_DATE__}`}>
@@ -588,6 +603,17 @@ function AboutSection() {
           Contact
         </a>
       </Row>
+      {credits.length > 0 ? (
+        <Row title="Sounds">
+          <span className="setting-links setting-credits">
+            {credits.map((credit) => (
+              <a key={credit.name} href={credit.url} target="_blank" rel="noreferrer">
+                {credit.title} · {credit.author} · {credit.license}
+              </a>
+            ))}
+          </span>
+        </Row>
+      ) : null}
       <Row title="Legal">
         <span className="setting-links">
           <a href="/privacy" target="_blank" rel="noreferrer">
