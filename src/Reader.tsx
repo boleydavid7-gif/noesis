@@ -17,6 +17,7 @@ import {
   Maximize2,
   MessageCircleQuestion,
   Minimize2,
+  PanelRight,
   Pause,
   Play,
   Plus,
@@ -24,6 +25,7 @@ import {
   Square,
   Sparkles,
   Type,
+  X,
 } from 'lucide-react'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
@@ -230,6 +232,8 @@ export function Reader({
   const setFontSize = (value: number) => onReadingChange({ fontSize: value })
   const setReaderTheme = (value: ReaderTheme) => onReadingChange({ theme: value })
   const [wideLayout, setWideLayout] = useState(reading.startWide)
+  // The tools panel covers the page on a phone, so it starts closed there.
+  const [toolsOpen, setToolsOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches)
   const [searchOpen, setSearchOpen] = useState(Boolean(initialSearch))
   const [searchTerm, setSearchTerm] = useState(initialSearch ?? '')
   const [searchOutcome, setSearchOutcome] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] })
@@ -852,7 +856,7 @@ export function Reader({
       }
     >
       {wideLayout ? (
-        <div className="reader-wide-topbar" aria-label="Focus reader controls">
+        <div className="reader-wide-topbar" aria-label="Expanded reader controls">
           <div className="reader-wide-capture">
             <span>Capture</span>
             <select
@@ -878,6 +882,15 @@ export function Reader({
           </div>
           <div className="reader-wide-actions">
             <button
+              className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
+              onClick={() => setToolsOpen((value) => !value)}
+              aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
+              aria-pressed={toolsOpen}
+              title="Reading tools"
+            >
+              <PanelRight size={18} />
+            </button>
+            <button
               className="icon-button"
               onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
               aria-label="Ask Noema about this page"
@@ -888,8 +901,8 @@ export function Reader({
             <button
               className="icon-button"
               onClick={() => setWideLayout(false)}
-              aria-label="Exit focus reader"
-              title="Exit focus reader"
+              aria-label="Exit expanded view"
+              title="Exit expanded view"
             >
               <Minimize2 size={18} />
             </button>
@@ -1133,7 +1146,7 @@ export function Reader({
             <option value="night">Night</option>
           </select>
           <button className="secondary-button" onClick={() => setWideLayout(true)}>
-            <Maximize2 size={14} /> Wide
+            <Maximize2 size={14} /> Expand
           </button>
         </div>
       ) : null}
@@ -1272,7 +1285,7 @@ export function Reader({
           </aside>
         ) : null}
       </div>
-      {wideLayout ? (
+      {wideLayout && toolsOpen ? (
         <ReaderWideSidebar
           book={book}
           notes={bookNotes}
@@ -1288,7 +1301,29 @@ export function Reader({
           }}
           onNote={onNote}
           onAsk={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
+          onClose={() => setToolsOpen(false)}
         />
+      ) : null}
+      {!wideLayout && book.format === 'epub' && chapterCount > 0 ? (
+        <div className="reader-pager" aria-label="Chapters">
+          <button
+            className="reader-page-button"
+            onClick={() => goToChapterRef.current(chapterIndex - 1)}
+            disabled={chapterIndex <= 0}
+            aria-label="Previous chapter"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <span>{chapterLabel}</span>
+          <button
+            className="reader-page-button"
+            onClick={() => goToChapterRef.current(chapterIndex + 1)}
+            disabled={chapterIndex >= chapterCount - 1}
+            aria-label="Next chapter"
+          >
+            <ArrowRight size={18} />
+          </button>
+        </div>
       ) : null}
       {wideLayout ? (
         <div className="reader-wide-footer">
@@ -1341,12 +1376,14 @@ function ReaderWideSidebar({
   location,
   onNote,
   onAsk,
+  onClose,
 }: {
   book: LibraryBook
   notes: Note[]
   location: BrainNoteLocation
   onNote: ReaderNoteHandler
   onAsk: () => void
+  onClose: () => void
 }) {
   return (
     <aside className="reader-wide-sidebar" aria-label="Reading tools">
@@ -1354,7 +1391,9 @@ function ReaderWideSidebar({
         <div>
           <h2>Second Brain</h2>
         </div>
-        <Brain size={18} />
+        <button className="icon-button" onClick={onClose} aria-label="Close reading tools">
+          <X size={16} />
+        </button>
       </div>
 
       <div className="reader-wide-sidebar-actions">
