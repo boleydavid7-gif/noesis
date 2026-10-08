@@ -11,6 +11,7 @@ The product centers on four things:
 - Highlight passages, write notes, and connect every note to its source.
 - Ask Noema about the selected passage, chapter, book, or library.
 - Group books into learning paths and track real reading and review progress.
+- Turn notes into review questions you approve, then study them on a schedule.
 
 ## Development
 

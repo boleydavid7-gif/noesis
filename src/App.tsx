@@ -55,6 +55,7 @@ import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } f
 import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
+import { ReviewPage } from './ReviewPage'
 import { markDeleted, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
 import { syncAccountLibrary } from './lib/accountLibrary'
@@ -116,6 +117,7 @@ const navItems = [
   { label: 'My Library', text: 'Library', icon: Library },
   { label: 'Read', text: 'Read', icon: BookOpen },
   { label: 'Notes', text: 'Second Brain', icon: Brain },
+  { label: 'Review', text: 'Review', icon: RotateCcw },
   { label: 'Learning Paths', text: 'Paths', icon: ListChecks },
   { label: 'Explore', text: 'Explore', icon: Search },
   { label: 'Cloud Backup', text: 'Settings', icon: Settings },
@@ -1483,6 +1485,10 @@ function App() {
       readPage()
     ) : activeNav === 'Notes' ? (
       notesPage()
+    ) : activeNav === 'Review' ? (
+      <Page title="Review" subtitle="Short questions from your own notes, scheduled so you remember them.">
+        <ReviewPage notes={notes} onNotice={showNotice} />
+      </Page>
     ) : activeNav === 'Progress' ? (
       progressPage()
     ) : activeNav === 'Explore' ? (

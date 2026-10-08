@@ -51,3 +51,33 @@ describe('worker', () => {
     expect((await call('/api/resource?url=https://www.gutenberg.org/a.epub', { headers: { 'cf-connecting-ip': '4.4.4.4' } })).status).toBe(413)
   })
 })
+
+describe('review route', () => {
+  const geminiReply = (text: string) => vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] })))
+  const post = (body: unknown, ip: string) =>
+    call('/api/review', { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify(body) }, { GEMINI_API_KEY: 'k' })
+  const passage = 'Photosynthesis converts light energy into chemical energy stored in sugars inside plant cells.'
+
+  it('rejects a passage that is too short', async () => {
+    expect((await post({ passage: 'too short' }, '5.5.5.1')).status).toBe(400)
+  })
+
+  it('returns validated cards and asks Gemini for JSON', async () => {
+    const mock = geminiReply(JSON.stringify([{ question: 'What does photosynthesis do?', answer: 'It turns light into chemical energy.' }, { question: '', answer: 'dropped' }]))
+    vi.stubGlobal('fetch', mock)
+    const response = await post({ passage, count: 3 }, '5.5.5.2')
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { cards: unknown[] }).cards).toHaveLength(1)
+    const init = (mock.mock.calls[0] as unknown as [string, RequestInit])[1]
+    expect(JSON.parse(String(init.body)).generationConfig.responseMimeType).toBe('application/json')
+  })
+
+  it('fails cleanly when the model returns non-JSON', async () => {
+    vi.stubGlobal('fetch', geminiReply('not json at all'))
+    expect((await post({ passage }, '5.5.5.3')).status).toBe(502)
+  })
+
+  it('only accepts POST', async () => {
+    expect((await call('/api/review')).status).toBe(405)
+  })
+})

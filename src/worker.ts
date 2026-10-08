@@ -60,11 +60,71 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
-async function answerTutor(request: Request, env: Env): Promise<Response> {
-  if (rateLimited(request, 'tutor', 20)) return json({ ok: false, error: 'Too many questions. Try again in a minute.' }, 429)
-  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
-    return json({ ok: false, error: 'Sign in to ask Noema.' }, 401)
+type Generated = { ok: true; text: string; model: string } | { ok: false; error: string; status: number }
+
+// One Gemini call with model fallback. Shared by the tutor and review routes.
+async function generate(
+  env: Env,
+  options: { system: string; prompt: string; maxOutputTokens: number; temperature: number; json?: boolean },
+): Promise<Generated> {
+  const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
+  if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.', status: 503 }
+
+  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
+  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
+  let lastStatus = 0
+  let lastDetail = ''
+  for (const model of models) {
+    let response: Response
+    try {
+      response = await fetchWithTimeout(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: options.system }] },
+          contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
+          generationConfig: {
+            temperature: options.temperature,
+            maxOutputTokens: options.maxOutputTokens,
+            ...(options.json ? { responseMimeType: 'application/json' } : {}),
+          },
+        }),
+      }, 25_000)
+    } catch {
+      return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
+    }
+
+    if (response.ok) {
+      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
+      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+      return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
+    }
+
+    lastStatus = response.status
+    try {
+      const providerError = (await response.clone().json()) as { error?: { message?: string } }
+      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
+    } catch {
+      lastDetail = ''
+    }
+    if (response.status === 429) return { ok: false, error: 'Gemini is busy. Try again in a moment.', status: 429 }
+    if (![404, 500, 502, 503, 504].includes(response.status)) break
   }
+  return { ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}`, status: 502 }
+}
+
+// Rate limit and (optionally) require a signed-in session for AI routes.
+async function guardAi(request: Request, env: Env, route: string, limit: number, busy: string, signIn: string): Promise<Response | null> {
+  if (rateLimited(request, route, limit)) return json({ ok: false, error: busy }, 429)
+  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
+    return json({ ok: false, error: signIn }, 401)
+  }
+  return null
+}
+
+async function answerTutor(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(request, env, 'tutor', 20, 'Too many questions. Try again in a minute.', 'Sign in to ask Noema.')
+  if (refused) return refused
   let input: { question?: unknown; context?: unknown; book?: unknown }
   try {
     input = (await request.json()) as typeof input
@@ -77,11 +137,6 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
 
   const context = typeof input.context === 'string' ? input.context.slice(0, MAX_CONTEXT_LENGTH) : ''
   const book = typeof input.book === 'string' ? input.book.slice(0, MAX_BOOK_LENGTH) : ''
-  const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
-  if (!apiKey) return json({ ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.' }, 503)
-
-  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
   const system = [
     'You are Noema, a calm and practical learning guide inside Noesis.',
     'Answer the learner directly in plain text. Use the supplied book and Second Brain context first.',
@@ -95,41 +150,53 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
   ].join(' ')
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
 
-  let lastStatus = 0
-  let lastDetail = ''
-  for (const model of models) {
-    let response: Response
-    try {
-      response = await fetchWithTimeout(`${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.35, maxOutputTokens: 800 },
-        }),
-      }, 25_000)
-    } catch {
-      return json({ ok: false, error: 'Noema could not reach Gemini right now.' }, 502)
-    }
+  const result = await generate(env, { system, prompt, maxOutputTokens: 800, temperature: 0.35 })
+  return result.ok ? json({ ok: true, text: result.text, model: result.model }) : json({ ok: false, error: result.error }, result.status)
+}
 
-    if (response.ok) {
-      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-      const text = body.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
-      return text ? json({ ok: true, text, model }) : json({ ok: false, error: 'Gemini returned an empty answer.' }, 502)
-    }
+const MAX_PASSAGE_LENGTH = 6_000
 
-    lastStatus = response.status
-    try {
-      const providerError = (await response.clone().json()) as { error?: { message?: string } }
-      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
-    } catch {
-      lastDetail = ''
-    }
-    if (response.status === 429) return json({ ok: false, error: 'Gemini is busy. Try again in a moment.' }, 429)
-    if (![404, 500, 502, 503, 504].includes(response.status)) break
+// Drafts study questions from one passage. The client shows them to the
+// learner, who approves each one before it becomes a review card.
+async function draftReviewCards(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(request, env, 'review', 10, 'Too many requests. Try again in a minute.', 'Sign in to create review questions.')
+  if (refused) return refused
+  let input: { passage?: unknown; bookTitle?: unknown; count?: unknown }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
   }
-  return json({ ok: false, error: `Gemini request failed (${lastStatus}) after trying available tutor models.${lastDetail ? ` ${lastDetail}` : ''}` }, 502)
+  const passage = typeof input.passage === 'string' ? input.passage.trim().slice(0, MAX_PASSAGE_LENGTH) : ''
+  if (passage.length < 40) return json({ ok: false, error: 'Select a longer passage to make questions from.' }, 400)
+  const bookTitle = typeof input.bookTitle === 'string' ? input.bookTitle.slice(0, 200) : ''
+  const requested = typeof input.count === 'number' && Number.isFinite(input.count) ? Math.round(input.count) : 3
+  const count = Math.max(1, Math.min(5, requested))
+
+  const system = [
+    'You write review questions for a learner, grounded only in the passage supplied.',
+    'Return a JSON array of objects with "question" and "answer" strings, and nothing else.',
+    'Every question must be answerable from the passage alone, without outside knowledge or the surrounding book.',
+    'Prefer questions that test understanding of an idea over recalling exact wording. Keep each answer to one to three sentences.',
+    'Do not invent facts or quotations. If the passage supports fewer questions than requested, return fewer.',
+  ].join(' ')
+  const prompt = `${bookTitle ? `Book: ${bookTitle}\n` : ''}Write up to ${count} questions.\n\nPassage:\n${passage}`
+  const result = await generate(env, { system, prompt, maxOutputTokens: 900, temperature: 0.3, json: true })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema returned questions in an unexpected format. Try again.' }, 502)
+  }
+  const list = Array.isArray(parsed) ? parsed : (parsed as { cards?: unknown } | null)?.cards
+  const cards = (Array.isArray(list) ? list : [])
+    .map((item) => item as { question?: unknown; answer?: unknown })
+    .filter((item) => typeof item?.question === 'string' && typeof item?.answer === 'string' && item.question.trim() && item.answer.trim())
+    .slice(0, count)
+    .map((item) => ({ question: String(item.question).trim().slice(0, 400), answer: String(item.answer).trim().slice(0, 800) }))
+  return cards.length > 0 ? json({ ok: true, cards }) : json({ ok: false, error: 'Noema could not make questions from that passage.' }, 502)
 }
 
 type SearchResult = {
@@ -319,6 +386,10 @@ const worker = {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204 })
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return answerTutor(request, env)
+    }
+    if (url.pathname === '/api/review') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return draftReviewCards(request, env)
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)

@@ -777,3 +777,20 @@ body { background: #060d14; }
   .reader-wide-actions .icon-button { width: 34px; height: 34px; flex-basis: 34px; }
 }
 
+
+/* Review */
+.review-page { display: grid; gap: 14px; }
+.review-page .panel-card { padding: 18px; }
+.review-page h3 { margin: 0 0 8px; }
+.review-count, .review-hint, .review-origin, .review-source small, .review-card-row small { color: var(--muted); font-size: 11px; }
+.review-question { margin: 10px 0 14px; font-size: 18px; line-height: 1.4; }
+.review-answer { margin: 0 0 8px; padding: 12px 14px; border-left: 2px solid #5eb0f6; border-radius: 0 8px 8px 0; background: rgba(42, 105, 157, .14); font-size: 14px; line-height: 1.5; }
+.review-ratings { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.review-source, .review-card-row { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.review-source p { margin: 4px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.review-card-row { grid-template-columns: 1fr auto; align-items: center; }
+.review-card-row div { display: grid; gap: 3px; }
+.review-drafts { display: grid; gap: 10px; }
+.review-draft { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.review-draft label { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.review-draft textarea { min-height: 54px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; color: inherit; background: rgba(5, 19, 33, .55); font: inherit; font-size: 12px; resize: vertical; }
