@@ -118,6 +118,7 @@ import {
   subscribeToAuth,
   updateProfileName,
   upgradeAnonymousAccount,
+  updatePassword,
 } from './lib/auth'
 import type { User } from '@supabase/supabase-js'
 
@@ -145,6 +146,7 @@ type Resource = {
 type UtilityOverlay = 'calendar' | 'weather' | null
 
 const PATHS_KEY = 'noesis:paths:v1'
+const KEEP_BANNER_KEY = 'noesis:keep-banner:v1'
 const PROFILE_NAME_KEY = 'noesis:profile:first-name:v1'
 const navItems = [
   { label: 'Home', text: 'Home', icon: Home },
@@ -274,6 +276,17 @@ function App() {
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
+  const [recovering, setRecovering] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [justSavedPath, setJustSavedPath] = useState<string | null>(null)
+  const [signOutClear, setSignOutClear] = useState(false)
+  const [keepDismissed, setKeepDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(KEEP_BANNER_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const [authBusy, setAuthBusy] = useState(false)
   const [cloudConnections, setCloudConnections] = useState<CloudConnection[]>(() => readCloudConnections())
   const [cloudProviders, setCloudProviders] = useState<CloudProviderInfo[]>(() => listCloudProviders())
@@ -312,6 +325,12 @@ function App() {
     ? Math.round(books.reduce((sum, book) => sum + book.progress, 0) / books.length)
     : 0
   const timeGreeting = greetingFor(now)
+  const showKeepBanner =
+    !keepDismissed &&
+    (paths.length > 0 || notes.length > 0) &&
+    !(authUser && !isAnonymousUser(authUser)) &&
+    !(selectedBook && activeNav === 'Read') &&
+    activeNav !== 'Settings'
   const displayName = displayNameFor(authUser, profileFirstName)
   const focusRemaining = focusRemainingSeconds(focusState, focusNow)
   // Brings calendar, focus steps and review cards from a sync into this device.
@@ -449,7 +468,10 @@ function App() {
         if (!cancelled) setAuthUser(session?.user ?? null)
       })
       .catch(() => undefined)
-    const unsubscribe = subscribeToAuth((_event, session) => setAuthUser(session?.user ?? null))
+    const unsubscribe = subscribeToAuth((event, session) => {
+      setAuthUser(session?.user ?? null)
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+    })
     return () => {
       cancelled = true
       unsubscribe()
@@ -1107,6 +1129,26 @@ function App() {
     const next = [path, ...paths]
     setPaths(next)
     writePaths(next)
+    setJustSavedPath(path.id)
+  }
+  function goSignIn(mode: 'sign-in' | 'sign-up' = 'sign-in') {
+    setAuthMode(mode)
+    openSettings('account')
+  }
+  async function saveNewPassword(event: React.FormEvent) {
+    event.preventDefault()
+    if (newPassword.length < 6) {
+      showNotice('Use at least six characters.')
+      return
+    }
+    try {
+      await updatePassword(newPassword)
+      setRecovering(false)
+      setNewPassword('')
+      showNotice('Password updated.')
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : 'Could not update your password.')
+    }
   }
   function deleteBook(book: LibraryBook) {
     if (settings.library.confirmDelete && !window.confirm(`Remove ${book.title} from your library?`)) return
@@ -1121,6 +1163,9 @@ function App() {
       )
     )
       return
+    wipeLocalData()
+  }
+  function wipeLocalData() {
     try {
       for (const key of Object.keys(localStorage)) if (key.startsWith('noesis:')) localStorage.removeItem(key)
     } catch {
@@ -1233,7 +1278,11 @@ function App() {
       } else {
         const session = await signInWithPassword(email, authPassword)
         setAuthUser(session.user)
-        showNotice('Signed in. Your notes and backup are connected.')
+        showNotice(
+          books.length + notes.length + paths.length > 0
+            ? 'Signed in. What’s on this device will be added to your account.'
+            : 'Signed in.',
+        )
       }
       setAuthPassword('')
     } catch (reason) {
@@ -1271,10 +1320,21 @@ function App() {
     }
   }
   async function handleSignOut() {
+    if (
+      signOutClear &&
+      !window.confirm(
+        'Remove your books and notes from this device after signing out? Sync first if you want to keep them.',
+      )
+    )
+      return
     try {
       await signOut()
       setAuthUser(null)
-      showNotice('Signed out. Your local library and provider connection remain on this device.')
+      if (signOutClear) {
+        wipeLocalData()
+        return
+      }
+      showNotice('Signed out. Your books and notes are still on this device.')
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : 'Could not sign out.')
     }
@@ -1454,6 +1514,24 @@ function App() {
             <small>by Proairetos</small>
           </div>
         </section>
+        {books.length + paths.length + notes.length === 0 ? (
+          <section className="start-card panel-card">
+            <h2>Start here</h2>
+            <div className="start-actions">
+              <button className="primary-button" onClick={() => selectNav('Learning Paths')}>
+                <Sparkles size={15} /> Plan what to learn
+              </button>
+              <button className="secondary-button" onClick={() => fileInput.current?.click()}>
+                <Plus size={15} /> Add a book
+              </button>
+              {authUser && !isAnonymousUser(authUser) ? null : (
+                <button className="secondary-button" onClick={() => goSignIn('sign-up')}>
+                  <UserRound size={15} /> Create an account
+                </button>
+              )}
+            </div>
+          </section>
+        ) : null}
         <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
         <FreeCopyContext.Provider value={addResource}>
           <PathSection
@@ -1539,7 +1617,12 @@ function App() {
     return (
       <Page title="Learning paths" subtitle="">
         <FreeCopyContext.Provider value={addResource}>
-          <PathPlanner onSave={savePlannedPath} onNotice={showNotice} />
+          <PathPlanner
+            onSave={savePlannedPath}
+            onNotice={showNotice}
+            signedIn={Boolean(authUser)}
+            onSignIn={() => goSignIn('sign-in')}
+          />
           <h3 className="paths-own-heading">Or build your own</h3>
           <form className="create-form panel-card" onSubmit={createPath}>
             <input
@@ -1557,9 +1640,11 @@ function App() {
             </button>
           </form>
           <PathSection
+            key={justSavedPath ?? 'paths'}
             paths={paths}
             books={books}
             editable
+            initialOpen={justSavedPath}
             onDelete={(id) => {
               const next = paths.filter((path) => path.id !== id)
               markDeleted('path', id)
@@ -1937,9 +2022,19 @@ function App() {
               <h3>{displayName || authUser.email}</h3>
               <p>{authUser.email}</p>
             </div>
-            <button className="secondary-button" onClick={() => void handleSignOut()}>
-              Sign out
-            </button>
+            <div className="account-signout">
+              <button className="secondary-button" onClick={() => void handleSignOut()}>
+                Sign out
+              </button>
+              <label className="account-signout-clear">
+                <input
+                  type="checkbox"
+                  checked={signOutClear}
+                  onChange={(event) => setSignOutClear(event.target.checked)}
+                />
+                Also remove my books and notes from this device
+              </label>
+            </div>
           </section>
         ) : (
           <form className="auth-form panel-card" onSubmit={handleAuth}>
@@ -2009,7 +2104,11 @@ function App() {
                 Forgot password?
               </button>
             ) : null}
-            <p className="auth-footnote">Your library stays on this device. Sign in to sync notes and books.</p>
+            <p className="auth-footnote">
+              {authMode === 'sign-in' && books.length + notes.length + paths.length > 0
+                ? 'Your books, notes and paths on this device will be added to your account when you sign in. Anything already in the account stays too.'
+                : 'Your library stays on this device. Sign in to sync notes and books.'}
+            </p>
           </form>
         )}
       </>
@@ -2188,6 +2287,27 @@ function App() {
             {displayName?.slice(0, 1).toUpperCase() || <UserRound size={16} />}
           </button>
         </header>
+        {showKeepBanner ? (
+          <div className="keep-banner" role="status">
+            <span>Your work is only on this device. Create an account to keep it and use it anywhere.</span>
+            <button className="secondary-button" onClick={() => goSignIn('sign-up')}>
+              Create account
+            </button>
+            <button
+              className="text-button"
+              onClick={() => {
+                setKeepDismissed(true)
+                try {
+                  localStorage.setItem(KEEP_BANNER_KEY, '1')
+                } catch {
+                  // The banner may come back next visit.
+                }
+              }}
+            >
+              Not now
+            </button>
+          </div>
+        ) : null}
         <div className="page-content">{page}</div>
         <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           <button className={activeNav === 'Home' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Home')}>
@@ -2281,6 +2401,32 @@ function App() {
         ) : null}
         {createPortal(
           <>
+            {recovering ? (
+              <div className="brain-backdrop" data-overlay>
+                <form className="recovery-panel panel-card" onSubmit={(event) => void saveNewPassword(event)}>
+                  <h2>Choose a new password</h2>
+                  <label>
+                    New password
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="At least 6 characters"
+                      autoFocus
+                    />
+                  </label>
+                  <div className="recovery-actions">
+                    <button className="primary-button" type="submit">
+                      Save password
+                    </button>
+                    <button type="button" className="text-button" onClick={() => setRecovering(false)}>
+                      Skip
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : null}
             {overlay === 'brain' ? (
               <BrainOverlay
                 notes={notes}
@@ -2573,9 +2719,11 @@ function PathSection({
   onAssign,
   onUpdate,
   onAsk,
+  initialOpen = null,
 }: {
   paths: LearningPath[]
   books: LibraryBook[]
+  initialOpen?: string | null
   onOpen?: () => void
   editable?: boolean
   onDelete?: (id: string) => void
@@ -2583,7 +2731,14 @@ function PathSection({
   onUpdate?: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
 }) {
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(initialOpen)
+  const detailRef = useRef<HTMLElement | null>(null)
+  // A path that was just saved opens straight away and scrolls into view.
+  useEffect(() => {
+    if (!initialOpen) return
+    const timer = window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+    return () => window.clearTimeout(timer)
+  }, [initialOpen])
   const progressOf = (path: LearningPath) => {
     const pathBooks = books.filter((book) => path.bookIds.includes(book.id))
     const plan = path.plan ? planProgress(path.plan) : null
@@ -2658,7 +2813,7 @@ function PathSection({
         </div>
       )}
       {active && detail ? (
-        <article className="path-detail panel-card">
+        <article className="path-detail panel-card" ref={detailRef}>
           <div className="path-detail-head">
             <div>
               <h3>{active.title}</h3>
