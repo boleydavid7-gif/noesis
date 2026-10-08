@@ -7952,3 +7952,46 @@ body {
 .shelf-picker-pop {
   min-width: 200px;
 }
+.reader-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.reader-pager .reader-page-button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: inherit;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.35);
+  border-radius: 50%;
+  background: rgba(14, 40, 66, 0.7);
+  cursor: pointer;
+}
+.reader-pager .reader-page-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+@media (max-width: 899px) {
+  .reader-wide-sidebar {
+    left: 13px;
+    width: auto;
+  }
+}
+@media (max-width: 899px) {
+  .reader-pager {
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom) + 86px);
+    z-index: 30;
+    margin-top: 8px;
+    border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+    border-radius: 999px;
+    background: rgba(8, 20, 34, 0.94);
+    backdrop-filter: blur(8px);
+  }
+}
