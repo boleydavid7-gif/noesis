@@ -3,12 +3,15 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 
 export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note' | 'connection'
 
-export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink'
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | 'purple' | 'teal'
 export const HIGHLIGHT_COLORS: Array<{ id: HighlightColor; label: string; css: string }> = [
   { id: 'yellow', label: 'Yellow', css: '#f2d46b' },
   { id: 'green', label: 'Green', css: '#86d19a' },
   { id: 'blue', label: 'Blue', css: '#7fb8f2' },
   { id: 'pink', label: 'Pink', css: '#ef9ab0' },
+  { id: 'orange', label: 'Orange', css: '#f0a868' },
+  { id: 'purple', label: 'Purple', css: '#b79cef' },
+  { id: 'teal', label: 'Teal', css: '#6fd3c9' },
 ]
 
 export type BrainNoteLocation = {

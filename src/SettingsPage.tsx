@@ -3,7 +3,25 @@ import { Search } from 'lucide-react'
 import { Group, Row, Segmented, Toggle } from './settings/controls'
 import { canEmbedOnDevice } from './lib/embeddings'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings/sections'
-import { ACCENTS, FONT_STACKS, READER_COLORS, updateSetting, type AccentName, type Settings } from './lib/settings'
+import {
+  ACCENTS,
+  FONT_STACKS,
+  READER_COLORS,
+  SURFACES,
+  updateSetting,
+  type AccentName,
+  type Settings,
+  type SurfaceName,
+} from './lib/settings'
+import {
+  IMAGE_PRESETS,
+  applyImages,
+  cssForImage,
+  readImages,
+  saveImage,
+  shrinkPicture,
+  type ImageSlot,
+} from './lib/images'
 import { formatBytes, rebuildTextIndex } from './lib/reindex'
 import type { LibraryBook } from './lib/library'
 
@@ -257,6 +275,25 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
           ))}
         </div>
       </Row>
+      <Row title="App colors" detail="The dark color behind every page.">
+        <div className="swatches" role="radiogroup" aria-label="App colors">
+          {(Object.keys(SURFACES) as SurfaceName[]).map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="radio"
+              aria-checked={appearance.surface === name}
+              aria-label={SURFACES[name].label}
+              title={SURFACES[name].label}
+              className={appearance.surface === name ? 'swatch swatch-on' : 'swatch'}
+              style={{ background: SURFACES[name].vars['--surface-main-b'] ?? '#071d34' }}
+              onClick={() => set('appearance', 'surface', name)}
+            />
+          ))}
+        </div>
+      </Row>
+      <ImagePicker slot="banner" title="Home banner" />
+      <ImagePicker slot="sidebar" title="Sidebar picture" />
       <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds.">
         <Toggle
           checked={appearance.scenery}
@@ -279,6 +316,61 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
         />
       </Row>
     </Group>
+  )
+}
+
+function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
+  const [current, setCurrent] = useState<string | undefined>(() => readImages()[slot])
+  const [note, setNote] = useState('')
+  const choose = (value: string | null) => {
+    if (!saveImage(slot, value)) {
+      setNote('That picture is too large to keep on this device. Try a smaller one.')
+      return
+    }
+    setNote('')
+    setCurrent(value ?? undefined)
+    applyImages()
+  }
+  return (
+    <Row title={title} detail="Pick a look, or use your own picture.">
+      <div className="image-picker">
+        <div className="image-picker-options">
+          <button
+            type="button"
+            className={!current ? 'image-option image-option-on' : 'image-option'}
+            onClick={() => choose(null)}
+          >
+            Original
+          </button>
+          {IMAGE_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              aria-label={preset.label}
+              title={preset.label}
+              className={current === preset.id ? 'image-option image-option-on' : 'image-option'}
+              style={{ background: cssForImage(preset.id) }}
+              onClick={() => choose(preset.id)}
+            />
+          ))}
+          <label className={current?.startsWith('data:') ? 'image-option image-option-on' : 'image-option'}>
+            Upload
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (!file) return
+                shrinkPicture(file).then(choose, () => setNote('That file could not be read as a picture.'))
+              }}
+            />
+          </label>
+        </div>
+        {note ? <small role="status">{note}</small> : null}
+      </div>
+    </Row>
   )
 }
 
