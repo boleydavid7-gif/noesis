@@ -1,15 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft,
   ArrowRight,
   BookOpen,
   Brain,
-  CalendarDays,
   CheckCircle2,
-  Circle,
   CircleHelp,
   Cloud,
-  CloudSun,
   Download,
   FileText,
   Highlighter,
@@ -62,6 +58,20 @@ import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
+import { ContextSidebar } from './ContextSidebar'
+import { CalendarPanel } from './CalendarPanel'
+import { WeatherPanel } from './WeatherPanel'
+import {
+  addFocusTask,
+  focusRemainingSeconds,
+  formatTimer,
+  readFocusState,
+  removeFocusTask,
+  writeFocusState,
+  type FocusState,
+} from './lib/focus'
+import { readEvents, toggleDone, writeEvents, type CalendarEvent } from './lib/calendar'
+import { readWeatherSettings, writeWeatherSettings, type WeatherSettings } from './lib/weather'
 import { timeAgo } from './lib/time'
 import { readSettings, rootAppearance, writeSettings, type Settings as AppSettings } from './lib/settings'
 import { dueCards, readReviewCards } from './lib/review'
@@ -120,22 +130,10 @@ type Resource = {
   format: string
   kind: 'book' | 'article'
 }
-type FocusTask = { label: string; done: boolean }
-type FocusState = {
-  title: string
-  tasks: FocusTask[]
-  durationMinutes: number
-  elapsedSeconds: number
-  startedAt?: number
-  running: boolean
-}
 type UtilityOverlay = 'calendar' | 'weather' | null
-type WeatherSettings = { location: string; unit: 'F' | 'C' }
 
 const PATHS_KEY = 'noesis:paths:v1'
 const PROFILE_NAME_KEY = 'noesis:profile:first-name:v1'
-const FOCUS_KEY = 'noesis:focus:v1'
-const WEATHER_KEY = 'noesis:weather:v1'
 const navItems = [
   { label: 'Home', text: 'Home', icon: Home },
   { label: 'My Library', text: 'Library', icon: Library },
@@ -157,73 +155,6 @@ function readPaths(): LearningPath[] {
 }
 function writePaths(paths: LearningPath[]) {
   localStorage.setItem(PATHS_KEY, JSON.stringify(paths))
-}
-const defaultFocusState = (): FocusState => ({
-  title: 'Today’s focus',
-  tasks: [
-    { label: 'Read for 30 minutes', done: false },
-    { label: 'Capture 2 key ideas', done: false },
-    { label: 'Reflect on one chapter', done: false },
-    { label: 'Make one connection', done: false },
-  ],
-  durationMinutes: 30,
-  elapsedSeconds: 0,
-  running: false,
-})
-function readFocusState(): FocusState {
-  try {
-    const value = JSON.parse(localStorage.getItem(FOCUS_KEY) ?? 'null') as Partial<FocusState> | null
-    if (!value || !Array.isArray(value.tasks)) return defaultFocusState()
-    return {
-      ...defaultFocusState(),
-      ...value,
-      tasks: value.tasks
-        .filter((task): task is FocusTask =>
-          Boolean(task && typeof task === 'object' && typeof task.label === 'string'),
-        )
-        .map((task) => ({ label: task.label, done: Boolean(task.done) })),
-    }
-  } catch {
-    return defaultFocusState()
-  }
-}
-function writeFocusState(value: FocusState) {
-  try {
-    localStorage.setItem(FOCUS_KEY, JSON.stringify(value))
-  } catch {
-    /* local storage can be unavailable */
-  }
-}
-function focusRemainingSeconds(value: FocusState, now = Date.now()): number {
-  const elapsed =
-    value.elapsedSeconds + (value.running && value.startedAt ? Math.floor((now - value.startedAt) / 1000) : 0)
-  return Math.max(0, value.durationMinutes * 60 - elapsed)
-}
-function formatTimer(seconds: number): string {
-  const safe = Math.max(0, Math.floor(seconds))
-  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`
-}
-function weatherLabel(value: number, unit: WeatherSettings['unit']): string {
-  const temperature = unit === 'C' ? Math.round(((value - 32) * 5) / 9) : Math.round(value)
-  return `${temperature}°${unit}`
-}
-function readWeatherSettings(): WeatherSettings {
-  try {
-    const value = JSON.parse(localStorage.getItem(WEATHER_KEY) ?? 'null') as Partial<WeatherSettings> | null
-    return {
-      location: typeof value?.location === 'string' ? value.location : 'Reading retreat',
-      unit: value?.unit === 'C' ? 'C' : 'F',
-    }
-  } catch {
-    return { location: 'Reading retreat', unit: 'F' }
-  }
-}
-function writeWeatherSettings(value: WeatherSettings) {
-  try {
-    localStorage.setItem(WEATHER_KEY, JSON.stringify(value))
-  } catch {
-    /* local storage can be unavailable */
-  }
 }
 function greetingFor(date: Date): string {
   const hour = date.getHours()
@@ -344,7 +275,8 @@ function App() {
   const [focusState, setFocusState] = useState<FocusState>(() => readFocusState())
   const [focusNow, setFocusNow] = useState(() => Date.now())
   const [weatherSettings, setWeatherSettings] = useState<WeatherSettings>(() => readWeatherSettings())
-  const [weatherTemperature] = useState<number | null>(56)
+  const [events, setEvents] = useState<CalendarEvent[]>(() => readEvents())
+  const [calendarSeed, setCalendarSeed] = useState<{ date?: string; adding?: boolean }>({})
   const authUserRef = useLatest(authUser)
   const notesRef = useLatest(notes)
   const authUserId = authUser?.id
@@ -604,6 +536,15 @@ function App() {
       document.removeEventListener('keyup', update)
     }
   }, [])
+  const closeUtility = useCallback(() => setUtilityOverlay(null), [])
+  function updateEvents(next: CalendarEvent[]) {
+    setEvents(next)
+    writeEvents(next)
+  }
+  function updateWeather(next: WeatherSettings) {
+    setWeatherSettings(next)
+    writeWeatherSettings(next)
+  }
   function updateSettings(next: AppSettings) {
     setSettings(next)
     writeSettings(next)
@@ -1217,6 +1158,14 @@ function App() {
                 onChange={(event) => updateFocusState((current) => ({ ...current, title: event.target.value }))}
               />
             </label>
+            <label className="focus-title-field">
+              Session name
+              <input
+                value={focusState.session}
+                maxLength={40}
+                onChange={(event) => updateFocusState((current) => ({ ...current, session: event.target.value }))}
+              />
+            </label>
             <div className="focus-task-editor">
               {focusState.tasks.map((task, index) => (
                 <label className="focus-task-editor-row" key={`${task.label}-${index}`}>
@@ -1232,21 +1181,31 @@ function App() {
                       }))
                     }
                   />
+                  <button
+                    type="button"
+                    className="focus-item-remove"
+                    onClick={() => updateFocusState((current) => removeFocusTask(current, index))}
+                    aria-label={`Remove: ${task.label}`}
+                  >
+                    <X size={13} />
+                  </button>
                 </label>
               ))}
             </div>
-            <button
-              className="secondary-button focus-add-task"
-              type="button"
-              onClick={() =>
-                updateFocusState((current) => ({
-                  ...current,
-                  tasks: [...current.tasks, { label: 'New focus step', done: false }],
-                }))
-              }
+            <form
+              className="focus-add focus-add-wide"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const field = event.currentTarget.elements.namedItem('step') as HTMLInputElement
+                updateFocusState((current) => addFocusTask(current, field.value))
+                field.value = ''
+              }}
             >
-              <Plus size={14} /> Add focus step
-            </button>
+              <input name="step" placeholder="Add a focus step" maxLength={120} aria-label="Add a focus step" />
+              <button type="submit" className="secondary-button">
+                <Plus size={14} /> Add
+              </button>
+            </form>
             <small className="focus-completion">
               {completed} of {focusState.tasks.length} steps complete
             </small>
@@ -1353,12 +1312,6 @@ function App() {
             <small>by Proairetos</small>
           </div>
         </section>
-        <FocusHomeWidget
-          focus={focusState}
-          remaining={focusRemaining}
-          onOpen={() => selectNav('Focus')}
-          onToggle={focusState.running ? pauseFocusTimer : startFocusTimer}
-        />
         <ReadingShelfSection
           books={filteredBooks.slice(0, 6)}
           onOpen={openSavedBook}
@@ -1951,14 +1904,10 @@ function App() {
       <aside className={`sidebar ${mobileNavOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-image" aria-hidden="true" />
         <div className="sidebar-content">
-          <div className="brand-row">
-            <div className="brand-mark">
-              <NoesisMark size={22} />
-            </div>
-            <div>
-              <strong>NOESIS</strong>
-              <span>by Proairetos</span>
-            </div>
+          <div className="brand-row brand-lockup">
+            <NoesisMark size={84} />
+            <strong>NOESIS</strong>
+            <span>by Proairetos</span>
             <button
               className="icon-button sidebar-close"
               onClick={() => setMobileNavOpen(false)}
@@ -2170,18 +2119,18 @@ function App() {
             onClose={() => setOverlay(null)}
           />
         ) : null}
-        {utilityOverlay === 'calendar' ? <CalendarOverlay now={now} onClose={() => setUtilityOverlay(null)} /> : null}
-        {utilityOverlay === 'weather' ? (
-          <WeatherOverlay
-            settings={weatherSettings}
-            temperature={weatherTemperature}
-            onSave={(next) => {
-              setWeatherSettings(next)
-              writeWeatherSettings(next)
-              setUtilityOverlay(null)
-            }}
-            onClose={() => setUtilityOverlay(null)}
+        {utilityOverlay === 'calendar' ? (
+          <CalendarPanel
+            now={now}
+            events={events}
+            onChange={updateEvents}
+            initialDate={calendarSeed.date}
+            startAdding={calendarSeed.adding}
+            onClose={closeUtility}
           />
+        ) : null}
+        {utilityOverlay === 'weather' ? (
+          <WeatherPanel settings={weatherSettings} onChange={updateWeather} onClose={closeUtility} />
         ) : null}
         <footer className="legal-footer">
           <a href="/privacy">Privacy</a>
@@ -2193,334 +2142,33 @@ function App() {
           </div>
         ) : null}
       </main>
-      {activeNav !== 'Read' && activeNav !== 'Settings' ? (
-        <DesktopContextSidebar
+      {activeNav !== 'Settings' ? (
+        <ContextSidebar
           now={now}
-          notes={notes}
           focus={focusState}
           remaining={focusRemaining}
-          weather={weatherSettings}
-          weatherTemperature={weatherTemperature}
-          onOpenNotes={() => setOverlay('brain')}
+          onFocusChange={updateFocusState}
+          onToggleTimer={focusState.running ? pauseFocusTimer : startFocusTimer}
           onOpenFocus={() => selectNav('Focus')}
-          onToggleFocus={focusState.running ? pauseFocusTimer : startFocusTimer}
-          onToggleTask={toggleFocusTask}
-          onOpenCalendar={() => setUtilityOverlay('calendar')}
+          events={events}
+          onToggleEvent={(eventId, date) =>
+            updateEvents(events.map((item) => (item.id === eventId ? toggleDone(item, date) : item)))
+          }
+          onOpenCalendar={(date, adding) => {
+            setCalendarSeed({ date, adding })
+            setUtilityOverlay('calendar')
+          }}
+          weather={weatherSettings}
+          onWeatherChange={updateWeather}
           onOpenWeather={() => setUtilityOverlay('weather')}
+          onAddNote={() => openNotePanel()}
+          onAskNoema={() => openNoemaPanel()}
         />
       ) : null}
     </div>
   )
 }
 
-function FocusHomeWidget({
-  focus,
-  remaining,
-  onOpen,
-  onToggle,
-}: {
-  focus: FocusState
-  remaining: number
-  onOpen: () => void
-  onToggle: () => void
-}) {
-  const completed = focus.tasks.filter((task) => task.done).length
-  return (
-    <section className="focus-home-widget panel-card">
-      <button className="focus-home-main" onClick={onOpen}>
-        <div>
-          <p className="eyebrow">Today’s focus</p>
-          <h3>{focus.title}</h3>
-          <span>
-            {completed} of {focus.tasks.length} steps complete
-          </span>
-        </div>
-        <strong>{formatTimer(remaining)}</strong>
-      </button>
-      <div className="focus-home-actions">
-        <button className="primary-button" onClick={onToggle}>
-          {focus.running ? <Pause size={14} /> : <Play size={14} />}
-          {focus.running ? 'Pause timer' : remaining < focus.durationMinutes * 60 ? 'Resume timer' : 'Start timer'}
-        </button>
-        <button className="secondary-button" onClick={onOpen}>
-          Open focus <ArrowRight size={14} />
-        </button>
-      </div>
-    </section>
-  )
-}
-
-function CalendarOverlay({ now, onClose }: { now: Date; onClose: () => void }) {
-  const [viewDate, setViewDate] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1))
-  const year = viewDate.getFullYear()
-  const month = viewDate.getMonth()
-  const firstDay = new Date(year, month, 1).getDay()
-  const days = new Date(year, month + 1, 0).getDate()
-  const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
-  return (
-    <div className="utility-backdrop" data-overlay onMouseDown={onClose}>
-      <section className="utility-panel calendar-panel" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="utility-panel-head">
-          <div>
-            <p className="eyebrow">Reading calendar</p>
-            <h2>{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
-          </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close calendar">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="calendar-toolbar">
-          <button
-            className="icon-button"
-            onClick={() => setViewDate(new Date(year, month - 1, 1))}
-            aria-label="Previous month"
-          >
-            <ArrowLeft size={15} />
-          </button>
-          <button className="text-button" onClick={() => setViewDate(new Date(now.getFullYear(), now.getMonth(), 1))}>
-            Today
-          </button>
-          <button
-            className="icon-button"
-            onClick={() => setViewDate(new Date(year, month + 1, 1))}
-            aria-label="Next month"
-          >
-            <ArrowRight size={15} />
-          </button>
-        </div>
-        <div className="calendar-grid calendar-weekdays">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <span key={day}>{day}</span>
-          ))}
-        </div>
-        <div className="calendar-grid calendar-days">
-          {Array.from({ length: firstDay }, (_, index) => (
-            <span className="calendar-day calendar-day-empty" key={`empty-${index}`} />
-          ))}
-          {Array.from({ length: days }, (_, index) => {
-            const day = index + 1
-            const key = `${year}-${month}-${day}`
-            return (
-              <button
-                key={key}
-                className={`calendar-day ${key === todayKey ? 'calendar-day-today' : ''}`}
-                onClick={onClose}
-              >
-                {day}
-              </button>
-            )
-          })}
-        </div>
-        <p className="utility-panel-footnote">Use your focus page to set a reading session for today.</p>
-      </section>
-    </div>
-  )
-}
-
-function WeatherOverlay({
-  settings,
-  temperature,
-  onSave,
-  onClose,
-}: {
-  settings: WeatherSettings
-  temperature: number | null
-  onSave: (settings: WeatherSettings) => void
-  onClose: () => void
-}) {
-  const [draft, setDraft] = useState(settings)
-  return (
-    <div className="utility-backdrop" data-overlay onMouseDown={onClose}>
-      <section className="utility-panel weather-panel" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="utility-panel-head">
-          <div>
-            <p className="eyebrow">Reading weather</p>
-            <h2>{weatherLabel(temperature ?? 56, draft.unit)}</h2>
-            <span className="utility-muted">{draft.location || 'Your reading retreat'}</span>
-          </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close weather">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="weather-current">
-          <CloudSun size={32} />
-          <div>
-            <strong>Quiet skies</strong>
-            <span>Set your preferred place and units for this sidebar.</span>
-          </div>
-        </div>
-        <label>
-          Location
-          <input
-            value={draft.location}
-            onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-            placeholder="City or reading retreat"
-          />
-        </label>
-        <label>
-          Temperature units
-          <select
-            value={draft.unit}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, unit: event.target.value as WeatherSettings['unit'] }))
-            }
-          >
-            <option value="F">Fahrenheit</option>
-            <option value="C">Celsius</option>
-          </select>
-        </label>
-        <button className="primary-button" onClick={() => onSave(draft)}>
-          <Settings size={15} /> Save weather settings
-        </button>
-      </section>
-    </div>
-  )
-}
-
-function DesktopContextSidebar({
-  now,
-  notes,
-  focus,
-  remaining,
-  weather,
-  weatherTemperature,
-  onOpenNotes,
-  onOpenFocus,
-  onToggleFocus,
-  onToggleTask,
-  onOpenCalendar,
-  onOpenWeather,
-}: {
-  now: Date
-  notes: Note[]
-  focus: FocusState
-  remaining: number
-  weather: WeatherSettings
-  weatherTemperature: number | null
-  onOpenNotes: () => void
-  onOpenFocus: () => void
-  onToggleFocus: () => void
-  onToggleTask: (index: number) => void
-  onOpenCalendar: () => void
-  onOpenWeather: () => void
-}) {
-  const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(now)
-  const highlights = notes.filter((note) => note.kind === 'highlight').slice(0, 3)
-  const questions = notes.filter((note) => note.kind === 'question').length
-  const reflections = notes.filter((note) => note.kind === 'idea' || note.kind === 'connection').length
-  return (
-    <aside className="desktop-context-sidebar" aria-label="Daily reading context">
-      <div className="context-date-row">
-        <button className="context-date-button" onClick={onOpenCalendar} aria-label="Open calendar">
-          <CalendarDays size={12} /> {dateLabel}
-        </button>
-        <button className="context-weather-button" onClick={onOpenWeather} aria-label="Open weather settings">
-          <CloudSun size={14} /> {weatherLabel(weatherTemperature ?? 56, weather.unit)}
-        </button>
-      </div>
-      <section className="context-section context-focus">
-        <div className="context-section-heading">
-          <button className="context-heading-button" onClick={onOpenFocus}>
-            <h2>{focus.title}</h2>
-            <ArrowRight size={12} />
-          </button>
-          <button className="context-more-button" onClick={onOpenFocus} aria-label="Open focus settings">
-            <MoreVertical size={14} />
-          </button>
-        </div>
-        <p className="context-intro">Make reading part of the day, one quiet session at a time.</p>
-        <div className="focus-list">
-          {focus.tasks.map((task, index) => (
-            <button
-              key={`${task.label}-${index}`}
-              className={task.done ? 'focus-item focus-item-done' : 'focus-item'}
-              onClick={() => onToggleTask(index)}
-            >
-              {task.done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-              <span>{task.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="context-focus-timer">
-          <span>
-            {focus.running
-              ? `Focus running · ${formatTimer(remaining)}`
-              : remaining < focus.durationMinutes * 60
-                ? `Paused · ${formatTimer(remaining)}`
-                : `${focus.durationMinutes} minute timer`}
-          </span>
-          <button onClick={onToggleFocus}>
-            {focus.running ? <Pause size={12} /> : <Play size={12} />}
-            {focus.running ? 'Pause' : 'Start'}
-          </button>
-        </div>
-      </section>
-      <section className="context-section">
-        <div className="context-section-heading">
-          <h2>Recent highlights</h2>
-          <button onClick={onOpenNotes}>
-            View all <ArrowRight size={12} />
-          </button>
-        </div>
-        {highlights.length > 0 ? (
-          <div className="context-highlight-list">
-            {highlights.map((note) => (
-              <article key={note.id}>
-                <Highlighter size={12} />
-                <div>
-                  <p>{note.body}</p>
-                  <small>{note.source}</small>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="context-empty">Highlights from your reading will appear here.</p>
-        )}
-      </section>
-      <section className="context-section context-brain">
-        <div className="context-section-heading">
-          <h2>Your Second Brain</h2>
-          <button onClick={onOpenNotes}>
-            Open <ArrowRight size={12} />
-          </button>
-        </div>
-        <p className="context-intro">Your highlights, notes, and connections in one place.</p>
-        <div className="context-metrics">
-          <div>
-            <strong>{notes.length}</strong>
-            <span>Notes</span>
-          </div>
-          <div>
-            <strong>{highlights.length}</strong>
-            <span>Highlights</span>
-          </div>
-          <div>
-            <strong>{questions + reflections}</strong>
-            <span>Ideas</span>
-          </div>
-        </div>
-        {notes[0] ? (
-          <div className="context-quote">
-            <QuoteMark />
-            <p>
-              “{notes[0].body.slice(0, 96)}
-              {notes[0].body.length > 96 ? '…' : ''}”
-            </p>
-            <small>{notes[0].source}</small>
-          </div>
-        ) : null}
-      </section>
-    </aside>
-  )
-}
-function QuoteMark() {
-  return (
-    <span className="context-quote-mark" aria-hidden="true">
-      “
-    </span>
-  )
-}
 function Page({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="page-view">

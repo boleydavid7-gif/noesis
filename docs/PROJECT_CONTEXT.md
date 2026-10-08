@@ -42,6 +42,10 @@ The current app is a working reader-first build:
 - Account supports email/password sign-in and can upgrade an anonymous session
   without moving its notes to a new user.
 - Explore searches Project Gutenberg, Open Library, OpenAlex, and Internet Archive through `/api/search`; hosted and borrowed items can open their official reader inside Noesis.
+- The right sidebar (every page except Settings) holds Today's focus (timer, add/remove
+  steps), a calendar for classes, assignments and exams (repeating events,
+  per-day check-off, stored locally), a real weather forecast (city search or
+  Detect, via Open-Meteo) and quick actions.
 - Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
   AI Companion, Notifications, Privacy, and About. Every setting is stored
   locally (`noesis:settings:v1`) and read by the app: reader text/page/font,

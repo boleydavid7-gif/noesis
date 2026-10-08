@@ -522,7 +522,7 @@ export function Reader({
       rendition.current = null
       epubRef.current = null
     }
-  }, [book.id, bookRef, readerCallbacksRef, wideLayoutRef, wideCaptureKindRef, jumpLocation])
+  }, [book.id, bookRef, readerCallbacksRef, wideLayoutRef, wideCaptureKindRef, jumpLocation, readingRef])
   useEffect(() => {
     const query = activeQuery
     if (query.length < 2) return
