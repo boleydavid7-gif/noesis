@@ -8,6 +8,7 @@ import './App.css'
 import { hydrateRemoteNotes, persistNote, readLocalNotes, syncPendingNotes, type BrainNote, type BrainNoteKind, type BrainNoteLocation } from './lib/knowledge'
 import { epubBookFromParsed, openEpub, parseEpub, pdfBookFromSource } from './lib/epub'
 import { loadBookText, loadEpubFile, readLibraryBooks, removeLibraryBook, saveBookText, saveEpubFile, upsertLibraryBook, writeLibraryBooks, type LibraryBook } from './lib/library'
+import { syncAccountLibrary } from './lib/accountLibrary'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import { bindCloudConnectionsToUser, cloudConnectionForUser, connectCloudProvider, consumeCloudOAuthRedirect, disconnectCloudProvider, listCloudProviders, readCloudConnections, type CloudConnection, type CloudProviderId } from './lib/cloudProviders'
 import { syncCloudState } from './lib/cloudSync'
@@ -431,6 +432,20 @@ function App() {
     setCloudConnections((current) => JSON.stringify(current) === JSON.stringify(bound) ? current : bound)
   }, [authUser, authUserId])
   useEffect(() => {
+    if (!authUser || isAnonymousUser(authUser)) return
+    let cancelled = false
+    const restore = async () => {
+      try {
+        const restored = await syncAccountLibrary(readLibraryBooks())
+        if (!cancelled) setBooks((current) => JSON.stringify(current) === JSON.stringify(restored) ? current : (writeLibraryBooks(restored), restored))
+      } catch (reason) {
+        if (!cancelled) showNotice(reason instanceof Error ? reason.message : 'Your book files could not be synced yet. Notes are still connected.')
+      }
+    }
+    void restore()
+    return () => { cancelled = true }
+  }, [authUser, authUserId])
+  useEffect(() => {
     const metadata = authUser?.user_metadata as Record<string, unknown> | undefined
     const metadataName = [metadata?.first_name, metadata?.given_name, metadata?.full_name, metadata?.name].find((value): value is string => typeof value === 'string' && value.trim().length > 0) ?? ''
     setProfileFirstName(readProfileName(authUserId) || firstNameFromValue(metadataName) || (authUser ? '' : readProfileName()))
@@ -468,7 +483,7 @@ function App() {
     setNoteDraft({ title: choice.title, body: seed, source, kind: choice.kind, location: sourceLocation }); setOverlay('brain')
   }
   function openNoemaPanel(seed = '', context?: ReaderTutorContext) { setTutorPrompt(seed); setTutorContext(context ?? null); setTutorReply(''); setOverlay('noema') }
-  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; const isEpub = file.name.toLowerCase().endsWith('.epub'); const isPdf = file.name.toLowerCase().endsWith('.pdf'); if (!isEpub && !isPdf) { showNotice('Noesis imports EPUB and PDF files.'); return }; try { const data = await file.arrayBuffer(); const parsed = isEpub ? await parseEpub(data, file.name) : null; const book = parsed ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed) : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, file.name, file.size, file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '), 'Imported PDF'); await saveEpubFile(book.id, data); if (parsed?.text) await saveBookText(book.id, parsed.text); setBooks(upsertLibraryBook(book)); setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added to your library.`) } catch (reason) { showNotice(friendlyBookError(reason, 'Could not read that file.')) } }
+  async function handleImport(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; const isEpub = file.name.toLowerCase().endsWith('.epub'); const isPdf = file.name.toLowerCase().endsWith('.pdf'); if (!isEpub && !isPdf) { showNotice('Noesis imports EPUB and PDF files.'); return }; try { const data = await file.arrayBuffer(); const parsed = isEpub ? await parseEpub(data, file.name) : null; const book = parsed ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed) : pdfBookFromSource(`pdf-${crypto.randomUUID()}`, file.name, file.size, file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' '), 'Imported PDF'); await saveEpubFile(book.id, data); if (parsed?.text) await saveBookText(book.id, parsed.text); const nextBooks = upsertLibraryBook(book); setBooks(nextBooks); if (authUser && !isAnonymousUser(authUser)) { void syncAccountLibrary(nextBooks).then((synced) => setBooks(synced)).catch(() => undefined) } setSelectedBookId(book.id); setActiveNav('Read'); showNotice(`${book.title} was added to your library.`) } catch (reason) { showNotice(friendlyBookError(reason, 'Could not read that file.')) } }
   function updateBookProgress(id: string, progress: number, cfi?: string, href?: string, chapter?: string, chapterIndex?: number, chapterProgress?: number) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, progress, cfi: cfi ?? book.cfi, currentHref: href ?? book.currentHref, chapter: chapter ?? book.chapter, chapterIndex: chapterIndex ?? book.chapterIndex, chapterProgress: chapterProgress ?? book.chapterProgress, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   function toggleBookmark(id: string) { setBooks((current) => { const next = current.map((book) => book.id === id ? { ...book, bookmarked: !book.bookmarked, updated: new Date().toISOString() } : book); const changed = next.find((book) => book.id === id); if (changed) upsertLibraryBook(changed); return next }) }
   async function saveNote(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const body = noteDraft.body.trim(); if (body.length < 2) { showNotice('Write a note or highlight first.'); return }; const note: Note = { id: `local-${crypto.randomUUID()}`, kind: noteDraft.kind, title: noteDraft.title.trim() || (noteDraft.kind === 'highlight' ? 'Highlight' : 'Quick note'), body, source: noteDraft.source.trim() || 'Noesis', createdAt: new Date().toISOString(), ...noteDraft.location }; setNotes((current) => [note, ...current]); setNoteDraft({ title: '', body: '', source: '', kind: 'note' }); const destination = await persistNote(note); showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device. It will sync when Supabase is available.') }
