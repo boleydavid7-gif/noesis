@@ -77,6 +77,8 @@ import { readDiary } from './lib/diary'
 import { notesToZip } from './lib/exportNotes'
 import { bookmarkletCode, decodeCollection, encodeCollection, readIncoming, type SharedCollection } from './lib/share'
 import { excerpt, searchLibrary, searchPhrase, type LibraryHit } from './lib/librarySearch'
+import { onDeviceMeaning } from './lib/meaning'
+import { embedOnDevice } from './lib/embeddings'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
@@ -1934,7 +1936,7 @@ function App() {
             </button>
           </div>
         </div>
-        <LibraryDeepSearch books={books} onOpen={openAtPassage} onAsk={askAboutHits} />
+        <LibraryDeepSearch books={books} onOpen={openAtPassage} onAsk={askAboutHits} byMeaning={settings.ai.onDevice} />
         {allShelves.length + allSeries.length > 0 || hasFinished ? (
           <div className="shelf-chips" role="tablist" aria-label="Shelves">
             {[
@@ -2054,6 +2056,7 @@ function App() {
           onExport={() => void exportNotes()}
           onShare={(items) => void shareNotes(items)}
           onImportClippings={(file) => void importClippings(file)}
+          embed={settings.ai.onDevice ? embedOnDevice : undefined}
           notes={notes}
           onSave={(note) => void editNote(note)}
           onCreate={(fields) => void addNote(fields)}
@@ -3062,11 +3065,14 @@ function LibraryDeepSearch({
   books,
   onOpen,
   onAsk,
+  byMeaning,
 }: {
   books: LibraryBook[]
   onOpen: (bookId: string, phrase: string) => void
   onAsk: (question: string, hits: LibraryHit[]) => void
+  byMeaning: boolean
 }) {
+  const [step, setStep] = useState('')
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<LibraryHit[] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -3077,9 +3083,10 @@ function LibraryDeepSearch({
     if (query.trim().length < 3) return
     setBusy(true)
     try {
-      setHits(await searchLibrary(searchable, query, loadBookText))
+      setHits(await searchLibrary(searchable, query, loadBookText, 8, byMeaning ? onDeviceMeaning : undefined, setStep))
     } finally {
       setBusy(false)
+      setStep('')
     }
   }
   return (
@@ -3097,6 +3104,7 @@ function LibraryDeepSearch({
         <button className="secondary-button" type="submit" disabled={busy || query.trim().length < 3}>
           {busy ? 'Searching…' : 'Search inside books'}
         </button>
+        {busy && step ? <small className="deep-search-step">{step}</small> : null}
       </form>
       {hits ? (
         hits.length === 0 ? (

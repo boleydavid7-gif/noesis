@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Download, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
 import { diaryDays, type DiaryEntry } from './lib/diary'
 import { relatedNotes } from './lib/related'
+import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import type { BrainNote, BrainNoteKind } from './lib/knowledge'
 
@@ -70,7 +71,9 @@ export function SecondBrainPage({
   onExport,
   onShare,
   onImportClippings,
+  embed,
 }: {
+  embed?: Embed
   diary: DiaryEntry[]
   bookmarklet: string
   onExport: () => void
@@ -123,7 +126,27 @@ export function SecondBrainPage({
   }, [notes, tab, query, sort])
 
   const selected = selectedId && selectedId !== NEW ? (notes.find((note) => note.id === selectedId) ?? null) : null
-  const related = useMemo(() => (selected ? relatedNotes(selected, notes) : []), [selected, notes])
+  const keywordRelated = useMemo(() => (selected ? relatedNotes(selected, notes) : []), [selected, notes])
+  // With the model on, notes that mean the same thing are added to the ones that share words.
+  const vectorCache = useRef(new Map<string, Float32Array>())
+  const [byMeaning, setByMeaning] = useState<{ id: string; found: typeof notes }>({ id: '', found: [] })
+  useEffect(() => {
+    if (!embed || !selected) return
+    let active = true
+    void semanticRelated(selected, notes, embed, vectorCache.current)
+      .then((found) => {
+        if (active) setByMeaning({ id: selected.id, found: found.map((item) => item.note) })
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [embed, selected, notes])
+  const related = useMemo(() => {
+    const seen = new Set(keywordRelated.map((item) => item.note.id))
+    const extra = byMeaning.id === selected?.id ? byMeaning.found.filter((note) => !seen.has(note.id)) : []
+    return [...keywordRelated, ...extra.map((note) => ({ note, shared: ['similar idea'] }))].slice(0, 5)
+  }, [keywordRelated, byMeaning, selected])
   const editing = selected !== null || selectedId === NEW
   const dirty = selected ? JSON.stringify(draft) !== JSON.stringify(draftOf(selected)) : draft.body.trim() !== ''
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { Group, Row, Segmented, Toggle } from './settings/controls'
+import { canEmbedOnDevice } from './lib/embeddings'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings/sections'
 import { ACCENTS, FONT_STACKS, READER_COLORS, updateSetting, type AccentName, type Settings } from './lib/settings'
 import { formatBytes, rebuildTextIndex } from './lib/reindex'
@@ -472,6 +473,18 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
             label="Share the page I'm reading"
           />
         </Row>
+        {canEmbedOnDevice() ? (
+          <Row
+            title="Search by meaning"
+            detail="Finds passages and notes that mean the same thing, even in different words. Downloads a small model (about 25 MB) once, then runs on this device."
+          >
+            <Toggle
+              checked={ai.onDevice}
+              onChange={(value) => set('ai', 'onDevice', value)}
+              label="Search by meaning"
+            />
+          </Row>
+        ) : null}
         <Row title="Avoid spoilers" detail="Answers only use the part of the book you've read.">
           <Toggle
             checked={ai.avoidSpoilers}

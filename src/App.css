@@ -8078,3 +8078,8 @@ body {
     white-space: nowrap;
   }
 }
+.deep-search-step {
+  color: var(--muted);
+  font-size: 12px;
+  align-self: center;
+}
