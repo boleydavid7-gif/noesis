@@ -6,6 +6,8 @@ import {
   milestoneDone,
   pathFromSuggestion,
   pickBook,
+  withSchedule,
+  formatWeeks,
   planProgress,
   toggleTopic,
   topicCount,
@@ -335,5 +337,61 @@ describe('guided stages', () => {
     expect(guide.resources.map((resource) => resource.url)).toEqual(['https://a.example.com'])
     expect(guide.books.map((item) => item.title)).toEqual(['Computer Networking: A Top-Down Approach, 7th Edition'])
     expect(milestoneGuide(plan, {})).toEqual({ resources: [], books: [] })
+  })
+})
+
+describe('per-path books and schedule', () => {
+  const planned = cleanSuggestion('g', {
+    paths: [
+      {
+        title: 'Foundations of psychology',
+        milestones: [
+          { title: 'Intro', hours: 10, topics: ['a', 'b'] },
+          { title: 'Core', hours: 20, topics: ['c', 'd', 'e'] },
+          { title: 'No estimate', topics: ['f', 'g'] },
+        ],
+        reading: [
+          { title: 'Psychology', author: 'Myers' },
+          { title: 'Psychology', author: 'Myers' },
+        ],
+      },
+      {
+        title: 'Clinical psychology',
+        milestones: [
+          { title: 'One', topics: ['x'] },
+          { title: 'Two', topics: ['y'] },
+        ],
+        reading: [{ title: 'Abnormal Psychology', author: 'Comer' }],
+      },
+    ],
+  })!
+
+  it('keeps each path its own reading list and a combined list for lookups', () => {
+    expect(planned.paths.map((path) => path.books.map((book) => book.title))).toEqual([
+      ['Psychology'],
+      ['Abnormal Psychology'],
+    ])
+    expect(planned.books).toHaveLength(2)
+  })
+
+  it('allows up to six paths', () => {
+    const many = cleanSuggestion('g', {
+      paths: Array.from({ length: 9 }, (_, index) => ({
+        title: `Path ${index}`,
+        milestones: [
+          { title: 'a', topics: ['x'] },
+          { title: 'b', topics: ['y'] },
+        ],
+      })),
+    })!
+    expect(many.paths).toHaveLength(6)
+  })
+
+  it("works out weeks from study hours and the learner's hours per week", () => {
+    const path = withSchedule(planned.paths[0], 5)
+    // 10 + 20 + (2 topics x 3 hours) = 36 hours at 5 a week
+    expect(path.milestones.map((milestone) => milestone.timeframe)).toEqual(['Weeks 1–2', 'Weeks 3–6', 'Weeks 7–8'])
+    expect(path.weeks).toBe(formatWeeks(36 / 5))
+    expect(withSchedule(planned.paths[0], 10).weeks).not.toBe(path.weeks)
   })
 })

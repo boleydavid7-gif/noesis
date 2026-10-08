@@ -145,7 +145,13 @@ export async function loadBookText(id: string): Promise<string | null> {
   const db = await openDatabase()
   return new Promise<string | null>((resolve, reject) => {
     const request = db.transaction(TEXT_STORE, 'readonly').objectStore(TEXT_STORE).get(id)
-    request.onsuccess = () => { db.close(); resolve(typeof request.result === 'string' ? request.result : null) }
-    request.onerror = () => { db.close(); reject(request.error ?? new Error('Could not load the book text.')) }
+    request.onsuccess = () => {
+      db.close()
+      resolve(typeof request.result === 'string' ? request.result : null)
+    }
+    request.onerror = () => {
+      db.close()
+      reject(request.error ?? new Error('Could not load the book text.'))
+    }
   })
 }

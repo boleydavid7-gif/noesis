@@ -247,16 +247,42 @@ describe('learning path routes', () => {
     expect(body.suggestion.resources).toHaveLength(3)
   })
 
-  it('asks the model for a start point, timeframe and study materials for every stage', async () => {
+  it('asks the model for study hours, outcomes and a reading list per path', async () => {
     const mock = geminiThen(() => new Response('ok'))
     vi.stubGlobal('fetch', mock)
     await ask('I want to understand networking from scratch', '7.7.7.9')
     const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     const instructions = sent.systemInstruction.parts[0].text as string
-    expect(instructions).toContain('"timeframe"')
+    expect(instructions).toContain('"hours"')
     expect(instructions).toContain('"outcome"')
-    expect(instructions).toContain('"resources"')
-    expect(instructions).toContain('twenty real, published books')
+    expect(instructions).toContain('"reading"')
+    expect(instructions).toContain('six real, published books')
+    expect(instructions).not.toContain('"weeks"')
+  })
+
+  it('builds one path per chosen focus area and passes level and purpose along', async () => {
+    const mock = geminiThen(() => new Response('ok'))
+    vi.stubGlobal('fetch', mock)
+    await call(
+      '/api/path',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '7.7.8.1' },
+        body: JSON.stringify({
+          goal: 'Psychology',
+          focuses: ['Foundations of psychology', 'Clinical psychology'],
+          level: 'Complete beginner',
+          purpose: 'School or an exam',
+        }),
+      },
+      { GEMINI_API_KEY: 'k' },
+    )
+    const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    const instructions = sent.systemInstruction.parts[0].text as string
+    expect(instructions).toContain('exactly 2 paths')
+    expect(instructions).toContain('"Foundations of psychology", "Clinical psychology"')
+    expect(instructions).toContain('Complete beginner')
+    expect(instructions).toContain('School or an exam')
   })
 
   it('fails cleanly when the model returns something unusable', async () => {
@@ -514,5 +540,47 @@ describe('book ratings from two sources', () => {
       book: unknown
     }
     expect(body.book).toBeNull()
+  })
+})
+
+describe('clarify route', () => {
+  const focusReply = {
+    topic: 'Psychology',
+    broad: true,
+    focuses: [
+      { title: 'Foundations of psychology', description: 'The core ideas.' },
+      { title: 'Clinical psychology', description: 'Mental health and treatment.' },
+      { title: '', description: 'dropped' },
+    ],
+  }
+  const ask = (goal: unknown, ip: string) =>
+    call(
+      '/api/clarify',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify({ goal }) },
+      { GEMINI_API_KEY: 'k' },
+    )
+
+  it('turns a broad subject into specific focus areas', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(focusReply) }] } }] }),
+          ),
+      ),
+    )
+    const body = (await (await ask('Psychology', '7.7.9.1')).json()) as {
+      ok: boolean
+      broad: boolean
+      focuses: Array<{ title: string }>
+    }
+    expect(body.ok).toBe(true)
+    expect(body.broad).toBe(true)
+    expect(body.focuses.map((focus) => focus.title)).toEqual(['Foundations of psychology', 'Clinical psychology'])
+  })
+
+  it('rejects an empty goal', async () => {
+    expect((await ask('', '7.7.9.2')).status).toBe(400)
   })
 })

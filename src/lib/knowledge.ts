@@ -98,12 +98,16 @@ function fromRemote(row: Record<string, unknown>): BrainNote {
   let saved: Partial<BrainNote> = {}
   try {
     const parsed = JSON.parse(rawContent) as unknown
-    if (parsed && typeof parsed === 'object' && (parsed as { __noesisBrainNote?: unknown }).__noesisBrainNote === 1) saved = parsed as Partial<BrainNote>
+    if (parsed && typeof parsed === 'object' && (parsed as { __noesisBrainNote?: unknown }).__noesisBrainNote === 1)
+      saved = parsed as Partial<BrainNote>
   } catch {
     // Older notes stored plain text in content.
   }
   const rawKind = row.kind ?? saved.kind
-  const kind: BrainNoteKind = rawKind === 'highlight' || rawKind === 'idea' || rawKind === 'question' || rawKind === 'connection' ? rawKind : 'note'
+  const kind: BrainNoteKind =
+    rawKind === 'highlight' || rawKind === 'idea' || rawKind === 'question' || rawKind === 'connection'
+      ? rawKind
+      : 'note'
   return {
     id: String(row.id),
     kind,

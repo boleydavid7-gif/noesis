@@ -11,6 +11,7 @@ export type PlanMilestone = {
   outcome?: string // what the learner can do once the stage is finished
   resourceTitles?: string[] // titles from the plan's resource list to study with
   bookTitles?: string[] // titles from the plan's book list to study with
+  hours?: number // estimated study hours for the whole stage
 }
 
 export type PlanResource = { title: string; publisher: string; url: string; kind: string; note?: string }
@@ -42,6 +43,7 @@ export type SuggestedPath = {
   weeks: string
   level: string
   milestones: PlanMilestone[]
+  books: BookCandidate[] // this path's own reading list
 }
 export type BookCandidate = { title: string; author: string; note?: string }
 export type Suggestion = {
@@ -58,6 +60,7 @@ export type PathPlan = {
   weeks: string
   level: string
   milestones: PlanMilestone[]
+  hoursPerWeek?: number
   books: ResolvedBook[]
   resources: PlanResource[]
 }
@@ -106,11 +109,35 @@ function isPublicHttps(value: string): boolean {
   }
 }
 
+export const MAX_PATHS = 6
+
+function hoursOf(value: unknown): number | undefined {
+  const hours = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  return Number.isFinite(hours) && hours > 0 ? Math.min(80, Math.max(2, Math.round(hours))) : undefined
+}
+
+function cleanBooks(value: unknown, limit = 12): BookCandidate[] {
+  const seen = new Set<string>()
+  return (Array.isArray(value) ? value : [])
+    .slice(0, limit * 2)
+    .flatMap((item) => {
+      const row = (item ?? {}) as Record<string, unknown>
+      const title = clip(row.title, 140)
+      const author = clip(row.author, 100)
+      const key = `${title}|${author}`.toLowerCase()
+      if (!title || seen.has(key)) return []
+      seen.add(key)
+      const note = clip(row.note, 40)
+      return [{ title, author, note: note || undefined }]
+    })
+    .slice(0, limit)
+}
+
 // Turns whatever the model returned into a safe, bounded suggestion. Anything
 // malformed is dropped rather than repaired.
 export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
   const root = (raw ?? {}) as { paths?: unknown; books?: unknown; resources?: unknown }
-  const paths: SuggestedPath[] = (Array.isArray(root.paths) ? root.paths : []).slice(0, 3).flatMap((item) => {
+  const paths: SuggestedPath[] = (Array.isArray(root.paths) ? root.paths : []).slice(0, MAX_PATHS).flatMap((item) => {
     const row = item as Record<string, unknown>
     const title = clip(row.title, 80)
     const milestones: PlanMilestone[] = (Array.isArray(row.milestones) ? row.milestones : [])
@@ -138,11 +165,13 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
                 outcome: clip(milestone.outcome, 180) || undefined,
                 resourceTitles: titles(milestone.resources),
                 bookTitles: titles(milestone.books),
+                hours: hoursOf(milestone.hours),
               },
             ]
           : []
       })
     if (!title || milestones.length < 2) return []
+    const own = cleanBooks(row.reading ?? row.books)
     return [
       {
         id: uid('plan'),
@@ -151,22 +180,15 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
         weeks: clip(row.weeks, 24) || 'Self-paced',
         level: clip(row.level, 24) || 'Beginner',
         milestones,
+        books: own,
       },
     ]
   })
   if (paths.length === 0) return null
-
-  const seenBooks = new Set<string>()
-  const books: BookCandidate[] = (Array.isArray(root.books) ? root.books : []).slice(0, 24).flatMap((item) => {
-    const row = item as Record<string, unknown>
-    const title = clip(row.title, 140)
-    const author = clip(row.author, 100)
-    const key = `${title}|${author}`.toLowerCase()
-    if (!title || seenBooks.has(key)) return []
-    seenBooks.add(key)
-    const note = clip(row.note, 40)
-    return [{ title, author, note: note || undefined }]
-  })
+  const books = cleanBooks(
+    [...paths.flatMap((path) => path.books), ...(Array.isArray(root.books) ? root.books : [])],
+    120,
+  )
 
   const resources: PlanResource[] = (Array.isArray(root.resources) ? root.resources : [])
     .slice(0, 10)
@@ -186,6 +208,33 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
       ]
     })
   return { goal: clip(goal, 400), paths, books, resources }
+}
+
+export const HOURS_PER_TOPIC = 3
+
+// Study hours for a stage: the model's estimate when it gave one, otherwise a
+// flat allowance per topic.
+export const stageHours = (milestone: PlanMilestone) => milestone.hours ?? milestone.topics.length * HOURS_PER_TOPIC
+
+export function formatWeeks(weeks: number): string {
+  if (weeks <= 1) return 'About 1 week'
+  const low = Math.max(1, Math.floor(weeks * 0.85))
+  const high = Math.ceil(weeks * 1.15)
+  return low === high ? `About ${low} weeks` : `About ${low}–${high} weeks`
+}
+
+// Works out the schedule from the work in each stage and how many hours a week
+// the learner has, instead of trusting a duration the model made up.
+export function withSchedule(path: SuggestedPath, hoursPerWeek: number): SuggestedPath {
+  const rate = Math.max(1, hoursPerWeek)
+  let elapsed = 0
+  const milestones = path.milestones.map((milestone) => {
+    const start = Math.floor(elapsed / rate) + 1
+    elapsed += stageHours(milestone)
+    const end = Math.max(start, Math.ceil(elapsed / rate))
+    return { ...milestone, timeframe: start === end ? `Week ${start}` : `Weeks ${start}–${end}` }
+  })
+  return { ...path, milestones, weeks: formatWeeks(elapsed / rate) }
 }
 
 export function topicCount(milestones: PlanMilestone[]): number {
@@ -250,6 +299,7 @@ export function pathFromSuggestion(
   path: SuggestedPath,
   books: ResolvedBook[],
   now = new Date(),
+  hoursPerWeek?: number,
 ): LearningPath {
   const stamp = now.toISOString()
   return {
@@ -265,6 +315,7 @@ export function pathFromSuggestion(
       weeks: path.weeks,
       level: path.level,
       milestones: path.milestones,
+      hoursPerWeek,
       books,
       resources: suggestion.resources,
     },

@@ -5,11 +5,19 @@ import type { BrainNote } from './knowledge'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 import { isAnonymousUser } from './auth'
 
-export type BackupPayload = { version: 1; createdAt: string; books: LibraryBook[]; notes: BrainNote[]; paths: unknown[] }
+export type BackupPayload = {
+  version: 1
+  createdAt: string
+  books: LibraryBook[]
+  notes: BrainNote[]
+  paths: unknown[]
+}
 
 function getClient(): SupabaseClient | null {
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: true, autoRefreshToken: true } })
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true },
+  })
 }
 
 function dataUrlToBytes(value: string): Uint8Array | null {
@@ -41,27 +49,50 @@ export async function readBackup(file: Blob): Promise<BackupPayload> {
   const manifest = zip.file('manifest.json')
   if (!manifest) throw new Error('This is not a Noesis backup file.')
   const parsed = JSON.parse(await manifest.async('text')) as Partial<BackupPayload>
-  if (parsed.version !== 1 || !Array.isArray(parsed.books) || !Array.isArray(parsed.notes) || !Array.isArray(parsed.paths)) throw new Error('This backup was created by an incompatible version of Noesis.')
-  return { version: 1, createdAt: String(parsed.createdAt ?? new Date().toISOString()), books: parsed.books as LibraryBook[], notes: parsed.notes as BrainNote[], paths: parsed.paths }
+  if (
+    parsed.version !== 1 ||
+    !Array.isArray(parsed.books) ||
+    !Array.isArray(parsed.notes) ||
+    !Array.isArray(parsed.paths)
+  )
+    throw new Error('This backup was created by an incompatible version of Noesis.')
+  return {
+    version: 1,
+    createdAt: String(parsed.createdAt ?? new Date().toISOString()),
+    books: parsed.books as LibraryBook[],
+    notes: parsed.notes as BrainNote[],
+    paths: parsed.paths,
+  }
 }
 
 export async function downloadBackup(books: LibraryBook[], notes: BrainNote[], paths: unknown[]): Promise<void> {
   const blob = await createBackupBlob(books, notes, paths)
   const url = URL.createObjectURL(blob)
-  const link = document.createElement('a'); link.href = url; link.download = `noesis-backup-${new Date().toISOString().slice(0, 10)}.zip`; link.click(); URL.revokeObjectURL(url)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `noesis-backup-${new Date().toISOString().slice(0, 10)}.zip`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 async function authenticatedClient(): Promise<{ client: SupabaseClient; userId: string }> {
-  const client = getClient(); if (!client) throw new Error('Supabase browser configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Cloudflare build variables.')
+  const client = getClient()
+  if (!client)
+    throw new Error(
+      'Supabase browser configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Cloudflare build variables.',
+    )
   const session = await client.auth.getSession()
-  if (session.data.session?.user.id && !isAnonymousUser(session.data.session.user)) return { client, userId: session.data.session.user.id }
+  if (session.data.session?.user.id && !isAnonymousUser(session.data.session.user))
+    return { client, userId: session.data.session.user.id }
   throw new Error('Sign in to your Noesis account before using Supabase backup.')
 }
 
 export async function uploadCloudBackup(books: LibraryBook[], notes: BrainNote[], paths: unknown[]): Promise<void> {
   const auth = await authenticatedClient()
   const blob = await createBackupBlob(books, notes, paths)
-  const result = await auth.client.storage.from('noesis-backups').upload(`${auth.userId}/latest.zip`, blob, { upsert: true, contentType: 'application/zip' })
+  const result = await auth.client.storage
+    .from('noesis-backups')
+    .upload(`${auth.userId}/latest.zip`, blob, { upsert: true, contentType: 'application/zip' })
   if (result.error) throw new Error(result.error.message)
 }
 
