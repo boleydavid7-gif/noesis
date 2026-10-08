@@ -268,34 +268,57 @@ function displayNameFor(user: User | null, preferred = ''): string {
 function NoesisMark({ size = 22 }: { size?: number }) {
   return (
     <svg className="noesis-mark" width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <path
-        d="M9 17.5c8.5-3 16.2-2.1 23 3.6v31.2c-6.8-5.5-14.5-6.7-23-3.7V17.5Z"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M55 17.5c-8.5-3-16.2-2.1-23 3.6v31.2c6.8-5.5 14.5-6.7 23-3.7V17.5Z"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinejoin="round"
-      />
-      <path d="M32 21.5v30.8" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-      <path
-        d="M32 44c.2-7.8 3.5-13.3 9.6-17"
-        stroke="var(--mark-accent, #d5ab61)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="m42.3 11.5 1.7 4.6 4.6 1.7-4.6 1.7-1.7 4.6-1.7-4.6-4.6-1.7 4.6-1.7 1.7-4.6Z"
-        stroke="var(--mark-accent, #d5ab61)"
-        strokeWidth="1.9"
-        strokeLinejoin="round"
-      />
+      <g transform="translate(3.2 4.2) scale(.9)">
+        <path
+          d="M9 24.5c8.5-3 16.2-2.1 23 3.6v27.2c-6.8-5.5-14.5-6.7-23-3.7V24.5Z"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M55 24.5c-8.5-3-16.2-2.1-23 3.6v27.2c6.8-5.5 14.5-6.7 23-3.7V24.5Z"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinejoin="round"
+        />
+        <path d="M32 28.1v27.2" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+        <path
+          d="M32 27C32 19 34.5 11.5 41 4.5"
+          stroke="var(--mark-accent, #d5ab61)"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+        <g fill="var(--mark-accent, #d5ab61)">
+          <path
+            transform="translate(32.6 20.4) rotate(-131) scale(1)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+          <path
+            transform="translate(33.3 17.6) rotate(-22) scale(1)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+          <path
+            transform="translate(34.6 14.0) rotate(-118) scale(0.95)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+          <path
+            transform="translate(36.2 10.9) rotate(-8) scale(0.9)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+          <path
+            transform="translate(38.2 7.9) rotate(-106) scale(0.8)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+          <path
+            transform="translate(41.0 4.5) rotate(-47) scale(1)"
+            d="M0 0C1.4-1.9 4.4-2.2 6.6 0 4.4 2.2 1.4 1.9 0 0Z"
+          />
+        </g>
+      </g>
     </svg>
   )
 }
+
 function ProgressRing({ value }: { value: number }) {
   return (
     <div
