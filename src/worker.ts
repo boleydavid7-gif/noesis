@@ -28,6 +28,7 @@ type Env = {
   DROPBOX_APP_KEY?: string
 }
 
+const RETRY_PAUSE_MS = 1_500
 const MAX_QUESTION_LENGTH = 2_000
 const MAX_CONTEXT_LENGTH = 32_000
 const MAX_BOOK_LENGTH = 36_000
@@ -94,52 +95,81 @@ async function generate(
   if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.', status: 503 }
 
   const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  const models = [...new Set([configuredModel, 'gemini-flash-latest', 'gemini-2.5-flash'])]
+  // When the main model is overloaded the lighter ones usually still answer.
+  const models = [
+    ...new Set([
+      configuredModel,
+      'gemini-flash-latest',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-flash-lite-latest',
+    ]),
+  ]
+  // These mean "try another model" (a model can be missing, rate limited, or overloaded).
+  const tryNext = new Set([404, 429, 500, 502, 503, 504])
+  const busy = new Set([429, 500, 502, 503, 504])
   let lastStatus = 0
   let lastDetail = ''
-  for (const model of models) {
-    let response: Response
-    try {
-      response = await fetchWithTimeout(
-        `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: options.system }] },
-            contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
-            generationConfig: {
-              temperature: options.temperature,
-              maxOutputTokens: options.maxOutputTokens,
-              ...(options.json ? { responseMimeType: 'application/json' } : {}),
-            },
-          }),
-        },
-        25_000,
-      )
-    } catch {
-      return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
-    }
+  for (let round = 0; round < 2; round += 1) {
+    let sawBusy = false
+    for (const model of models) {
+      let response: Response
+      try {
+        response = await fetchWithTimeout(
+          `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: options.system }] },
+              contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
+              generationConfig: {
+                temperature: options.temperature,
+                maxOutputTokens: options.maxOutputTokens,
+                ...(options.json ? { responseMimeType: 'application/json' } : {}),
+              },
+            }),
+          },
+          25_000,
+        )
+      } catch {
+        return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
+      }
 
-    if (response.ok) {
-      const body = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-      const text =
-        body.candidates?.[0]?.content?.parts
-          ?.map((part) => part.text ?? '')
-          .join('')
-          .trim() ?? ''
-      return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
-    }
+      if (response.ok) {
+        const body = (await response.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+        }
+        const text =
+          body.candidates?.[0]?.content?.parts
+            ?.map((part) => part.text ?? '')
+            .join('')
+            .trim() ?? ''
+        return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
+      }
 
-    lastStatus = response.status
-    try {
-      const providerError = (await response.clone().json()) as { error?: { message?: string } }
-      lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
-    } catch {
-      lastDetail = ''
+      lastStatus = response.status
+      try {
+        const providerError = (await response.clone().json()) as { error?: { message?: string } }
+        lastDetail = providerError.error?.message?.slice(0, 240) ?? ''
+      } catch {
+        lastDetail = ''
+      }
+      if (!tryNext.has(response.status)) {
+        return {
+          ok: false,
+          error: `Gemini request failed (${lastStatus}).${lastDetail ? ` ${lastDetail}` : ''}`,
+          status: 502,
+        }
+      }
+      if (busy.has(response.status)) sawBusy = true
     }
-    if (response.status === 429) return { ok: false, error: 'Gemini is busy. Try again in a moment.', status: 429 }
-    if (![404, 500, 502, 503, 504].includes(response.status)) break
+    // Every model was busy: wait a moment and go around once more.
+    if (!sawBusy || round === 1) break
+    await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS))
+  }
+  if (busy.has(lastStatus)) {
+    return { ok: false, error: 'Noema is very busy right now. Please try again in a moment.', status: 503 }
   }
   return {
     ok: false,
