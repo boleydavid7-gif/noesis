@@ -8220,3 +8220,83 @@ body {
 .edit-cover-pick {
   cursor: pointer;
 }
+.command-backdrop {
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.command-bar {
+  width: min(94vw, 600px);
+  max-height: 70vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 0;
+}
+.command-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.command-input input {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+.command-input kbd {
+  padding: 2px 6px;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+}
+.command-bar ul {
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.command-group {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.command-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.command-item small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-item-on {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.command-empty {
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+}

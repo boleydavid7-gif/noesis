@@ -143,3 +143,30 @@ describe('duplicateGroups', () => {
     expect(duplicateGroups([book('1', 'A', 'x', 1), book('2', 'B', 'x', 1)])).toEqual([])
   })
 })
+
+import { filterCommands, type Command } from '../lib/commands'
+
+describe('filterCommands', () => {
+  const run = () => undefined
+  const items: Command[] = [
+    { id: 'a', label: 'Library', group: 'Go to', run },
+    { id: 'b', label: 'Add a note', group: 'Do', keywords: 'capture write', run },
+    { id: 'c', label: 'Atomic Habits', hint: 'James Clear', group: 'Books', run },
+    { id: 'd', label: 'Deep Work', hint: 'Cal Newport', group: 'Books', run },
+  ]
+  it('shows the common things first when nothing is typed', () => {
+    expect(filterCommands(items, '').map((item) => item.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+  it('needs every word and also looks at the hint and keywords', () => {
+    expect(filterCommands(items, 'james').map((item) => item.id)).toEqual(['c'])
+    expect(filterCommands(items, 'capture').map((item) => item.id)).toEqual(['b'])
+    expect(filterCommands(items, 'work habits')).toEqual([])
+  })
+  it('puts titles that start with the text first', () => {
+    expect(
+      filterCommands(items, 'a')
+        .map((item) => item.id)
+        .slice(0, 2),
+    ).toEqual(['b', 'c'])
+  })
+})
