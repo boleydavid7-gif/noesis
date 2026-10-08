@@ -123,7 +123,7 @@ export function BookCard({ book, rank }: { book: ResolvedBook; rank?: number }) 
                 {link.note ? <small>{link.note}</small> : null}
               </li>
             ))}
-            <li className="plan-buy-note">Only DRM-free EPUB or PDF files can be imported into Noesis.</li>
+            <li className="plan-buy-note">Only files with no copy protection can be imported into Noesis.</li>
           </ul>
         </details>
         <FreeCopyFinder book={book} />
