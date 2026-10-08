@@ -281,7 +281,6 @@ export function PathPlanDetail({
 const LEVELS = ['Complete beginner', 'Know the basics', 'Experienced']
 const PURPOSES = ['Curiosity', 'Career or job', 'School or an exam', 'A specific project']
 const HOURS = [2, 4, 6, 10, 15]
-const MAX_FOCUS = 6
 
 function MiniBooks({ books, loading }: { books: ResolvedBook[]; loading: boolean }) {
   return (
@@ -320,7 +319,7 @@ export function PathPlanner({
   const [goal, setGoal] = useState('')
   const [status, setStatus] = useState<'idle' | 'clarifying' | 'asking' | 'planning' | 'ready' | 'error'>('idle')
   const [clarification, setClarification] = useState<Clarification | null>(null)
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState('')
   const [level, setLevel] = useState(LEVELS[0])
   const [purpose, setPurpose] = useState(PURPOSES[0])
   const [hours, setHours] = useState(4)
@@ -350,7 +349,7 @@ export function PathPlanner({
     setSuggestion(null)
     setBooksByPath({})
     setClarification(null)
-    setPicked([])
+    setPicked('')
     setOpen(null)
     setError('')
   }
@@ -370,6 +369,7 @@ export function PathPlanner({
       const result = await requestClarification(goal.trim())
       if (id !== run.current) return
       setClarification(result)
+      setPicked(result.focuses[0]?.title ?? '')
       setStatus('asking')
     } catch (reason) {
       fail(reason, id, 'Noema could not narrow that down right now.')
@@ -386,7 +386,7 @@ export function PathPlanner({
     setOpen(null)
     try {
       const plan = await requestSuggestion(goal.trim(), {
-        focuses: skip ? [] : picked,
+        focuses: skip || !picked ? [] : [picked],
         level: skip ? undefined : level,
         purpose: skip ? undefined : purpose,
       })
@@ -406,16 +406,6 @@ export function PathPlanner({
     } catch (reason) {
       fail(reason, id, 'Noema could not build a path right now.')
     }
-  }
-
-  function toggleFocus(title: string) {
-    setPicked((current) =>
-      current.includes(title)
-        ? current.filter((item) => item !== title)
-        : current.length < MAX_FOCUS
-          ? [...current, title]
-          : current,
-    )
   }
 
   function save(path: SuggestedPath) {
@@ -512,21 +502,22 @@ export function PathPlanner({
               ? `${clarification.topic} covers a lot. What do you want to focus on?`
               : 'Which angles interest you?'}
           </h3>
-          <p>Pick up to {MAX_FOCUS}. Each one becomes its own path with its own books.</p>
+          <p>Pick one. Its path and reading list will be built around exactly that.</p>
           <div className="planner-focuses">
-            {clarification.focuses.map((focus) => {
-              const on = picked.includes(focus.title)
+            {clarification.focuses.map((focus, index) => {
+              const on = picked === focus.title
               return (
                 <button
                   type="button"
                   key={focus.title}
                   className={on ? 'planner-focus planner-focus-on' : 'planner-focus'}
                   aria-pressed={on}
-                  onClick={() => toggleFocus(focus.title)}
+                  onClick={() => setPicked(focus.title)}
                 >
                   <strong>
                     {on ? <Check size={13} /> : null} {focus.title}
                   </strong>
+                  {index === 0 ? <span className="plan-pill">Good place to start</span> : null}
                   <small>{focus.description}</small>
                 </button>
               )
@@ -561,14 +552,11 @@ export function PathPlanner({
             </label>
           </div>
           <div className="planner-actions">
-            <button className="primary-button" onClick={() => void build()} disabled={busy || picked.length === 0}>
-              <Sparkles size={15} />{' '}
-              {status === 'planning'
-                ? 'Building…'
-                : `Build ${picked.length || ''} path${picked.length === 1 ? '' : 's'}`}
+            <button className="primary-button" onClick={() => void build()} disabled={busy || !picked}>
+              <Sparkles size={15} /> {status === 'planning' ? 'Building…' : 'Build this path'}
             </button>
             <button className="text-button" onClick={() => void build(true)} disabled={busy}>
-              Skip, just suggest paths
+              Skip, suggest a few paths
             </button>
           </div>
         </section>

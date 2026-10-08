@@ -93,7 +93,14 @@ type Generated = { ok: true; text: string; model: string } | { ok: false; error:
 // One Gemini call with model fallback. Shared by the tutor and review routes.
 async function generate(
   env: Env,
-  options: { system: string; prompt: string; maxOutputTokens: number; temperature: number; json?: boolean },
+  options: {
+    system: string
+    prompt: string
+    maxOutputTokens: number
+    temperature: number
+    json?: boolean
+    timeoutMs?: number
+  },
 ): Promise<Generated> {
   const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
   if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.', status: 503 }
@@ -134,7 +141,7 @@ async function generate(
               },
             }),
           },
-          25_000,
+          options.timeoutMs ?? 25_000,
         )
       } catch {
         return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
@@ -355,14 +362,14 @@ async function planPath(request: Request, env: Env): Promise<Response> {
     .slice(0, MAX_PATHS)
   const level = typeof input.level === 'string' ? input.level.trim().slice(0, 40) : ''
   const purpose = typeof input.purpose === 'string' ? input.purpose.trim().slice(0, 80) : ''
-  const count = focuses.length || 4
+  const count = focuses.length || 3
 
   const system = [
     'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
     '{"paths":[{"title":"","summary":"","level":"","milestones":[{"title":"","outcome":"","hours":0,"topics":[""],"resources":[""],"books":[""]}],"reading":[{"title":"","author":"","note":""}]}],',
     '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
     focuses.length
-      ? `Give exactly ${focuses.length} paths, one for each of these focus areas, in this order, using the focus area as the basis of the title: ${focuses.map((item) => `"${item}"`).join(', ')}.`
+      ? `Give exactly ${focuses.length} ${focuses.length === 1 ? 'path' : 'paths'}, one for each of these focus areas, using the focus area as the basis of the title: ${focuses.map((item) => `"${item}"`).join(', ')}.`
       : `Give exactly ${count} paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).`,
     'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "level" is Beginner, Intermediate, or Advanced' +
       (level ? `; the learner described their level as "${level}", so pitch every path for that level` : '') +
@@ -382,7 +389,8 @@ async function planPath(request: Request, env: Env): Promise<Response> {
   const result = await generate(env, {
     system,
     prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 12_000,
+    maxOutputTokens: 2_500 * count + 1_000,
+    timeoutMs: 20_000 + 8_000 * count,
     temperature: 0.5,
     json: true,
   })

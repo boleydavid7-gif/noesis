@@ -270,7 +270,7 @@ describe('learning path routes', () => {
         headers: { 'cf-connecting-ip': '7.7.8.1' },
         body: JSON.stringify({
           goal: 'Psychology',
-          focuses: ['Foundations of psychology', 'Clinical psychology'],
+          focuses: ['Foundations of psychology'],
           level: 'Complete beginner',
           purpose: 'School or an exam',
         }),
@@ -279,8 +279,8 @@ describe('learning path routes', () => {
     )
     const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     const instructions = sent.systemInstruction.parts[0].text as string
-    expect(instructions).toContain('exactly 2 paths')
-    expect(instructions).toContain('"Foundations of psychology", "Clinical psychology"')
+    expect(instructions).toContain('exactly 1 path,')
+    expect(instructions).toContain('"Foundations of psychology"')
     expect(instructions).toContain('Complete beginner')
     expect(instructions).toContain('School or an exam')
   })
