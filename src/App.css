@@ -8741,3 +8741,182 @@ body {
     overflow-y: auto;
   }
 }
+
+/* Second Brain, Noema and the reader's side panel follow the chosen app colours and accent. */
+.noema-panel,
+.utility-panel,
+.brain-panel {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.24);
+  background:
+    radial-gradient(120% 70% at 85% 0%, rgba(var(--accent-rgb, 220, 194, 142), 0.1), transparent 60%),
+    linear-gradient(165deg, var(--surface-card-a, #0b2035), var(--surface-card-b, #071321) 72%);
+}
+.brain-panel {
+  border-left-color: rgba(var(--accent-rgb, 220, 194, 142), 0.24);
+}
+.noema-action {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+.noema-action:hover:not(:disabled) {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.13);
+}
+.noema-action-icon {
+  background: rgba(0, 0, 0, 0.32);
+}
+.noema-orb {
+  border-color: var(--gold-warm, #c7a36a);
+  color: var(--gold-soft, #ead4a2);
+  background: radial-gradient(
+    circle at 35% 28%,
+    #fff 0 4%,
+    var(--gold-warm, #c7a36a) 10%,
+    var(--surface-deep, #071626) 48%,
+    #020914 72%
+  );
+  box-shadow:
+    0 0 30px rgba(var(--accent-rgb, 220, 194, 142), 0.45),
+    inset 0 0 18px rgba(var(--accent-rgb, 220, 194, 142), 0.25);
+}
+.noema-ask {
+  background: linear-gradient(180deg, var(--accent-light, #e2c084), var(--gold-warm, #b98f4f));
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb, 220, 194, 142), 0.28);
+}
+.noema-top-button {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(255, 255, 255, 0.05);
+}
+.noema-top-button:hover {
+  border-color: var(--gold-warm, #c7a36a);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
+}
+.noema-input textarea,
+.brain-form input,
+.brain-form textarea,
+.brain-form select {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+}
+.noema-input textarea:focus,
+.brain-form input:focus,
+.brain-form textarea:focus {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.noema-reader-context,
+.reader-wide-tutor > div {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+}
+.tutor-input {
+  background: rgba(255, 255, 255, 0.06);
+}
+.tutor-input button {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.2);
+}
+.tutor-chips button {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+}
+.tutor-chips button:hover {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.45);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.18);
+}
+.tutor-status {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+}
+.tutor-reply {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.22);
+  background: rgba(255, 255, 255, 0.05);
+}
+.tutor-reply strong {
+  color: var(--gold-soft, #ead4a2);
+}
+.brain-form {
+  background: rgba(0, 0, 0, 0.2);
+}
+.brain-form input[readonly] {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.08);
+}
+.brain-list-item,
+.brain-filter-row button {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+.brain-list-heading span {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.brain-filter-row button:hover,
+.brain-filter-row button.brain-filter-active {
+  color: var(--accent-light, #f0d18a);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
+}
+.brain-open-note,
+.reader-note-open {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+}
+.brain-open-note:hover,
+.reader-note-open:hover {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.2);
+}
+.reader-rail-heading,
+.reader-context-head,
+.reader-notes-heading,
+.reader-note-kind {
+  color: var(--gold-soft, #dbbc7d);
+}
+.reader-note-list article {
+  border-left-color: var(--gold-warm, #c7a36a);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.06);
+}
+.note-tab {
+  background: rgba(255, 255, 255, 0.06);
+}
+.note-tab-active {
+  color: #17110a;
+  background: var(--gold-warm, #c7a36a);
+  box-shadow: 0 6px 16px rgba(var(--accent-rgb, 220, 194, 142), 0.22);
+}
+.note-card {
+  background: rgba(255, 255, 255, 0.04);
+}
+.note-footer em {
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.context-section-heading button:hover {
+  color: var(--accent-light, #efc66e);
+}
+
+/* The reader's frame and rails follow the app colours too. */
+.reader-page.panel-card {
+  background: var(--surface-pop, #0c1925);
+}
+.reader-workspace-grid {
+  background: var(--surface-card-b, #101e2b);
+}
+.reader-chapter-rail,
+.reader-context-rail {
+  background: var(--surface-panel, rgba(8, 18, 27, 0.82));
+}
+.pdf-toolbar {
+  background: var(--surface-deep, rgba(8, 18, 28, 0.85));
+}
+.pdf-scroll {
+  background: var(--surface-card-b, #17283b);
+}
+.pdf-toolbar input,
+.pdf-toolbar select {
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+}
+.pdf-toolbar option {
+  color: #111;
+}
