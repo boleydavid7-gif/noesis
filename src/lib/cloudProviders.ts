@@ -170,7 +170,7 @@ export function consumeCloudOAuthRedirect(): void {
 export async function connectCloudProvider(provider: CloudProviderId, ownerUserId?: string): Promise<CloudConnection> {
   if (typeof window === 'undefined') throw new Error('Cloud connections are only available in a browser.')
   const config = configs[provider]
-  if (!config.clientId) throw new Error(`Add the ${providerDetails[provider].label} client ID/app key as a Cloudflare build variable first.`)
+  if (!config.clientId) throw new Error(`Add the ${providerDetails[provider].label} client ID/app key as a Cloudflare build or Worker variable first.`)
   const state = randomState()
   const params = new URLSearchParams({
     client_id: config.clientId,
