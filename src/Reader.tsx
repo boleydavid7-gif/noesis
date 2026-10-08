@@ -261,7 +261,7 @@ export function Reader({
   } | null>(null)
   const [wideLayout, setWideLayout] = useState(reading.startWide)
   // The tools panel covers the page on a phone, so it starts closed there.
-  const [toolsOpen, setToolsOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches)
+  const [toolsOpen, setToolsOpen] = useState(() => window.matchMedia('(min-width: 1600px)').matches)
   const [searchOpen, setSearchOpen] = useState(Boolean(initialSearch))
   const [searchTerm, setSearchTerm] = useState(initialSearch ?? '')
   const [searchOutcome, setSearchOutcome] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] })
@@ -642,8 +642,11 @@ export function Reader({
     if (!wideLayout) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // The expanded page covers the whole window, including the sidebar.
+    document.body.classList.add('reader-wide-open')
     return () => {
       document.body.style.overflow = previousOverflow
+      document.body.classList.remove('reader-wide-open')
     }
   }, [wideLayout])
   useEffect(() => {
@@ -1199,6 +1202,15 @@ export function Reader({
                 <BookA size={16} />
               </button>
             ) : null}
+            <button
+              className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
+              onClick={() => setToolsOpen((value) => !value)}
+              aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
+              aria-pressed={toolsOpen}
+              title="Notes and Noema beside the page"
+            >
+              <PanelRight size={16} />
+            </button>
             {book.format === 'epub' || book.format === 'pdf' ? (
               <span className="reader-ambient">
                 <button
@@ -1455,7 +1467,7 @@ export function Reader({
           <strong>{visibleProgress}%</strong>
         </div>
       ) : null}
-      <div className="reader-workspace-grid">
+      <div className={'reader-workspace-grid' + (!wideLayout && !toolsOpen ? ' reader-rail-off' : '')}>
         {!wideLayout ? (
           <aside className="reader-chapter-rail" aria-label="Book contents">
             <div className="reader-rail-book">
