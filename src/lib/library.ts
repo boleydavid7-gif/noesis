@@ -165,3 +165,7 @@ export async function loadBookText(id: string): Promise<string | null> {
     }
   })
 }
+
+// A book counts as started once it has been opened and moved on, even if the percentage still rounds to zero.
+export const isStarted = (book: Pick<LibraryBook, 'progress' | 'chapterIndex' | 'cfi' | 'currentHref'>): boolean =>
+  book.progress > 0 || (book.chapterIndex ?? 0) > 0 || Boolean(book.cfi) || Boolean(book.currentHref)
