@@ -14,7 +14,9 @@ import {
 describe('focus', () => {
   it('adds a trimmed task and ignores blanks', () => {
     const state = defaultFocusState()
-    expect(addFocusTask(state, '  Finish chapter 4  ').tasks.at(-1)).toEqual({ label: 'Finish chapter 4', done: false })
+    const added = addFocusTask(state, '  Finish chapter 4  ').tasks.at(-1)
+    expect(added).toMatchObject({ label: 'Finish chapter 4', done: false })
+    expect(added?.id).toMatch(/^focus-/)
     expect(addFocusTask(state, '   ')).toBe(state)
   })
 
@@ -54,8 +56,41 @@ describe('focus', () => {
     })
     expect(state.title).toBe('Mine')
     expect(state.session).toBe('Reading')
-    expect(state.tasks).toEqual([{ label: 'One', done: true }])
+    expect(state.tasks).toHaveLength(1)
+    expect(state.tasks[0]).toMatchObject({ label: 'One', done: true })
+    expect(state.tasks[0].id).toBeTruthy()
     expect(state.durationMinutes).toBe(45)
     expect(sanitizeFocusState('junk')).toEqual(defaultFocusState())
+  })
+})
+
+describe('focus step ids', () => {
+  it('gives the starter steps the same ids on every device', () => {
+    const fromOldSave = sanitizeFocusState({
+      tasks: [
+        { label: 'Read for 30 minutes', done: true },
+        { label: 'My own step', done: false },
+      ],
+    })
+    expect(fromOldSave.tasks[0].id).toBe('starter-read')
+    expect(fromOldSave.tasks[1].id).toMatch(/^legacy-/)
+    expect(defaultFocusState().tasks.map((task) => task.id)).toEqual([
+      'starter-read',
+      'starter-ideas',
+      'starter-reflect',
+      'starter-connect',
+    ])
+  })
+
+  it('keeps ids unique and stamps edits', () => {
+    const state = sanitizeFocusState({
+      tasks: [
+        { id: 'a', label: 'One', done: false },
+        { id: 'a', label: 'Two', done: false },
+      ],
+    })
+    expect(new Set(state.tasks.map((task) => task.id)).size).toBe(2)
+    expect(toggleFocusTask(state, 0).tasks[0].updated).toBeTruthy()
+    expect(renameFocusTask(state, 1, 'Renamed').tasks[1].updated).toBeTruthy()
   })
 })

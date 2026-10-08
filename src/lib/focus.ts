@@ -1,6 +1,6 @@
 // Today's focus: a short checklist plus a reading timer.
 
-export type FocusTask = { label: string; done: boolean }
+export type FocusTask = { id: string; label: string; done: boolean; updated?: string }
 export type FocusState = {
   title: string
   session: string
@@ -9,6 +9,7 @@ export type FocusState = {
   elapsedSeconds: number
   startedAt?: number
   running: boolean
+  metaUpdated?: string // when the title, session name or length last changed
 }
 
 const KEY = 'noesis:focus:v1'
@@ -17,16 +18,49 @@ export const MAX_FOCUS_TASKS = 12
 export const defaultFocusState = (): FocusState => ({
   title: 'Today’s focus',
   session: 'Reading',
+  // Fixed ids so the starter steps match on every device instead of doubling up.
   tasks: [
-    { label: 'Read for 30 minutes', done: false },
-    { label: 'Capture 2 key ideas', done: false },
-    { label: 'Reflect on one chapter', done: false },
-    { label: 'Make one connection', done: false },
+    { id: 'starter-read', label: 'Read for 30 minutes', done: false },
+    { id: 'starter-ideas', label: 'Capture 2 key ideas', done: false },
+    { id: 'starter-reflect', label: 'Reflect on one chapter', done: false },
+    { id: 'starter-connect', label: 'Make one connection', done: false },
   ],
   durationMinutes: 25,
   elapsedSeconds: 0,
   running: false,
 })
+
+const STARTER_IDS: Record<string, string> = {
+  'Read for 30 minutes': 'starter-read',
+  'Capture 2 key ideas': 'starter-ideas',
+  'Reflect on one chapter': 'starter-reflect',
+  'Make one connection': 'starter-connect',
+}
+
+// Steps saved before ids existed get one: the starter steps keep their shared
+// ids, anything else gets a stable id from its position and text.
+export function sanitizeTasks(value: unknown): FocusTask[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const tasks: FocusTask[] = []
+  value.forEach((item, index) => {
+    const task = item as Partial<FocusTask> | null
+    if (!task || typeof task !== 'object' || typeof task.label !== 'string') return
+    let id =
+      typeof task.id === 'string' && task.id
+        ? task.id
+        : (STARTER_IDS[task.label] ?? `legacy-${index}-${task.label.length}`)
+    if (seen.has(id)) id = `${id}-${index}`
+    seen.add(id)
+    tasks.push({
+      id,
+      label: task.label,
+      done: Boolean(task.done),
+      updated: typeof task.updated === 'string' ? task.updated : undefined,
+    })
+  })
+  return tasks.slice(0, MAX_FOCUS_TASKS)
+}
 
 export function sanitizeFocusState(value: unknown): FocusState {
   const base = defaultFocusState()
@@ -39,10 +73,8 @@ export function sanitizeFocusState(value: unknown): FocusState {
   return {
     title: typeof saved.title === 'string' && saved.title.trim() ? saved.title : base.title,
     session: typeof saved.session === 'string' && saved.session.trim() ? saved.session : base.session,
-    tasks: saved.tasks
-      .filter((task): task is FocusTask => Boolean(task && typeof task === 'object' && typeof task.label === 'string'))
-      .map((task) => ({ label: task.label, done: Boolean(task.done) }))
-      .slice(0, MAX_FOCUS_TASKS),
+    tasks: sanitizeTasks(saved.tasks),
+    metaUpdated: typeof saved.metaUpdated === 'string' ? saved.metaUpdated : undefined,
     durationMinutes: duration,
     elapsedSeconds: typeof saved.elapsedSeconds === 'number' && saved.elapsedSeconds > 0 ? saved.elapsedSeconds : 0,
     startedAt: typeof saved.startedAt === 'number' ? saved.startedAt : undefined,
@@ -80,7 +112,8 @@ export function formatTimer(seconds: number): string {
 export function addFocusTask(state: FocusState, label: string): FocusState {
   const clean = label.trim().slice(0, 120)
   if (!clean || state.tasks.length >= MAX_FOCUS_TASKS) return state
-  return { ...state, tasks: [...state.tasks, { label: clean, done: false }] }
+  const task = { id: `focus-${crypto.randomUUID()}`, label: clean, done: false, updated: new Date().toISOString() }
+  return { ...state, tasks: [...state.tasks, task] }
 }
 
 export function removeFocusTask(state: FocusState, index: number): FocusState {
@@ -91,10 +124,17 @@ export function removeFocusTask(state: FocusState, index: number): FocusState {
 export function toggleFocusTask(state: FocusState, index: number): FocusState {
   return {
     ...state,
-    tasks: state.tasks.map((task, position) => (position === index ? { ...task, done: !task.done } : task)),
+    tasks: state.tasks.map((task, position) =>
+      position === index ? { ...task, done: !task.done, updated: new Date().toISOString() } : task,
+    ),
   }
 }
 
 export function renameFocusTask(state: FocusState, index: number, label: string): FocusState {
-  return { ...state, tasks: state.tasks.map((task, position) => (position === index ? { ...task, label } : task)) }
+  return {
+    ...state,
+    tasks: state.tasks.map((task, position) =>
+      position === index ? { ...task, label, updated: new Date().toISOString() } : task,
+    ),
+  }
 }

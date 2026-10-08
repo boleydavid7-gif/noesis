@@ -71,13 +71,14 @@ import {
   type FocusState,
 } from './lib/focus'
 import { readEvents, toggleDone, writeEvents, type CalendarEvent } from './lib/calendar'
+import { applyFocusSync, focusToSync, sameItems, type SyncBundle } from './lib/syncData'
 import { readWeatherSettings, writeWeatherSettings, type WeatherSettings } from './lib/weather'
 import { timeAgo } from './lib/time'
 import { readSettings, rootAppearance, writeSettings, type Settings as AppSettings } from './lib/settings'
-import { dueCards, readReviewCards } from './lib/review'
-import { markDeleted, markRestored } from './lib/tombstones'
+import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
+import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
-import { syncAccountLibrary } from './lib/accountLibrary'
+import { syncAccountBundle, syncAccountLibrary } from './lib/accountLibrary'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import {
   bindCloudConnectionsToUser,
@@ -92,7 +93,7 @@ import {
   type CloudProviderId,
   type CloudProviderInfo,
 } from './lib/cloudProviders'
-import { syncCloudState } from './lib/cloudSync'
+import { syncCloudState, type CloudSyncState } from './lib/cloudSync'
 import { writeLocalNotes } from './lib/knowledge'
 import {
   authHeaders,
@@ -276,6 +277,10 @@ function App() {
   const [focusNow, setFocusNow] = useState(() => Date.now())
   const [weatherSettings, setWeatherSettings] = useState<WeatherSettings>(() => readWeatherSettings())
   const [events, setEvents] = useState<CalendarEvent[]>(() => readEvents())
+  // dataVersion bumps when review cards change on this device (to trigger a sync);
+  // reviewRemount bumps when a sync brought in different cards (to refresh the page).
+  const [dataVersion, setDataVersion] = useState(0)
+  const [reviewRemount, setReviewRemount] = useState(0)
   const [calendarSeed, setCalendarSeed] = useState<{ date?: string; adding?: boolean }>({})
   const authUserRef = useLatest(authUser)
   const notesRef = useLatest(notes)
@@ -299,9 +304,46 @@ function App() {
   const timeGreeting = greetingFor(now)
   const displayName = displayNameFor(authUser, profileFirstName)
   const focusRemaining = focusRemainingSeconds(focusState, focusNow)
+  // Brings calendar, focus steps and review cards from a sync into this device.
+  // It only touches state when the items really differ, so a sync that changed
+  // nothing never re-renders or restarts anything.
+  const applyBundle = useCallback((bundle: SyncBundle) => {
+    setEvents((current) => {
+      if (sameItems(current, bundle.events)) return current
+      writeEvents(bundle.events)
+      return bundle.events
+    })
+    setFocusState((current) => applyFocusSync(current, bundle.focus))
+    if (!sameItems(readReviewCards(), bundle.cards)) {
+      writeReviewCards(bundle.cards)
+      setReviewRemount((value) => value + 1)
+    }
+  }, [])
+  const focusSignature = JSON.stringify(focusToSync(focusState))
+  useEffect(() => {
+    if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      try {
+        const merged = await syncAccountBundle({ events, cards: readReviewCards(), focus: focusToSync(focusState) })
+        if (cancelled) return
+        applyBundle(merged)
+        markSynced()
+      } catch {
+        // Book sync reports storage problems; a failed background sync of the
+        // calendar just retries on the next change or with Sync now.
+      }
+    }, 1500)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+    // focusState is read through focusSignature so timer ticks do not trigger a sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUserId, events, focusSignature, dataVersion, settings.backup.autoSync, applyBundle])
   // Review cards live in local storage; recount whenever the page changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav])
+  const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav, dataVersion, reviewRemount])
   useEffect(() => {
     const root = document.documentElement
     const { classes, vars } = rootAppearance(settings)
@@ -461,8 +503,14 @@ function App() {
     const run = async () => {
       setCloudSyncing(true)
       try {
-        const merged = await syncCloudState(connection, { books, notes, paths })
+        const merged = await syncCloudState(connection, {
+          books,
+          notes,
+          paths,
+          bundle: { events, cards: readReviewCards(), focus: focusToSync(focusState) },
+        })
         if (cancelled) return
+        if (merged.bundle) applyBundle(merged.bundle)
         setBooks((current) =>
           JSON.stringify(current) === JSON.stringify(merged.books)
             ? current
@@ -500,7 +548,21 @@ function App() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [authUserId, authUserRef, cloudConnection, books, notes, paths, settings.backup.autoSync])
+    // focusState is read through focusSignature so timer ticks do not trigger a sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    authUserId,
+    authUserRef,
+    cloudConnection,
+    books,
+    notes,
+    paths,
+    events,
+    focusSignature,
+    dataVersion,
+    settings.backup.autoSync,
+    applyBundle,
+  ])
   useEffect(() => {
     let timer: number | undefined
     const update = () => {
@@ -538,6 +600,7 @@ function App() {
   }, [])
   const closeUtility = useCallback(() => setUtilityOverlay(null), [])
   function updateEvents(next: CalendarEvent[]) {
+    markRemoved('event', events, next)
     setEvents(next)
     writeEvents(next)
   }
@@ -569,7 +632,15 @@ function App() {
     window.setTimeout(() => setNotice(''), 3800)
   }
   function updateFocusState(updater: (current: FocusState) => FocusState) {
-    setFocusState((current) => updater(current))
+    const next = updater(focusState)
+    // Removed steps are remembered so another device does not bring them back,
+    // and a changed title, session name or length is stamped so the newest wins.
+    markRemoved('focus', focusState.tasks, next.tasks)
+    const metaChanged =
+      next.title !== focusState.title ||
+      next.session !== focusState.session ||
+      next.durationMinutes !== focusState.durationMinutes
+    setFocusState(metaChanged ? { ...next, metaUpdated: new Date().toISOString() } : next)
   }
   function startFocusTimer() {
     updateFocusState((current) => ({
@@ -602,7 +673,9 @@ function App() {
   function toggleFocusTask(index: number) {
     updateFocusState((current) => ({
       ...current,
-      tasks: current.tasks.map((task, taskIndex) => (taskIndex === index ? { ...task, done: !task.done } : task)),
+      tasks: current.tasks.map((task, taskIndex) =>
+        taskIndex === index ? { ...task, done: !task.done, updated: new Date().toISOString() } : task,
+      ),
     }))
   }
   function selectNav(label: string) {
@@ -1049,13 +1122,20 @@ function App() {
     }
     setCloudSyncing(true)
     try {
-      const merged = await syncCloudState(connection, { books, notes, paths })
+      const merged = await syncCloudState(connection, {
+        books,
+        notes,
+        paths,
+        bundle: { events, cards: readReviewCards(), focus: focusToSync(focusState) },
+      })
       setBooks(merged.books)
       setNotes(merged.notes)
       setPaths(merged.paths as LearningPath[])
       writeLibraryBooks(merged.books)
       writeLocalNotes(merged.notes)
       writePaths(merged.paths as LearningPath[])
+      if (merged.bundle) applyBundle(merged.bundle)
+      markSynced()
       showNotice(
         `${connection.provider === 'google-drive' ? 'Google Drive' : connection.provider === 'onedrive' ? 'OneDrive' : 'Dropbox'} sync completed.`,
       )
@@ -1176,7 +1256,9 @@ function App() {
                       updateFocusState((current) => ({
                         ...current,
                         tasks: current.tasks.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, label: event.target.value } : item,
+                          itemIndex === index
+                            ? { ...item, label: event.target.value, updated: new Date().toISOString() }
+                            : item,
                         ),
                       }))
                     }
@@ -1561,7 +1643,14 @@ function App() {
             : message || 'Your book files could not be synced.',
         )
       }
-      let state = { books: current, notes, paths: paths as unknown[] }
+      let bundle: SyncBundle = { events, cards: readReviewCards(), focus: focusToSync(focusState) }
+      try {
+        bundle = await syncAccountBundle(bundle)
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : ''
+        showNotice(message || 'Your calendar and review cards could not be synced.')
+      }
+      let state: CloudSyncState = { books: current, notes, paths: paths as unknown[], bundle }
       for (const connection of cloudConnections.filter(
         (item) => item.ownerUserId === authUserId && item.expiresAt > Date.now() + 30_000,
       )) {
@@ -1573,6 +1662,7 @@ function App() {
       writeLibraryBooks(state.books)
       writeLocalNotes(state.notes)
       writePaths(state.paths as LearningPath[])
+      if (state.bundle) applyBundle(state.bundle)
       markSynced()
       showNotice('Everything is up to date.')
     } catch (reason) {
@@ -1712,8 +1802,8 @@ function App() {
             />
           </Row>
           <p className="setting-note">
-            Synced: books and files, highlights and notes, reading progress, and learning paths. Review cards and these
-            settings stay on this device for now.
+            Synced: books and files, highlights and notes, reading progress, learning paths, your calendar, today’s
+            focus steps, and review cards. These settings and the focus timer stay on this device.
           </p>
         </Group>
       </>
@@ -1873,7 +1963,12 @@ function App() {
       notesPage()
     ) : activeNav === 'Review' ? (
       <Page title="Review" subtitle="Short questions from your own notes, scheduled so you remember them.">
-        <ReviewPage notes={notes} onNotice={showNotice} />
+        <ReviewPage
+          key={reviewRemount}
+          notes={notes}
+          onNotice={showNotice}
+          onChanged={() => setDataVersion((value) => value + 1)}
+        />
       </Page>
     ) : activeNav === 'Progress' ? (
       progressPage()

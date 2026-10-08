@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { authHeaders } from './lib/auth'
+import { markRemoved } from './lib/tombstones'
 import type { BrainNote } from './lib/knowledge'
 import {
   dueCards,
@@ -25,7 +26,15 @@ function whenDue(card: ReviewCard): string {
   return new Date(card.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export function ReviewPage({ notes, onNotice }: { notes: BrainNote[]; onNotice: (message: string) => void }) {
+export function ReviewPage({
+  notes,
+  onNotice,
+  onChanged,
+}: {
+  notes: BrainNote[]
+  onNotice: (message: string) => void
+  onChanged?: () => void
+}) {
   const [cards, setCards] = useState<ReviewCard[]>(() => readReviewCards())
   const [revealed, setRevealed] = useState(false)
   const [drafting, setDrafting] = useState<string | null>(null)
@@ -41,7 +50,9 @@ export function ReviewPage({ notes, onNotice }: { notes: BrainNote[]; onNotice: 
 
   function save(next: ReviewCard[]) {
     setCards(next)
+    markRemoved('card', cards, next)
     writeReviewCards(next)
+    onChanged?.()
   }
 
   function grade(rating: ReviewRating) {

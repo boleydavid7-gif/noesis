@@ -3,7 +3,7 @@
 // device. Each entry is last-write-wins, so deleting and later re-adding the
 // same id (e.g. a hosted resource, whose id is deterministic) also converges.
 
-export type TombstoneKind = 'book' | 'note' | 'path'
+export type TombstoneKind = 'book' | 'note' | 'path' | 'event' | 'card' | 'focus'
 export type Tombstone = { at: string; deleted: boolean }
 export type Tombstones = Record<string, Tombstone>
 
@@ -89,4 +89,15 @@ export function markRestored(kind: TombstoneKind, id: string, now = new Date()):
   const key = tombstoneKey(kind, id)
   if (!current[key]?.deleted) return
   writeTombstones({ ...current, [key]: { at: now.toISOString(), deleted: false } })
+}
+
+// Records a deletion for every id that was in `before` but is gone from `after`.
+export function markRemoved(kind: TombstoneKind, before: Array<{ id: string }>, after: Array<{ id: string }>): void {
+  const remaining = new Set(after.map((item) => item.id))
+  const removed = before.filter((item) => !remaining.has(item.id))
+  if (removed.length === 0) return
+  const at = new Date().toISOString()
+  const next = { ...readTombstones() }
+  for (const item of removed) next[tombstoneKey(kind, item.id)] = { at, deleted: true }
+  writeTombstones(next)
 }

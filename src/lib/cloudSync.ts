@@ -19,11 +19,13 @@ import {
   type Tombstones,
 } from './tombstones'
 import { readCloudFile, writeCloudFile, type CloudConnection } from './cloudProviders'
+import { mergeBundles, sanitizeBundle, type SyncBundle } from './syncData'
 
 export type CloudSyncState = {
   books: LibraryBook[]
   notes: BrainNote[]
   paths: unknown[]
+  bundle?: SyncBundle
 }
 
 type CloudManifest = CloudSyncState & { version: 2; updatedAt: string; tombstones?: Tombstones }
@@ -64,6 +66,7 @@ async function readManifest(connection: CloudConnection): Promise<CloudManifest 
       books: parsed.books as LibraryBook[],
       notes: parsed.notes as BrainNote[],
       paths: parsed.paths,
+      bundle: sanitizeBundle(parsed.bundle),
       tombstones: sanitizeTombstones(parsed.tombstones),
     }
   } catch {
@@ -124,6 +127,7 @@ export async function syncCloudState(connection: CloudConnection, local: CloudSy
     books: applyTombstones('book', unfiltered.books, tombstones),
     notes: applyTombstones('note', unfiltered.notes, tombstones),
     paths: applyTombstones('path', unfiltered.paths as Array<{ id: string }>, tombstones),
+    bundle: local.bundle ? mergeBundles(local.bundle, remote?.bundle, tombstones) : remote?.bundle,
   }
   writeTombstones(tombstones)
   const manifest: CloudManifest = { version: 2, updatedAt: new Date().toISOString(), ...merged, tombstones }

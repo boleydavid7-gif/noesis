@@ -44,7 +44,7 @@ The current app is a working reader-first build:
 - Explore searches Project Gutenberg, Open Library, OpenAlex, and Internet Archive through `/api/search`; hosted and borrowed items can open their official reader inside Noesis.
 - The right sidebar (every page except Settings) holds Today's focus (timer, add/remove
   steps), a calendar for classes, assignments and exams (repeating events,
-  per-day check-off, stored locally), a real weather forecast (city search or
+  per-day check-off, synced with the account), a real weather forecast (city search or
   Detect, via Open-Meteo) and quick actions.
 - Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
   AI Companion, Notifications, Privacy, and About. Every setting is stored
@@ -66,8 +66,8 @@ Done recently: whole-book search with jump-to-result, BM25 passage retrieval
 for Noema (answers cite `(Section N)`), deletion tombstones in both sync
 manifests, and review prompts with a spaced-repetition queue.
 
-1. Sync review cards (they are local to the browser today) and include them in
-   backups and tombstones.
+1. Include the calendar, focus steps and review cards in the ZIP backup. They
+   already sync through the account and cloud providers.
 2. Map book sections to table-of-contents labels so retrieval citations can say
    "Chapter 3" instead of "Section 3", and add stable source locations.
 3. Merge learning-path edits by timestamp (paths currently merge by creation
