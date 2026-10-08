@@ -4,6 +4,8 @@ import {
   ArrowRight,
   BookOpen,
   Bookmark,
+  BookA,
+  CloudRain,
   Brain,
   CircleHelp,
   FileText,
@@ -25,6 +27,17 @@ import {
 } from 'lucide-react'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
+import {
+  AMBIENT_OPTIONS,
+  canPlayAmbient,
+  readAmbient,
+  startAmbient,
+  writeAmbient,
+  type AmbientKind,
+  type AmbientPlayer,
+} from './lib/ambient'
+import { addReading, countWords, formatDuration, readPace, timeLeft, writePace, wordsPerMinute } from './lib/pace'
+import { logReading, readDiary, writeDiary } from './lib/diary'
 import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
 import type { BrainNote, BrainNoteKind, BrainNoteLocation } from './lib/knowledge'
 import { openEpub, spineSections } from './lib/epub'
@@ -131,6 +144,8 @@ export function Reader({
   onOpenNote,
   onAsk,
   onRecap,
+  onSaveWord,
+  initialSearch,
   onBookmark,
   reading,
   onReadingChange,
@@ -151,6 +166,8 @@ export function Reader({
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
   onRecap: () => void
+  onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
+  initialSearch?: string
   onBookmark: () => void
   reading: Settings['reading']
   onReadingChange: (patch: Partial<Settings['reading']>) => void
@@ -174,8 +191,8 @@ export function Reader({
   const setFontSize = (value: number) => onReadingChange({ fontSize: value })
   const setReaderTheme = (value: ReaderTheme) => onReadingChange({ theme: value })
   const [wideLayout, setWideLayout] = useState(reading.startWide)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchOpen, setSearchOpen] = useState(Boolean(initialSearch))
+  const [searchTerm, setSearchTerm] = useState(initialSearch ?? '')
   const [searchOutcome, setSearchOutcome] = useState<{ query: string; hits: SearchHit[] }>({ query: '', hits: [] })
   const activeQuery = searchOpen && book.format === 'epub' ? searchTerm.trim() : ''
   const searchReady = activeQuery.length >= 2
@@ -235,6 +252,7 @@ export function Reader({
     window.setTimeout(() => setPageTurn(null), 360)
   }
   const goToChapterRef = useLatest(goToChapter)
+  const noteChapterWordsRef = useRef<() => void>(() => undefined)
   // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
   const [listening, setListening] = useState<'off' | 'on' | 'paused'>('off')
   const listenRef = useRef<ListenController | null>(null)
@@ -294,6 +312,105 @@ export function Reader({
     },
     [],
   )
+  useEffect(() => {
+    noteChapterWordsRef.current = noteChapterWords
+  })
+  // Time left, from the length of this chapter and how fast this reader reads.
+  const [chapterWords, setChapterWords] = useState(0)
+  const chapterWordsRef = useRef<Map<number, number>>(new Map())
+  const wpm = wordsPerMinute(readPace())
+  const averageWords = (() => {
+    const counts = [...chapterWordsRef.current.values()]
+    return counts.length ? counts.reduce((sum, value) => sum + value, 0) / counts.length : 0
+  })()
+  const left =
+    book.format === 'epub' && chapterWords > 0 && chapterCount > 0
+      ? timeLeft({
+          chapterWords,
+          chapterProgress,
+          chapterIndex,
+          chapterCount,
+          averageChapterWords: averageWords || chapterWords,
+          wpm,
+        })
+      : null
+  const noteChapterWords = () => {
+    const doc = frame.current?.querySelector('iframe')?.contentDocument
+    const words = countWords(doc?.body?.innerText || doc?.body?.textContent || '')
+    if (words > 0) {
+      chapterWordsRef.current.set(chapterIndexRef.current, words)
+      setChapterWords(words)
+    }
+  }
+  // Pace and the reading diary: each step of reading adds its time and distance.
+  const lastStep = useRef<{ at: number; index: number; fraction: number } | null>(null)
+  useEffect(() => {
+    if (book.format !== 'epub' || chapterWords === 0) return
+    const now = Date.now()
+    const last = lastStep.current
+    lastStep.current = { at: now, index: chapterIndex, fraction: chapterProgress }
+    if (!last || last.index !== chapterIndex) return
+    const minutes = (now - last.at) / 60_000
+    const advance = chapterProgress - last.fraction
+    if (advance <= 0 || minutes < 0.03 || minutes > 2) return
+    writePace(addReading(readPace(), advance * chapterWords, minutes))
+    const to = bookRef.current.progress
+    writeDiary(logReading(readDiary(), { bookId: book.id, title: book.title, minutes, from: to - advance * 5, to }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterProgress, chapterIndex])
+
+  // Background sound.
+  const [ambient, setAmbient] = useState(readAmbient)
+  const [ambientOpen, setAmbientOpen] = useState(false)
+  const ambientRef = useRef<AmbientPlayer | null>(null)
+  const chooseAmbient = (kind: AmbientKind | null) => {
+    ambientRef.current?.stop()
+    ambientRef.current = kind ? startAmbient(kind, ambient.volume) : null
+    const next = { kind, volume: ambient.volume }
+    setAmbient(next)
+    writeAmbient(next)
+  }
+  useEffect(
+    () => () => {
+      ambientRef.current?.stop()
+    },
+    [],
+  )
+
+  // The meaning of the selected word.
+  const [define, setDefine] = useState<{
+    word: string
+    state: 'looking' | 'found' | 'missing' | 'error'
+    phonetic?: string
+    meanings?: Array<{ partOfSpeech: string; definition: string }>
+  } | null>(null)
+  const defineSelection = async () => {
+    const iframe = frame.current?.querySelector('iframe')
+    const selected = (iframe?.contentWindow?.getSelection()?.toString().trim() || selectedTextRef.current).trim()
+    const word = selected.split(/\s+/)[0]?.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '') ?? ''
+    if (!word || selected.split(/\s+/).length > 1) {
+      setDefine({ word: '', state: 'error' })
+      return
+    }
+    setDefine({ word, state: 'looking' })
+    try {
+      const response = await fetch(`/api/define?word=${encodeURIComponent(word)}`)
+      const result = (await response.json()) as {
+        ok?: boolean
+        found?: boolean
+        phonetic?: string
+        meanings?: Array<{ partOfSpeech: string; definition: string }>
+      }
+      if (!response.ok || !result.ok) throw new Error('lookup failed')
+      setDefine(
+        result.found
+          ? { word, state: 'found', phonetic: result.phonetic, meanings: result.meanings }
+          : { word, state: 'missing' },
+      )
+    } catch {
+      setDefine({ word, state: 'error' })
+    }
+  }
   useEffect(() => {
     if (!wideLayout) return
     const previousOverflow = document.body.style.overflow
@@ -506,6 +623,7 @@ export function Reader({
           const contentDocument = view?.contents?.document
           if (!contentDocument) return
           attachScroll(contentDocument)
+          window.setTimeout(() => noteChapterWordsRef.current(), 300)
           attachScroll(contentDocument.scrollingElement)
           attachScroll(contentDocument.documentElement)
           attachScroll(contentDocument.body)
@@ -729,6 +847,9 @@ export function Reader({
                 : external
                   ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source'
                   : currentChapter.label}
+              {left
+                ? ` · ${formatDuration(left.chapter)} left in chapter · about ${formatDuration(left.book)} to finish`
+                : ''}
             </span>
           </div>
           <div className="reader-controls">
@@ -758,6 +879,57 @@ export function Reader({
             >
               <Bookmark size={16} fill={book.bookmarked ? 'currentColor' : 'none'} />
             </button>
+            {book.format === 'epub' ? (
+              <button
+                className="icon-button"
+                onClick={() => void defineSelection()}
+                aria-label="Define the selected word"
+                title="Select a word, then define it"
+              >
+                <BookA size={16} />
+              </button>
+            ) : null}
+            {canPlayAmbient() ? (
+              <span className="reader-ambient">
+                <button
+                  className={'icon-button' + (ambient.kind ? ' reader-listening' : '')}
+                  onClick={() => setAmbientOpen((value) => !value)}
+                  aria-label="Background sound"
+                  aria-expanded={ambientOpen}
+                  title="Background sound"
+                >
+                  <CloudRain size={16} />
+                </button>
+                {ambientOpen ? (
+                  <div className="reader-ambient-pop">
+                    {[{ id: null, label: 'Off' }, ...AMBIENT_OPTIONS].map((option) => (
+                      <button
+                        key={option.label}
+                        className={ambient.kind === option.id ? 'reader-ambient-on' : ''}
+                        onClick={() => chooseAmbient(option.id as AmbientKind | null)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="1"
+                      step="0.05"
+                      value={ambient.volume}
+                      aria-label="Sound volume"
+                      onChange={(event) => {
+                        const volume = Number(event.target.value)
+                        ambientRef.current?.setVolume(volume)
+                        const next = { kind: ambient.kind, volume }
+                        setAmbient(next)
+                        writeAmbient(next)
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </span>
+            ) : null}
             {book.format === 'epub' ? (
               <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
                 <History size={16} />
@@ -801,6 +973,43 @@ export function Reader({
           </div>
         </div>
       )}
+      {define ? (
+        <div className="reader-define" role="status">
+          {define.state === 'looking' ? <span>Looking up “{define.word}”…</span> : null}
+          {define.state === 'missing' ? <span>No definition found for “{define.word}”.</span> : null}
+          {define.state === 'error' ? (
+            <span>{define.word ? 'The dictionary is unavailable right now.' : 'Select a single word first.'}</span>
+          ) : null}
+          {define.state === 'found' ? (
+            <>
+              <strong>
+                {define.word} {define.phonetic ? <em>{define.phonetic}</em> : null}
+              </strong>
+              {define.meanings?.map((meaning, index) => (
+                <p key={index}>
+                  <em>{meaning.partOfSpeech}</em> {meaning.definition}
+                </p>
+              ))}
+              <button
+                className="text-button"
+                onClick={() => {
+                  onSaveWord(
+                    define.word,
+                    (define.meanings ?? []).map((m) => `${m.partOfSpeech}: ${m.definition}`).join('\n'),
+                    currentNoteLocation(),
+                  )
+                  setDefine(null)
+                }}
+              >
+                Save to my words
+              </button>
+            </>
+          ) : null}
+          <button className="text-button" onClick={() => setDefine(null)}>
+            Close
+          </button>
+        </div>
+      ) : null}
       {!wideLayout && book.format === 'epub' && searchOpen ? (
         <div className="reader-search">
           <Search size={15} />
@@ -981,6 +1190,7 @@ export function Reader({
                       {noteIcon(note.kind)}
                       <span>{note.title}</span>
                     </div>
+                    {note.quote ? <blockquote className="reader-note-quote">{note.quote}</blockquote> : null}
                     <p>{note.body}</p>
                     <small>{noteLocationLabel(note) || note.source}</small>
                     <button className="reader-note-open" onClick={() => onOpenNote(note)}>

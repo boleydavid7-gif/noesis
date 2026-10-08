@@ -406,6 +406,42 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, books, resources: working })
 }
 
+// Looks a word up in a free dictionary, so the reader can show a meaning without leaving the page.
+async function defineWord(request: Request): Promise<Response> {
+  if (rateLimited(request, 'define', 40))
+    return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
+  const word = (new URL(request.url).searchParams.get('word') ?? '').trim().toLowerCase().slice(0, 40)
+  if (!/^[\p{L}][\p{L}'’-]*$/u.test(word)) return json({ ok: false, error: 'Select a single word.' }, 400)
+  try {
+    const response = await fetchWithTimeout(
+      `https://api.dictionaryapi.dev/v2/entries/en/${encodeURIComponent(word)}`,
+      { headers: { accept: 'application/json' } },
+      4_000,
+    )
+    if (response.status === 404) return json({ ok: true, found: false, word })
+    if (!response.ok) return json({ ok: false, error: 'The dictionary is unavailable right now.' }, 502)
+    const entries = (await response.json()) as Array<{
+      phonetic?: string
+      meanings?: Array<{ partOfSpeech?: string; definitions?: Array<{ definition?: string; example?: string }> }>
+    }>
+    const meanings = (entries[0]?.meanings ?? []).slice(0, 3).flatMap((meaning) => {
+      const first = meaning.definitions?.[0]
+      return first?.definition
+        ? [
+            {
+              partOfSpeech: meaning.partOfSpeech ?? '',
+              definition: first.definition.slice(0, 300),
+              example: first.example?.slice(0, 200),
+            },
+          ]
+        : []
+    })
+    return json({ ok: true, found: meanings.length > 0, word, phonetic: entries[0]?.phonetic ?? '', meanings })
+  } catch {
+    return json({ ok: false, error: 'The dictionary is unavailable right now.' }, 502)
+  }
+}
+
 // A one-question check on a topic from a learning path: ask a question, then
 // judge the learner's answer. Stateless, so the page sends the question back.
 async function quizTopic(request: Request, env: Env): Promise<Response> {
@@ -1165,6 +1201,10 @@ const worker = {
     if (url.pathname === '/api/materials') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return findMaterials(request, env)
+    }
+    if (url.pathname === '/api/define') {
+      if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return defineWord(request)
     }
     if (url.pathname === '/api/quiz') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)

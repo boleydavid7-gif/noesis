@@ -32,6 +32,7 @@ export type BrainNote = {
   href?: string
   cfi?: string
   tags?: string[]
+  quote?: string // the passage a note was written about
 }
 
 const STORAGE_KEY = 'noesis:second-brain:v1'
@@ -126,6 +127,7 @@ function fromRemote(row: Record<string, unknown>): BrainNote {
     href: typeof saved.href === 'string' ? saved.href : undefined,
     cfi: typeof saved.cfi === 'string' ? saved.cfi : undefined,
     tags: Array.isArray(saved.tags) ? saved.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
+    quote: typeof saved.quote === 'string' ? saved.quote : undefined,
   }
 }
 

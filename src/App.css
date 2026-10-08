@@ -7698,3 +7698,186 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 6px;
 }
+
+/* Capture, diary, related, deep search, shared */
+.brain-page-bar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.brain-capture {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  padding: 18px 20px;
+}
+.brain-capture strong {
+  font-size: 14px;
+}
+.brain-capture p {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.brain-bookmarklet {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 14px;
+  color: #17110a;
+  font-weight: 600;
+  border-radius: 8px;
+  background: var(--gold-warm, #c7a36a);
+  cursor: grab;
+  text-decoration: none;
+}
+.brain-diary {
+  display: grid;
+  gap: 18px;
+  padding: 18px 20px;
+}
+.brain-diary-day h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.brain-diary-day ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 13.5px;
+}
+.brain-diary-day small {
+  color: var(--muted);
+}
+.brain-related ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.brain-related small {
+  color: var(--muted);
+}
+.reader-note-quote {
+  margin: 4px 0;
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.6);
+}
+.deep-search {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.deep-search form {
+  display: flex;
+  gap: 10px;
+}
+.deep-search form .field-with-icon {
+  flex: 1;
+}
+.deep-search-hits {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.deep-search-hits li {
+  display: grid;
+  gap: 4px;
+}
+.deep-search-hits p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.deep-search-hits small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.shared-panel {
+  display: grid;
+  gap: 14px;
+}
+.shared-panel h2 {
+  margin: 0;
+  padding-right: 36px;
+  font-size: 22px;
+}
+.shared-quotes {
+  display: grid;
+  gap: 12px;
+  max-height: 50vh;
+  overflow: auto;
+}
+.shared-quotes blockquote {
+  margin: 0;
+  padding-left: 12px;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  line-height: 1.5;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.6);
+}
+.shared-quotes small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+}
+.reader-ambient {
+  position: relative;
+  display: inline-flex;
+}
+.reader-ambient-pop {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
+  border-radius: 10px;
+  background: #0a1626;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+.reader-ambient-pop button {
+  padding: 7px 10px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.reader-ambient-pop button:hover,
+.reader-ambient-on {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.15) !important;
+}
+.reader-define {
+  display: grid;
+  gap: 6px;
+  margin: 8px 16px;
+  padding: 12px 14px;
+  font-size: 13px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
+  border-radius: 10px;
+  background: rgba(10, 22, 38, 0.92);
+}
+.reader-define p {
+  margin: 0;
+}
+.reader-define em {
+  color: var(--muted);
+}
