@@ -49,7 +49,8 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     'When the context does not contain enough evidence, say that clearly and offer a useful next step.',
     'Do not invent quotations or pretend to have read a book that is not in the supplied context.',
     'For borrowed or hosted books, distinguish metadata from the actual text. Explain exact passages only when the learner supplies the passage or notes. Never claim access to protected reader contents; ask the learner to paste a passage when needed.',
-    'When relevant text is supplied, explain it from that text and mention the current chapter or location when available.',
+    'Treat the supplied visible reading text and selected passage as the learner\'s immediate context. Prefer that text over general book metadata or distant excerpts.',
+    'When relevant text is supplied, explain it from that text, mention the current chapter or page when available, and distinguish direct evidence from interpretation.',
     'Keep the answer focused unless the learner asks for a deep explanation.',
   ].join(' ')
   const prompt = [`Current book context:\n${book || '(none)'}`, `Second Brain notes:\n${context || '(none)'}`, `Learner question:\n${question}`].join('\n\n')
