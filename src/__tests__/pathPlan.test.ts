@@ -7,6 +7,7 @@ import {
   pathFromSuggestion,
   pickBook,
   withSchedule,
+  addMaterials,
   formatWeeks,
   planProgress,
   toggleTopic,
@@ -393,5 +394,31 @@ describe('per-path books and schedule', () => {
     expect(path.milestones.map((milestone) => milestone.timeframe)).toEqual(['Weeks 1–2', 'Weeks 3–6', 'Weeks 7–8'])
     expect(path.weeks).toBe(formatWeeks(36 / 5))
     expect(withSchedule(planned.paths[0], 10).weeks).not.toBe(path.weeks)
+  })
+})
+
+describe('addMaterials', () => {
+  const book = (title: string) => ({ title, authors: ['A'], buy: [] })
+  const plan: PathPlan = {
+    goal: 'g',
+    summary: '',
+    weeks: '',
+    level: 'Beginner',
+    books: [book('Old Book')],
+    resources: [],
+    milestones: [
+      { id: 'm1', title: 'One', topics: [] },
+      { id: 'm2', title: 'Two', topics: [] },
+    ],
+  }
+  const resource = { title: 'Course', publisher: '', url: 'https://x.example.com', kind: 'Free course' }
+
+  it('attaches new books and resources to one stage without duplicating', () => {
+    const next = addMaterials(plan, 'm1', [book('Old Book'), book('New Book')], [resource])
+    expect(next.books.map((item) => item.title)).toEqual(['Old Book', 'New Book'])
+    expect(next.milestones[0].bookTitles).toEqual(['Old Book', 'New Book'])
+    expect(next.milestones[0].resourceTitles).toEqual(['Course'])
+    expect(next.milestones[1].bookTitles).toBeUndefined()
+    expect(addMaterials(next, 'm1', [book('New Book')], [resource]).resources).toHaveLength(1)
   })
 })
