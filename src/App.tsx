@@ -55,6 +55,7 @@ import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } f
 import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
+import { markDeleted, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
 import { syncAccountLibrary } from './lib/accountLibrary'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
@@ -813,6 +814,10 @@ function App() {
     setBooks(payload.books)
     setNotes(payload.notes)
     const restoredPaths = payload.paths as LearningPath[]
+    // Restoring a backup re-adds items that may have been deleted earlier.
+    payload.books.forEach((book) => markRestored('book', book.id))
+    payload.notes.forEach((note) => markRestored('note', note.id))
+    restoredPaths.forEach((path) => markRestored('path', path.id))
     setPaths(restoredPaths)
     writeLocalNotes(payload.notes)
     writeLibraryBooks(payload.books)
@@ -1079,6 +1084,7 @@ function App() {
           editable
           onDelete={(id) => {
             const next = paths.filter((path) => path.id !== id)
+            markDeleted('path', id)
             setPaths(next)
             writePaths(next)
           }}

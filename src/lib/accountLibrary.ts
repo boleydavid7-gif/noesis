@@ -1,6 +1,22 @@
 import { getAuthClient, isAnonymousUser } from './auth'
-import { loadEpubFile, readLibraryBooks, saveBookText, saveEpubFile, writeLibraryBooks, type LibraryBook } from './library'
+import {
+  loadEpubFile,
+  readLibraryBooks,
+  saveBookText,
+  saveEpubFile,
+  writeLibraryBooks,
+  type LibraryBook,
+} from './library'
 import { parseEpub } from './epub'
+import {
+  applyTombstones,
+  mergeTombstones,
+  pruneTombstones,
+  readTombstones,
+  sanitizeTombstones,
+  writeTombstones,
+  type Tombstones,
+} from './tombstones'
 
 const BUCKET = 'noesis-backups'
 const MANIFEST_NAME = 'library/manifest.json'
@@ -9,6 +25,7 @@ type AccountLibraryManifest = {
   version: 1
   updatedAt: string
   books: LibraryBook[]
+  tombstones?: Tombstones
 }
 
 function newer(localValue: string | undefined, remoteValue: string | undefined): boolean {
@@ -54,15 +71,25 @@ async function readRemoteManifest(userId: string): Promise<AccountLibraryManifes
   try {
     const parsed = JSON.parse(await result.data.text()) as Partial<AccountLibraryManifest>
     if (parsed.version !== 1 || !Array.isArray(parsed.books)) return null
-    return { version: 1, updatedAt: String(parsed.updatedAt ?? new Date(0).toISOString()), books: parsed.books as LibraryBook[] }
+    return {
+      version: 1,
+      updatedAt: String(parsed.updatedAt ?? new Date(0).toISOString()),
+      books: parsed.books as LibraryBook[],
+      tombstones: sanitizeTombstones(parsed.tombstones),
+    }
   } catch {
     return null
   }
 }
 
-async function writeRemoteManifest(userId: string, books: LibraryBook[]): Promise<void> {
-  const body: AccountLibraryManifest = { version: 1, updatedAt: new Date().toISOString(), books }
-  const result = await getAuthClient().storage.from(BUCKET).upload(manifestPath(userId), new Blob([JSON.stringify(body)], { type: 'application/json' }), { upsert: true, contentType: 'application/json' })
+async function writeRemoteManifest(userId: string, books: LibraryBook[], tombstones: Tombstones): Promise<void> {
+  const body: AccountLibraryManifest = { version: 1, updatedAt: new Date().toISOString(), books, tombstones }
+  const result = await getAuthClient()
+    .storage.from(BUCKET)
+    .upload(manifestPath(userId), new Blob([JSON.stringify(body)], { type: 'application/json' }), {
+      upsert: true,
+      contentType: 'application/json',
+    })
   if (result.error) throw new Error(`Supabase could not save your book library: ${result.error.message}`)
 }
 
@@ -71,7 +98,9 @@ async function uploadLocalBook(userId: string, book: LibraryBook): Promise<void>
   const bytes = await loadEpubFile(book.id).catch(() => null)
   if (!bytes) return
   const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
-  const result = await getAuthClient().storage.from(BUCKET).upload(bookPath(userId, book), new Blob([bytes], { type: contentType }), { upsert: true, contentType })
+  const result = await getAuthClient()
+    .storage.from(BUCKET)
+    .upload(bookPath(userId, book), new Blob([bytes], { type: contentType }), { upsert: true, contentType })
   if (result.error) throw new Error(`Supabase could not save ${book.title}: ${result.error.message}`)
 }
 
@@ -104,8 +133,14 @@ export async function syncAccountLibrary(localBooks: LibraryBook[]): Promise<Lib
   const user = await signedInUser()
   if (!user) return localBooks
   const remote = await readRemoteManifest(user.id)
-  const books = mergeBooks(mergeBooks(readLibraryBooks(), localBooks), remote?.books ?? [])
-  await writeRemoteManifest(user.id, books)
+  const tombstones = pruneTombstones(mergeTombstones(readTombstones(), remote?.tombstones ?? {}))
+  const books = applyTombstones(
+    'book',
+    mergeBooks(mergeBooks(readLibraryBooks(), localBooks), remote?.books ?? []),
+    tombstones,
+  )
+  writeTombstones(tombstones)
+  await writeRemoteManifest(user.id, books, tombstones)
   for (const book of books) await uploadLocalBook(user.id, book)
   for (const book of books) await restoreRemoteBook(user.id, book)
   writeLibraryBooks(books)
