@@ -4596,7 +4596,12 @@ body {
   padding: 38px 17px 34px;
   border-left: 1px solid rgba(155, 190, 218, 0.1);
   color: #dbe8ef;
-  background: linear-gradient(180deg, var(--surface-ctx-a, #061421) 0%, var(--surface-ctx-b, #07192a) 52%, var(--surface-ctx-a, #061321) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--surface-ctx-a, #061421) 0%,
+    var(--surface-ctx-b, #07192a) 52%,
+    var(--surface-ctx-a, #061321) 100%
+  );
 }
 .context-date-row {
   display: flex;
