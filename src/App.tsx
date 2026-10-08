@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowRight,
+  Check,
+  ChevronDown,
+  Clock,
+  ListFilter,
   BookOpen,
   Brain,
   Compass,
@@ -779,6 +783,11 @@ function App() {
       ? `${sourceLocation.bookTitle}${sourceLocation.chapter ? ` · ${sourceLocation.chapter}` : ''}${sourceLocation.page ? ` · p. ${sourceLocation.page}` : ''}`
       : 'Noesis'
     setNoteDraft({ title: choice.title, body: seed, source, kind: choice.kind, location: sourceLocation })
+    setUtilityOverlay(null)
+    setOverlay('brain')
+  }
+  function openTopicNote(title: string, source: string) {
+    setNoteDraft({ title, body: '', source, kind: 'note' })
     setUtilityOverlay(null)
     setOverlay('brain')
   }
@@ -1582,6 +1591,7 @@ function App() {
               openNoemaPanel(prompt)
               void askNoema(prompt)
             }}
+            onNote={openTopicNote}
           />
         </FreeCopyContext.Provider>
         <NotesSection
@@ -1699,6 +1709,7 @@ function App() {
               openNoemaPanel(prompt)
               void askNoema(prompt)
             }}
+            onNote={openTopicNote}
             onUpdate={(updated) => {
               const next = paths.map((path) => (path.id === updated.id ? updated : path))
               setPaths(next)
@@ -2657,6 +2668,69 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
+const SHELF_OPTIONS: Array<{ id: ShelfMode; label: string; detail: string; icon: typeof Clock }> = [
+  { id: 'added', label: 'Recently added', detail: 'Newest books in your library', icon: Clock },
+  { id: 'reading', label: 'Recently reading', detail: 'Books you’ve opened recently', icon: BookOpen },
+]
+
+// A small menu for choosing which books the Home shelf shows.
+function ShelfMenu({ mode, onChange }: { mode: ShelfMode; onChange: (mode: ShelfMode) => void }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      document.removeEventListener('keydown', key)
+    }
+  }, [open])
+  const current = SHELF_OPTIONS.find((option) => option.id === mode) ?? SHELF_OPTIONS[0]
+  return (
+    <div className="shelf-menu" ref={root}>
+      <button
+        className={`shelf-menu-button${open ? ' shelf-menu-button-open' : ''}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Choose which books to show"
+      >
+        <ListFilter size={18} />
+        <span>{current.label}</span>
+        <ChevronDown size={16} className="shelf-menu-chevron" />
+      </button>
+      {open ? (
+        <ul className="shelf-menu-list" role="listbox">
+          {SHELF_OPTIONS.map((option) => (
+            <li key={option.id} role="option" aria-selected={option.id === mode}>
+              <button
+                className={option.id === mode ? 'shelf-menu-item shelf-menu-item-on' : 'shelf-menu-item'}
+                onClick={() => {
+                  onChange(option.id)
+                  setOpen(false)
+                }}
+              >
+                <option.icon size={20} />
+                <span>
+                  <strong>{option.label}</strong>
+                  <small>{option.detail}</small>
+                </span>
+                {option.id === mode ? <Check size={16} /> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
 const SHELF_KEY = 'noesis:home-shelf:v1'
 type ShelfMode = 'reading' | 'added'
 
@@ -2692,17 +2766,7 @@ function ReadingShelfSection({
     <section className="section-block shelf-section">
       <div className="section-heading">
         <div>
-          <h2>
-            <select
-              className="shelf-select"
-              value={mode}
-              onChange={(event) => change(event.target.value as ShelfMode)}
-              aria-label="Choose which books to show"
-            >
-              <option value="reading">Recently reading</option>
-              <option value="added">Recently added</option>
-            </select>
-          </h2>
+          <ShelfMenu mode={mode} onChange={change} />
         </div>
         <button className="text-button" onClick={onImport}>
           Add book <Plus size={14} />
@@ -2760,6 +2824,7 @@ function PathSection({
   onAssign,
   onUpdate,
   onAsk,
+  onNote,
   initialOpen = null,
 }: {
   paths: LearningPath[]
@@ -2771,6 +2836,7 @@ function PathSection({
   onAssign?: (pathId: string, bookId: string) => void
   onUpdate?: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
+  onNote?: (title: string, source: string) => void
 }) {
   const [selected, setSelected] = useState<string | null>(initialOpen)
   const detailRef = useRef<HTMLElement | null>(null)
@@ -2879,7 +2945,9 @@ function PathSection({
               </button>
             ) : null}
           </div>
-          {active.plan && onUpdate ? <PathPlanDetail path={active} onChange={onUpdate} onAsk={onAsk} /> : null}
+          {active.plan && onUpdate ? (
+            <PathPlanDetail path={active} onChange={onUpdate} onAsk={onAsk} onNote={onNote} />
+          ) : null}
           {detail.pathBooks.length ? (
             <ul className="path-detail-books">
               {detail.pathBooks.map((book) => (

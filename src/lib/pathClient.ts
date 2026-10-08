@@ -82,6 +82,32 @@ export async function requestMaterials(input: {
   return { books: result.books ?? [], resources: result.resources ?? [] }
 }
 
+export type QuizTopic = { goal: string; stage: string; topic: string; level?: string }
+export type QuizGrade = { verdict: 'correct' | 'partly' | 'incorrect'; feedback: string; ideal: string }
+
+export async function requestQuestion(input: QuizTopic): Promise<string> {
+  const result = await post<{ question?: string }>(
+    '/api/quiz',
+    { ...input, mode: 'question' },
+    'Noema could not write a question right now.',
+  )
+  if (!result.question) throw new Error('Noema could not write a question right now.')
+  return result.question
+}
+
+export async function requestGrade(input: QuizTopic & { question: string; answer: string }): Promise<QuizGrade> {
+  const result = await post<Partial<QuizGrade>>(
+    '/api/quiz',
+    { ...input, mode: 'grade' },
+    'Noema could not check that right now.',
+  )
+  return {
+    verdict: result.verdict ?? 'incorrect',
+    feedback: result.feedback ?? '',
+    ideal: result.ideal ?? '',
+  }
+}
+
 // null means "no such book was found" (so it is left out); a catalogue outage
 // keeps the suggestion but marks it unverified.
 export async function resolveBook(candidate: BookCandidate, now = Date.now()): Promise<ResolvedBook | null> {
