@@ -63,12 +63,26 @@ the knowledge migration in `supabase/migrations/` to enable note sync.
 
 For personal cloud sync, add these public build variables in Cloudflare when
 you configure the corresponding OAuth apps: `VITE_GOOGLE_DRIVE_CLIENT_ID`,
-`VITE_ONEDRIVE_CLIENT_ID`, and `VITE_DROPBOX_APP_KEY`. Register the live Noesis
-URL and your local development URL as redirect URLs in each provider. The
-provider connection uses a browser access token and the learner's own account;
-Noesis never receives the provider password or client secret. Connect the
-provider from Cloud Backup after signing in. A ZIP export remains available
-for one-off manual transfers.
+`VITE_ONEDRIVE_CLIENT_ID`, and `VITE_DROPBOX_APP_KEY`. Noesis never receives the
+provider password or client secret. Connect the provider from Cloud Backup after
+signing in. A ZIP export remains available for one-off manual transfers.
+
+### OAuth redirect URIs
+
+Each provider redirects back to a clean path with no query string (Microsoft
+rejects query strings for apps that allow personal accounts). Register these
+exact URLs in each provider, replacing the host with your live Noesis URL and
+adding your local one (for example `http://localhost:5173`) as well:
+
+| Provider     | Redirect URI                                  |
+| ------------ | --------------------------------------------- |
+| Google Drive | `https://YOUR-NOESIS-HOST/oauth/google-drive` |
+| OneDrive     | `https://YOUR-NOESIS-HOST/oauth/onedrive`     |
+| Dropbox      | `https://YOUR-NOESIS-HOST/oauth/dropbox`      |
+
+For OneDrive, register it in Microsoft Entra under Authentication as a
+"Single-page application" platform URI and enable the implicit grant for access
+tokens.
 
 ### Worker protection
 
