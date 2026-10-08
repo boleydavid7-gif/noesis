@@ -140,7 +140,7 @@ export function cloudConnectionForUser(connections: CloudConnection[], userId: s
 }
 
 function redirectUri(provider: CloudProviderId): string {
-  return `${window.location.origin}/?noesis-oauth=1&provider=${provider}`
+  return `${window.location.origin}/oauth/${provider}`
 }
 
 function randomState(): string {
@@ -152,10 +152,11 @@ function randomState(): string {
 export function consumeCloudOAuthRedirect(): void {
   if (typeof window === 'undefined') return
   const query = new URLSearchParams(window.location.search)
-  if (!query.has('noesis-oauth') || !window.opener) return
+  const pathProvider = window.location.pathname.match(/^\\/oauth\\/(google-drive|onedrive|dropbox)\\/?$/)?.[1] as CloudProviderId | undefined
+  if ((!query.has('noesis-oauth') && !pathProvider) || !window.opener) return
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   const error = hash.get('error') || query.get('error')
-  const provider = query.get('provider') as CloudProviderId | null
+  const provider = (query.get('provider') as CloudProviderId | null) ?? pathProvider ?? null
   window.opener.postMessage({
     type: 'noesis-cloud-oauth',
     state: hash.get('state') || query.get('state'),
