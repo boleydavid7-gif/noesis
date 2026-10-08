@@ -8172,3 +8172,51 @@ body {
   margin-right: 6px;
   border-radius: 50%;
 }
+.dupes-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.dupes-group {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+.dupes-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.shelf-edit {
+  justify-self: start;
+  padding: 0 0 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+.edit-cover {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.edit-cover .book-cover {
+  width: 84px;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
+}
+.edit-cover > span {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.edit-cover-pick {
+  cursor: pointer;
+}
