@@ -78,6 +78,7 @@ import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
+import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
 import { applyImages } from './lib/images'
 import { notesToZip } from './lib/exportNotes'
 import { bookmarkletCode, decodeCollection, encodeCollection, readIncoming, type SharedCollection } from './lib/share'
@@ -1091,16 +1092,17 @@ function App() {
     setUtilityOverlay(null)
     setOverlay('noema')
   }
-  // Reads one EPUB or PDF into the library. Returns null for files that are not books or are already here.
+  // Reads one book file into the library. Returns null for files that are not books or are already here.
   async function importOne(file: File): Promise<LibraryBook | 'duplicate' | null> {
     const name = file.name.toLowerCase()
     const isEpub = name.endsWith('.epub')
     const isPdf = name.endsWith('.pdf')
-    if (!isEpub && !isPdf) return null
+    if (!isImportable(name)) return null
     if (readLibraryBooks().some((item) => item.fileName === file.name && item.fileSize === file.size))
       return 'duplicate'
-    const data = await file.arrayBuffer()
-    const parsed = isEpub ? await parseEpub(data, file.name) : null
+    // Other formats are turned into EPUB first, so every reading tool works on them.
+    const data = isEpub || isPdf ? await file.arrayBuffer() : await convertToEpub(file)
+    const parsed = isPdf ? null : await parseEpub(data, file.name)
     const book = parsed
       ? epubBookFromParsed(`epub-${crypto.randomUUID()}`, file.name, file.size, parsed)
       : pdfBookFromSource(
@@ -1116,9 +1118,11 @@ function App() {
     return book
   }
   async function importFiles(files: File[]) {
-    const usable = files.filter((file) => /\.(epub|pdf)$/i.test(file.name))
+    const usable = files.filter((file) => isImportable(file.name))
     if (usable.length === 0) {
-      showNotice('Noesis imports EPUB and PDF files.')
+      showNotice(
+        'Noesis reads EPUB, PDF, Kindle (DRM-free), Word, text, Markdown, web pages, FictionBook and comic (CBZ) files.',
+      )
       return
     }
     const added: LibraryBook[] = []
@@ -2899,7 +2903,7 @@ function App() {
               <button
                 className="quick-icon"
                 onClick={() => fileInput.current?.click()}
-                aria-label="Add EPUB or PDF"
+                aria-label="Add a book file"
                 title="Add book"
               >
                 <Plus size={16} />
@@ -3015,7 +3019,7 @@ function App() {
           ref={fileInput}
           className="visually-hidden"
           type="file"
-          accept=".epub,.pdf,application/epub+zip,application/pdf"
+          accept={IMPORT_ACCEPT}
           multiple
           onChange={handleImport}
         />
@@ -3637,7 +3641,7 @@ function BookSection({
         ) : null}
       </div>
       {books.length === 0 ? (
-        <div className="empty-state">No books yet. Import an EPUB or PDF, or look in Explore.</div>
+        <div className="empty-state">No books yet. Import a book file, or look in Explore.</div>
       ) : (
         <div className="book-grid">
           {books.map((book) => (
