@@ -8428,3 +8428,26 @@ body {
 .opds-form small {
   color: var(--muted);
 }
+
+.year-stats {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+}
+.year-stats dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.year-stats dt {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.year-stats dd {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+}

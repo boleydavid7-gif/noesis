@@ -2258,6 +2258,7 @@ function App() {
       <Page title="Second Brain" subtitle="">
         <SecondBrainPage
           diary={readDiary()}
+          books={books}
           bookmarklet={bookmarkletCode(window.location.origin)}
           onExport={() => void exportNotes()}
           onShare={(items) => void shareNotes(items)}
