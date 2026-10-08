@@ -3,6 +3,11 @@ import {
   ArrowRight,
   BookOpen,
   Brain,
+  Compass,
+  Cpu,
+  FlaskConical,
+  Landmark,
+  Target,
   CheckCircle2,
   CircleHelp,
   Cloud,
@@ -1415,12 +1420,23 @@ function App() {
             <small>by Proairetos</small>
           </div>
         </section>
-        <ReadingShelfSection
-          books={filteredBooks.slice(0, 6)}
-          onOpen={openSavedBook}
-          onImport={() => fileInput.current?.click()}
-        />
-        <PathSection paths={paths} books={books} onOpen={() => selectNav('Learning Paths')} />
+        <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
+        <FreeCopyContext.Provider value={addResource}>
+          <PathSection
+            paths={paths}
+            books={books}
+            onOpen={() => selectNav('Learning Paths')}
+            onUpdate={(updated) => {
+              const next = paths.map((path) => (path.id === updated.id ? updated : path))
+              setPaths(next)
+              writePaths(next)
+            }}
+            onAsk={(prompt) => {
+              openNoemaPanel(prompt)
+              void askNoema(prompt)
+            }}
+          />
+        </FreeCopyContext.Provider>
         <NotesSection notes={notes} onOpen={() => setOverlay('brain')} onOpenNote={openNoteLocation} />
         <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
       </div>
@@ -2426,6 +2442,9 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
+const SHELF_KEY = 'noesis:home-shelf:v1'
+type ShelfMode = 'reading' | 'added'
+
 function ReadingShelfSection({
   books,
   onOpen,
@@ -2435,12 +2454,45 @@ function ReadingShelfSection({
   onOpen: (book: LibraryBook) => void
   onImport: () => void
 }) {
+  const [mode, setMode] = useState<ShelfMode>(() => {
+    try {
+      return localStorage.getItem(SHELF_KEY) === 'added' ? 'added' : 'reading'
+    } catch {
+      return 'reading'
+    }
+  })
+  const change = (next: ShelfMode) => {
+    setMode(next)
+    try {
+      localStorage.setItem(SHELF_KEY, next)
+    } catch {
+      // The choice just won't be remembered.
+    }
+  }
+  const shelf =
+    mode === 'reading'
+      ? books.filter((book) => book.progress > 0).sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
+      : [...books].sort((a, b) => (b.added ?? b.updated ?? '').localeCompare(a.added ?? a.updated ?? ''))
   return (
     <section className="section-block shelf-section">
       <div className="section-heading">
         <div>
-          <h2>Recently reading</h2>
-          <p>A quiet shelf for the books you are spending time with.</p>
+          <h2>
+            <select
+              className="shelf-select"
+              value={mode}
+              onChange={(event) => change(event.target.value as ShelfMode)}
+              aria-label="Choose which books to show"
+            >
+              <option value="reading">Recently reading</option>
+              <option value="added">Recently added</option>
+            </select>
+          </h2>
+          <p>
+            {mode === 'reading'
+              ? 'A quiet shelf for the books you are spending time with.'
+              : 'The newest books in your library.'}
+          </p>
         </div>
         <button className="text-button" onClick={onImport}>
           Add book <Plus size={14} />
@@ -2450,9 +2502,11 @@ function ReadingShelfSection({
         <button className="empty-state" onClick={onImport}>
           Your shelf is waiting for its first book.
         </button>
+      ) : shelf.length === 0 ? (
+        <div className="empty-state">You haven’t started a book yet. Open one and it will appear here.</div>
       ) : (
         <div className="bookshelf-row">
-          {books.map((book) => (
+          {shelf.slice(0, 8).map((book) => (
             <button className="shelf-book" key={book.id} onClick={() => onOpen(book)}>
               <div className="shelf-cover">
                 <BookCover book={book} compact />
@@ -2463,11 +2517,30 @@ function ReadingShelfSection({
               <small>{Math.round(book.progress)}% read</small>
             </button>
           ))}
+          <button className="shelf-book shelf-add" onClick={onImport}>
+            <div className="shelf-cover shelf-add-cover">
+              <Plus size={22} />
+            </div>
+            <strong>Add a book</strong>
+          </button>
         </div>
       )}
     </section>
   )
 }
+const TILE_IMAGES = ['/noesis-hero.jpg', '/noesis-header.webp', '/noesis-sidebar.webp']
+const hashOf = (value: string) => [...value].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7)
+function pathIcon(title: string) {
+  const text = title.toLowerCase()
+  if (/psych|mind|brain|cogni|neuro/.test(text)) return Brain
+  if (/comput|network|program|code|python|cyber|software|data|\bit\b|tech/.test(text)) return Cpu
+  if (/focus|product|habit|growth|goal|career/.test(text)) return Target
+  if (/financ|money|invest|econom|business/.test(text)) return Landmark
+  if (/science|biolog|chem|physic|math|medic|mcat/.test(text)) return FlaskConical
+  if (/write|novel|story|read|book|liter/.test(text)) return BookOpen
+  return Compass
+}
+
 function PathSection({
   paths,
   books,
@@ -2487,7 +2560,19 @@ function PathSection({
   onUpdate?: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
 }) {
-  const [openPlan, setOpenPlan] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const progressOf = (path: LearningPath) => {
+    const pathBooks = books.filter((book) => path.bookIds.includes(book.id))
+    const plan = path.plan ? planProgress(path.plan) : null
+    const percent = plan
+      ? plan.percent
+      : pathBooks.length
+        ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length)
+        : 0
+    return { pathBooks, plan, percent }
+  }
+  const active = paths.find((path) => path.id === selected) ?? null
+  const detail = active ? progressOf(active) : null
   return (
     <section className="section-block path-section">
       <div className="section-heading">
@@ -2504,81 +2589,109 @@ function PathSection({
       {paths.length === 0 ? (
         <div className="empty-state">Create a path when you want to connect several books around one goal.</div>
       ) : (
-        <div className="journey-list">
+        <div className="path-tiles">
           {paths.map((path) => {
-            const pathBooks = books.filter((book) => path.bookIds.includes(book.id))
-            const plan = path.plan ? planProgress(path.plan) : null
-            const progress = plan
-              ? plan.percent
-              : pathBooks.length
-                ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length)
-                : 0
+            const { pathBooks, plan, percent } = progressOf(path)
+            const Icon = pathIcon(path.title)
+            const seed = hashOf(path.id)
             return (
-              <article className="journey-item" key={path.id}>
-                <div className="journey-marker">
-                  <Brain size={15} />
-                </div>
-                <div className="journey-content">
-                  <div className="journey-line">
-                    <strong>{path.title}</strong>
-                    <span>{progress}%</span>
-                  </div>
-                  <div className="journey-track">
-                    <span style={{ width: `${progress}%` }} />
-                  </div>
-                  <p>{path.description}</p>
+              <button
+                key={path.id}
+                className={`path-tile${selected === path.id ? ' path-tile-active' : ''}`}
+                onClick={() => setSelected(selected === path.id ? null : path.id)}
+                aria-expanded={selected === path.id}
+              >
+                <span
+                  className="path-tile-art"
+                  style={{
+                    backgroundImage: `url(${TILE_IMAGES[seed % TILE_IMAGES.length]})`,
+                    backgroundPosition: `${seed % 100}% ${(seed >> 3) % 100}%`,
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="path-tile-body">
+                  <span className="path-tile-icon">
+                    <Icon size={16} />
+                  </span>
+                  <strong>{path.title}</strong>
                   <small>
                     {plan
-                      ? `${plan.done} of ${plan.total} topics · ${path.plan?.weeks ?? ''}`
-                      : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
-                    · {progress >= 100 ? 'Complete' : 'In progress'}
+                      ? `${plan.done} / ${plan.total} topics`
+                      : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
                   </small>
-                  {path.plan ? (
-                    <button
-                      className="text-button plan-toggle"
-                      onClick={() => setOpenPlan(openPlan === path.id ? null : path.id)}
-                      aria-expanded={openPlan === path.id}
-                    >
-                      {openPlan === path.id ? 'Hide plan' : 'Open plan'}
-                    </button>
-                  ) : null}
-                  {path.plan && openPlan === path.id && onUpdate ? (
-                    <PathPlanDetail path={path} onChange={onUpdate} onAsk={onAsk} />
-                  ) : null}
-                  {editable && books.length > 0 ? (
-                    <select
-                      className="path-book-select"
-                      defaultValue=""
-                      onChange={(event) => {
-                        if (event.target.value) onAssign?.(path.id, event.target.value)
-                        event.target.value = ''
-                      }}
-                    >
-                      <option value="">Add a book…</option>
-                      {books
-                        .filter((book) => !path.bookIds.includes(book.id))
-                        .map((book) => (
-                          <option key={book.id} value={book.id}>
-                            {book.title}
-                          </option>
-                        ))}
-                    </select>
-                  ) : null}
-                </div>
-                {editable ? (
-                  <button
-                    className="path-delete"
-                    onClick={() => onDelete?.(path.id)}
-                    aria-label={`Delete ${path.title}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                ) : null}
-              </article>
+                  <span className="path-tile-track">
+                    <span style={{ width: `${percent}%` }} />
+                  </span>
+                </span>
+                <ArrowRight size={14} className="path-tile-arrow" />
+              </button>
             )
           })}
+          {onOpen ? (
+            <button className="path-tile path-tile-new" onClick={onOpen}>
+              <Plus size={20} />
+              <strong>Plan a new path</strong>
+            </button>
+          ) : null}
         </div>
       )}
+      {active && detail ? (
+        <article className="path-detail panel-card">
+          <div className="path-detail-head">
+            <div>
+              <h3>{active.title}</h3>
+              <p>{active.description}</p>
+              <small>
+                {detail.plan
+                  ? `${detail.plan.done} of ${detail.plan.total} topics · ${active.plan?.weeks ?? ''}`
+                  : `${detail.pathBooks.length} ${detail.pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
+                · {detail.percent >= 100 ? 'Complete' : `${detail.percent}%`}
+              </small>
+            </div>
+            {editable ? (
+              <button
+                className="path-delete"
+                onClick={() => {
+                  setSelected(null)
+                  onDelete?.(active.id)
+                }}
+                aria-label={`Delete ${active.title}`}
+              >
+                <Trash2 size={14} />
+              </button>
+            ) : null}
+          </div>
+          {active.plan && onUpdate ? <PathPlanDetail path={active} onChange={onUpdate} onAsk={onAsk} /> : null}
+          {detail.pathBooks.length ? (
+            <ul className="path-detail-books">
+              {detail.pathBooks.map((book) => (
+                <li key={book.id}>
+                  {book.title} <small>{Math.round(book.progress)}%</small>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {editable && books.length > 0 ? (
+            <select
+              className="path-book-select"
+              defaultValue=""
+              onChange={(event) => {
+                if (event.target.value) onAssign?.(active.id, event.target.value)
+                event.target.value = ''
+              }}
+            >
+              <option value="">Add a book…</option>
+              {books
+                .filter((book) => !active.bookIds.includes(book.id))
+                .map((book) => (
+                  <option key={book.id} value={book.id}>
+                    {book.title}
+                  </option>
+                ))}
+            </select>
+          ) : null}
+        </article>
+      ) : null}
     </section>
   )
 }

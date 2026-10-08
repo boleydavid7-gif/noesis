@@ -8,6 +8,7 @@ export type LibraryBook = {
   progress: number
   chapter: string
   updated: string
+  added?: string // when the book first joined the library
   cover: string
   coverDataUrl?: string
   coverUrl?: string
@@ -57,8 +58,10 @@ export function writeLibraryBooks(books: LibraryBook[]): void {
 
 export function upsertLibraryBook(book: LibraryBook): LibraryBook[] {
   markRestored('book', book.id)
-  const books = readLibraryBooks().filter((item) => item.id !== book.id)
-  const next = [book, ...books]
+  const existing = readLibraryBooks()
+  const previous = existing.find((item) => item.id === book.id)
+  const books = existing.filter((item) => item.id !== book.id)
+  const next = [{ ...book, added: book.added ?? previous?.added ?? new Date().toISOString() }, ...books]
   writeLibraryBooks(next)
   return next
 }
