@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { Group, Row, Segmented, Toggle } from './settings/controls'
+import { clearCustomFont, customFontName, saveCustomFont } from './lib/customFont'
 import { canEmbedOnDevice } from './lib/embeddings'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings/sections'
 import {
@@ -120,6 +121,8 @@ type SetFn = <S extends keyof Settings, K extends keyof Settings[S]>(section: S,
 
 function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
   const reading = settings.reading
+  const [fontName, setFontName] = useState(() => customFontName())
+  const [fontNote, setFontNote] = useState('')
   const colors = READER_COLORS[reading.theme]
   return (
     <>
@@ -145,8 +148,53 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
               { value: 'serif', label: 'Serif' },
               { value: 'sans', label: 'Sans' },
               { value: 'easy', label: 'Easy-read' },
+              ...(fontName ? [{ value: 'custom' as const, label: 'Yours' }] : []),
             ]}
           />
+        </Row>
+        <Row
+          title="Your own font"
+          detail={
+            fontNote ||
+            (fontName ? `${fontName}. Used the next time you open a book.` : 'Add a .ttf, .otf or .woff2 file.')
+          }
+        >
+          <div className="image-picker-options">
+            <label className="image-option">
+              {fontName ? 'Change' : 'Add a font'}
+              <input
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (!file) return
+                  saveCustomFont(file).then(
+                    (name) => {
+                      setFontName(name)
+                      setFontNote('')
+                      set('reading', 'font', 'custom')
+                    },
+                    (reason) => setFontNote(reason instanceof Error ? reason.message : 'That font could not be added.'),
+                  )
+                }}
+              />
+            </label>
+            {fontName ? (
+              <button
+                type="button"
+                className="image-option"
+                onClick={() => {
+                  clearCustomFont()
+                  setFontName('')
+                  if (reading.font === 'custom') set('reading', 'font', 'book')
+                }}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
         </Row>
         <Row title="Line spacing" detail={reading.lineHeight.toFixed(2)}>
           <input
@@ -183,6 +231,13 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
               { value: 'normal', label: 'Normal' },
               { value: 'wide', label: 'Wide' },
             ]}
+          />
+        </Row>
+        <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
+          <Toggle
+            checked={reading.tapZones}
+            onChange={(value) => set('reading', 'tapZones', value)}
+            label="Tap to turn pages"
           />
         </Row>
         <Row title="Open books expanded" detail="Shows the reading tools beside the page.">

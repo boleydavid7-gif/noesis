@@ -2,7 +2,7 @@
 // setting that appears in the Settings page changes behaviour.
 
 export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
-export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy'
+export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy' | 'custom'
 export type SurfaceName = 'midnight' | 'charcoal' | 'forest' | 'plum' | 'espresso'
 export type LetterSpacing = 'normal' | 'wide'
 export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
@@ -25,6 +25,9 @@ export type Settings = {
     lineWidth: LineWidth
     dropCap: boolean
     letterSpacing: LetterSpacing
+    tapZones: boolean
+    dim: number // 0 to 60: how much the page is darkened
+    autoScrollSpeed: number // 1 to 10
   }
   appearance: { accent: AccentName; surface: SurfaceName; scenery: boolean; reduceMotion: boolean; compact: boolean }
   library: {
@@ -59,6 +62,9 @@ export const DEFAULT_SETTINGS: Settings = {
     lineWidth: 'full',
     dropCap: false,
     letterSpacing: 'normal',
+    tapZones: false,
+    dim: 0,
+    autoScrollSpeed: 3,
   },
   appearance: { accent: 'gold', surface: 'midnight', scenery: true, reduceMotion: false, compact: false },
   library: {
@@ -124,6 +130,7 @@ export const FONT_STACKS: Record<ReaderFont, string | null> = {
   serif: "Georgia, 'Times New Roman', serif",
   sans: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   // Fonts with open, clearly different letter shapes. Uses OpenDyslexic or Atkinson if installed.
+  custom: 'NoesisCustom, Georgia, serif',
   easy: "OpenDyslexic, 'Atkinson Hyperlegible', Lexend, Verdana, Tahoma, sans-serif",
 }
 
@@ -168,7 +175,7 @@ export function sanitizeSettings(input: unknown): Settings {
     reading: {
       fontSize: Math.round(num(reading.fontSize, 85, 140, d.reading.fontSize) / 5) * 5,
       theme: pick(reading.theme, ['paper', 'sepia', 'night', 'contrast'], d.reading.theme),
-      font: pick(reading.font, ['book', 'serif', 'sans', 'easy'], d.reading.font),
+      font: pick(reading.font, ['book', 'serif', 'sans', 'easy', 'custom'], d.reading.font),
       lineHeight: Math.round(num(reading.lineHeight, 1.3, 2.2, d.reading.lineHeight) * 20) / 20,
       startWide: bool(reading.startWide, d.reading.startWide),
       speechRate: Math.round(num(reading.speechRate, 0.6, 1.6, d.reading.speechRate) * 10) / 10,
@@ -176,6 +183,9 @@ export function sanitizeSettings(input: unknown): Settings {
       paragraphs: pick(reading.paragraphs, ['book', 'indent', 'space'], d.reading.paragraphs),
       lineWidth: pick(reading.lineWidth, ['full', 'comfortable', 'narrow'], d.reading.lineWidth),
       dropCap: bool(reading.dropCap, d.reading.dropCap),
+      tapZones: bool(reading.tapZones, d.reading.tapZones),
+      dim: Math.round(num(reading.dim, 0, 60, d.reading.dim) / 5) * 5,
+      autoScrollSpeed: Math.round(num(reading.autoScrollSpeed, 1, 10, d.reading.autoScrollSpeed)),
       letterSpacing: pick(reading.letterSpacing, ['normal', 'wide'], d.reading.letterSpacing),
     },
     appearance: {

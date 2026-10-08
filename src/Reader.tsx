@@ -19,6 +19,7 @@ import {
   Minimize2,
   PanelRight,
   Pause,
+  SlidersHorizontal,
   Play,
   Plus,
   Search,
@@ -40,6 +41,7 @@ import {
 } from './lib/ambient'
 import { addReading, countWords, formatDuration, readPace, timeLeft, writePace, wordsPerMinute } from './lib/pace'
 import { logReading, readDiary, writeDiary } from './lib/diary'
+import { locateRange } from './lib/wordRange'
 import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
 import {
   HIGHLIGHT_COLORS,
@@ -52,6 +54,8 @@ import { openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { PdfReader } from './PdfReader'
+import { customFontCss } from './lib/customFont'
+import { autoScrollPixelsPerSecond, pageScroll, tapZone } from './lib/readerControls'
 import { parsePdfLocation } from './lib/pdfMarks'
 import { FONT_STACKS, READER_COLORS, type ReaderTheme, type Settings } from './lib/settings'
 
@@ -321,6 +325,10 @@ export function Reader({
   const goToChapterRef = useLatest(goToChapter)
   const noteChapterWordsRef = useRef<() => void>(() => undefined)
   // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
+  const [controlsOpen, setControlsOpen] = useState(false)
+  const [autoScroll, setAutoScroll] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const speedRef = useLatest(reading.autoScrollSpeed)
   const [listening, setListening] = useState<'off' | 'on' | 'paused'>('off')
   const listenRef = useRef<ListenController | null>(null)
   const chapterIndexRef = useLatest(chapterIndex)
@@ -336,7 +344,49 @@ export function Reader({
     const start = all.findIndex((block) => block.element.getBoundingClientRect().bottom > 4)
     return start >= 0 ? all.slice(start) : all
   }
+  // The sentence being read is shaded and the word being spoken is marked, where the browser can do so.
+  const markSpoken = (element: Element | undefined, start: number, end: number) => {
+    const doc = element?.ownerDocument
+    const view = doc?.defaultView as
+      | (Window & { CSS?: { highlights?: Map<string, unknown> }; Highlight?: new (...ranges: Range[]) => unknown })
+      | null
+      | undefined
+    if (!element || !doc || !view?.CSS?.highlights || !view.Highlight) return
+    if (!doc.getElementById('noesis-speaking-style')) {
+      const style = doc.createElement('style')
+      style.id = 'noesis-speaking-style'
+      style.textContent =
+        '::highlight(noesis-block){background-color:rgba(255,214,120,.16)}::highlight(noesis-word){background-color:rgba(255,196,64,.55)}'
+      doc.head.appendChild(style)
+    }
+    const block = doc.createRange()
+    block.selectNodeContents(element)
+    view.CSS.highlights.set('noesis-block', new view.Highlight(block))
+    if (end <= start) {
+      view.CSS.highlights.delete('noesis-word')
+      return
+    }
+    const walker = doc.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    const nodes: Text[] = []
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text)
+    const place = locateRange(
+      nodes.map((node) => node.data),
+      start,
+      end,
+    )
+    if (!place) return
+    const word = doc.createRange()
+    word.setStart(nodes[place.start.part], place.start.offset)
+    word.setEnd(nodes[place.end.part], place.end.offset)
+    view.CSS.highlights.set('noesis-word', new view.Highlight(word))
+  }
+  const clearSpoken = () => {
+    const doc = frame.current?.querySelector('iframe')?.contentDocument
+    const view = doc?.defaultView as (Window & { CSS?: { highlights?: Map<string, unknown> } }) | null | undefined
+    view?.CSS?.highlights?.clear()
+  }
   const stopListening = () => {
+    clearSpoken()
     listenRef.current?.stop()
     listenRef.current = null
     setListening('off')
@@ -350,7 +400,11 @@ export function Reader({
     listenRef.current?.stop()
     listenRef.current = startListening(blocks, {
       rate: rateRef.current,
-      onBlock: (block) => block.element?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+      onBlock: (block) => {
+        block.element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        markSpoken(block.element, 0, 0)
+      },
+      onWord: (block, start, end) => markSpoken(block.element, start, end),
       onDone: () => {
         const next = chapterIndexRef.current + 1
         if (next < chaptersRef.current.length) {
@@ -379,6 +433,42 @@ export function Reader({
     },
     [],
   )
+  // Slowly scrolls the page; touching it or pressing a key hands control back.
+  useEffect(() => {
+    if (!autoScroll) return
+    const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container, .pdf-scroll')
+    if (!container) return
+    let frameId = 0
+    let last = performance.now()
+    let position = container.scrollTop
+    const step = (now: number) => {
+      position += (autoScrollPixelsPerSecond(speedRef.current) * (now - last)) / 1000
+      last = now
+      container.scrollTop = position
+      if (position >= container.scrollHeight - container.clientHeight - 1) {
+        // The end of the chapter: carry on into the next one.
+        const next = chapterIndexRef.current + 1
+        setAutoScroll(false)
+        if (book.format === 'epub' && next < chaptersRef.current.length) {
+          goToChapterRef.current(next)
+          window.setTimeout(() => setAutoScroll(true), 1500)
+        }
+        return
+      }
+      frameId = window.requestAnimationFrame(step)
+    }
+    frameId = window.requestAnimationFrame(step)
+    const stop = () => setAutoScroll(false)
+    container.addEventListener('wheel', stop, { passive: true })
+    container.addEventListener('touchstart', stop, { passive: true })
+    window.addEventListener('keydown', stop)
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      container.removeEventListener('wheel', stop)
+      container.removeEventListener('touchstart', stop)
+      window.removeEventListener('keydown', stop)
+    }
+  }, [autoScroll, book.format, speedRef, chapterIndexRef, chaptersRef, goToChapterRef])
   useEffect(() => {
     noteChapterWordsRef.current = noteChapterWords
   })
@@ -691,6 +781,15 @@ export function Reader({
           spread: 'none',
         })
         rendition.current = instance
+        // A font the reader brought along is made available inside each page.
+        const fontCss = await customFontCss()
+        if (fontCss) {
+          instance.hooks.content.register((contents: { document: Document }) => {
+            const style = contents.document.createElement('style')
+            style.textContent = fontCss
+            contents.document.head.appendChild(style)
+          })
+        }
         applyReadingStyle(instance.themes, readingRef.current)
         let activeChapterIndex = initialIndex
         let scrollTimer: number | undefined
@@ -781,6 +880,29 @@ export function Reader({
           const contentDocument = view?.contents?.document
           if (!contentDocument) return
           attachScroll(contentDocument)
+          // Touching the page, or pressing a key, hands control back from auto-scroll.
+          for (const name of ['wheel', 'touchstart', 'keydown'] as const)
+            contentDocument.addEventListener(name, () => setAutoScroll(false), { passive: true })
+          // Tapping near the top or bottom of the page turns it.
+          contentDocument.addEventListener('click', (event) => {
+            if (!readingRef.current.tapZones || contentDocument.getSelection()?.toString()) return
+            if ((event.target as Element | null)?.closest?.('a, svg, button, input')) return
+            const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container')
+            if (!container) return
+            const zone = tapZone(event.clientY - container.scrollTop, container.clientHeight)
+            if (!zone) return
+            const atEdge =
+              zone === 'down'
+                ? container.scrollTop + container.clientHeight >= container.scrollHeight - 4
+                : container.scrollTop <= 4
+            const target = chapterIndexRef.current + (zone === 'down' ? 1 : -1)
+            if (atEdge && target >= 0 && target < chaptersRef.current.length) goToChapterRef.current(target)
+            else
+              container.scrollBy({
+                top: (zone === 'down' ? 1 : -1) * pageScroll(container.clientHeight),
+                behavior: 'smooth',
+              })
+          })
           // The choices go away when the selection is let go of.
           let clearTimer: number | undefined
           contentDocument.addEventListener('selectionchange', () => {
@@ -875,7 +997,18 @@ export function Reader({
       rendition.current = null
       epubRef.current = null
     }
-  }, [book.id, bookRef, readerCallbacksRef, wideLayoutRef, wideCaptureKindRef, jumpLocation, readingRef])
+  }, [
+    book.id,
+    bookRef,
+    readerCallbacksRef,
+    wideLayoutRef,
+    wideCaptureKindRef,
+    jumpLocation,
+    readingRef,
+    chapterIndexRef,
+    chaptersRef,
+    goToChapterRef,
+  ])
   useEffect(() => {
     const query = activeQuery
     if (query.length < 2) return
@@ -1065,6 +1198,65 @@ export function Reader({
               >
                 <BookA size={16} />
               </button>
+            ) : null}
+            {book.format === 'epub' || book.format === 'pdf' ? (
+              <span className="reader-ambient">
+                <button
+                  className={
+                    'icon-button' + (autoScroll || reading.tapZones || reading.dim > 0 ? ' reader-listening' : '')
+                  }
+                  onClick={() => setControlsOpen((value) => !value)}
+                  aria-label="Page controls"
+                  aria-expanded={controlsOpen}
+                  title="Auto-scroll, dimming and tap zones"
+                >
+                  <SlidersHorizontal size={16} />
+                </button>
+                {controlsOpen ? (
+                  <div className="reader-ambient-pop reader-controls-pop">
+                    <button
+                      className={autoScroll ? 'reader-ambient-on' : ''}
+                      onClick={() => setAutoScroll((value) => !value)}
+                    >
+                      {autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
+                    </button>
+                    <label>
+                      Speed
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={reading.autoScrollSpeed}
+                        aria-label="Auto-scroll speed"
+                        onChange={(event) => onReadingChange({ autoScrollSpeed: Number(event.target.value) })}
+                      />
+                    </label>
+                    <label>
+                      Dim the page
+                      <input
+                        type="range"
+                        min="0"
+                        max="60"
+                        step="5"
+                        value={reading.dim}
+                        aria-label="Dim the page"
+                        onChange={(event) => onReadingChange({ dim: Number(event.target.value) })}
+                      />
+                    </label>
+                    {book.format === 'epub' ? (
+                      <label className="reader-controls-check">
+                        <input
+                          type="checkbox"
+                          checked={reading.tapZones}
+                          onChange={(event) => onReadingChange({ tapZones: event.target.checked })}
+                        />
+                        Tap the top or bottom to turn the page
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+              </span>
             ) : null}
             {canPlayAmbient() ? (
               <span className="reader-ambient">
@@ -1296,6 +1488,7 @@ export function Reader({
           </aside>
         ) : null}
         <div
+          ref={bodyRef}
           className={
             'reader-body ' +
             (book.format === 'pdf' ? 'reader-body-pdf' : '') +
@@ -1309,6 +1502,13 @@ export function Reader({
                   : '')
           }
         >
+          {reading.dim > 0 ? (
+            <div
+              className="reader-dim"
+              style={{ background: `rgba(0, 0, 0, ${reading.dim / 100})` }}
+              aria-hidden="true"
+            />
+          ) : null}
           <div className={'reader-frame-wrap ' + (book.format === 'epub' ? 'reader-frame-epub' : '')}>
             {book.format === 'pdf' ? (
               pdfData ? (
