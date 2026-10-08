@@ -697,6 +697,22 @@ function App() {
     }
   }, [])
   const closeUtility = useCallback(() => setUtilityOverlay(null), [])
+  // Shortcuts from the installed app's icon: "Continue reading", Library, Second Brain.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const page = params.get('page')
+    if (params.get('continue') === '1') {
+      const current = readLibraryBooks()
+        .filter((book) => book.progress > 0 && book.progress < 100)
+        .sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))[0]
+      if (current) {
+        setSelectedBookId(current.id)
+        setActiveNav('Read')
+      }
+    } else if (page === 'library') setActiveNav('My Library')
+    else if (page === 'notes') setActiveNav('Notes')
+    if (params.has('continue') || params.has('page')) window.history.replaceState(null, '', window.location.pathname)
+  }, [])
   // Something shared into Noesis from another app or a web page.
   useEffect(() => {
     const incoming = readIncoming(window.location.search)

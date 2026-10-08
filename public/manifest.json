@@ -42,5 +42,23 @@
       "text": "share-text",
       "url": "share-url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Continue reading",
+      "short_name": "Continue",
+      "url": "/?continue=1",
+      "description": "Open the book you were reading"
+    },
+    {
+      "name": "Library",
+      "short_name": "Library",
+      "url": "/?page=library"
+    },
+    {
+      "name": "Second Brain",
+      "short_name": "Notes",
+      "url": "/?page=notes"
+    }
+  ]
 }
