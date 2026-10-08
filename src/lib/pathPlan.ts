@@ -96,7 +96,7 @@ export const RESOURCE_KINDS = [
 const clip = (value: unknown, max: number): string => (typeof value === 'string' ? value.trim().slice(0, max) : '')
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`
 
-function isPublicHttps(value: string): boolean {
+export function isPublicHttps(value: string): boolean {
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:') return false
