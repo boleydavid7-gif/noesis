@@ -31,7 +31,7 @@ function writeCache(cache: Record<string, CacheEntry>) {
 
 export const bookKey = (candidate: BookCandidate) => `${candidate.title}|${candidate.author}`.toLowerCase()
 
-export type Focus = { title: string; description: string }
+export type Focus = { title: string; description: string; covers?: string[]; fits?: string }
 export type Clarification = { topic: string; broad: boolean; focuses: Focus[] }
 export type PlanOptions = { focuses?: string[]; level?: string; purpose?: string }
 
