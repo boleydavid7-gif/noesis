@@ -312,6 +312,7 @@ function Reader({ book, notes, onClose, onProgress, onNote, onOpenNote, onAsk, o
           reportProgress(progress, location.start.cfi, location.start.href ?? chapters[nextIndex]?.href, label, nextIndex, fraction)
         }
         const handleScroll = (event: Event) => {
+          selectedTextRef.current = ''
           if (scrollTimer) return
           scrollTimer = window.setTimeout(() => {
             scrollTimer = undefined
