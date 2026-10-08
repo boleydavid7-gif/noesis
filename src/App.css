@@ -8486,3 +8486,44 @@ body {
 .image-option-on {
   border-color: var(--gold-warm, #c7a36a);
 }
+
+.checklist-card,
+.read-next-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+}
+.checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.checklist-card ul,
+.read-next-card ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checklist-done span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+.checklist-card ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.checklist-card li,
+.read-next-card li {
+  font-size: 14px;
+}
+.checklist-card .text-button,
+.read-next-card .text-button {
+  font-size: 14px;
+}
