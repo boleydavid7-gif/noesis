@@ -5,6 +5,12 @@ export type CloudConnection = {
   accessToken: string
   expiresAt: number
   connectedAt: string
+  /**
+   * The Noesis account that authorized this browser connection. Older
+   * connections do not have this field and are claimed by the first account
+   * that signs in after the migration.
+   */
+  ownerUserId?: string
   fileIds?: Record<string, string>
 }
 
@@ -78,6 +84,30 @@ export function clearCloudConnections(): void {
   localStorage.removeItem(CONNECTIONS_KEY)
 }
 
+/**
+ * Keep a provider connection available after logout so the same account can
+ * restore its local book files when it signs back in. The connection is bound
+ * to the account id before it is used; another account on the same browser
+ * cannot accidentally sync against it.
+ */
+export function bindCloudConnectionsToUser(userId: string): CloudConnection[] {
+  if (typeof window === 'undefined' || !userId) return []
+  const current = readCloudConnections()
+  let changed = false
+  const next = current.map((connection) => {
+    if (connection.ownerUserId || !connection.accessToken) return connection
+    changed = true
+    return { ...connection, ownerUserId: userId }
+  })
+  if (changed) writeCloudConnections(next)
+  return next
+}
+
+export function cloudConnectionForUser(connections: CloudConnection[], userId: string | undefined): CloudConnection | undefined {
+  if (!userId) return undefined
+  return connections.find((connection) => connection.ownerUserId === userId)
+}
+
 function redirectUri(provider: CloudProviderId): string {
   return `${window.location.origin}/?noesis-oauth=1&provider=${provider}`
 }
@@ -106,7 +136,7 @@ export function consumeCloudOAuthRedirect(): void {
   window.close()
 }
 
-export async function connectCloudProvider(provider: CloudProviderId): Promise<CloudConnection> {
+export async function connectCloudProvider(provider: CloudProviderId, ownerUserId?: string): Promise<CloudConnection> {
   if (typeof window === 'undefined') throw new Error('Cloud connections are only available in a browser.')
   const config = configs[provider]
   if (!config.clientId) throw new Error(`Add the ${providerDetails[provider].label} client ID/app key as a Cloudflare build variable first.`)
@@ -136,6 +166,7 @@ export async function connectCloudProvider(provider: CloudProviderId): Promise<C
         accessToken: String(event.data.accessToken),
         expiresAt: Date.now() + Math.max(60, Number(event.data.expiresIn) || 3600) * 1000,
         connectedAt: new Date().toISOString(),
+        ownerUserId,
       }
       const next = [...readCloudConnections().filter((item) => item.provider !== provider), connection]
       writeCloudConnections(next)
