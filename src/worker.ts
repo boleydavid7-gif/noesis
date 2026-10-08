@@ -3,6 +3,7 @@ import {
   RESOURCE_KINDS,
   buyLinks,
   cleanSuggestion,
+  MAX_PATHS,
   matchScore,
   pickBook,
   resolvedFromRecord,
@@ -273,14 +274,14 @@ async function linkWorks(url: string): Promise<boolean> {
   }
 }
 
-// Turns a learner's goal into three structured paths, plus books and free
-// resources to look up. Books are verified one by one through /api/book.
-async function planPath(request: Request, env: Env): Promise<Response> {
+// Before planning, helps the learner say what they actually mean: a broad goal
+// such as "psychology" is split into specific focus areas to choose from.
+async function clarifyGoal(request: Request, env: Env): Promise<Response> {
   const refused = await guardAi(
     request,
     env,
-    'path',
-    6,
+    'clarify',
+    12,
     'Too many requests. Try again in a few minutes.',
     'Sign in to create learning paths.',
   )
@@ -292,28 +293,96 @@ async function planPath(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
   }
   const goal = typeof input.goal === 'string' ? input.goal.trim().slice(0, 400) : ''
+  if (goal.length < 3) return json({ ok: false, error: 'Tell Noema what you want to learn.' }, 400)
+  const result = await generate(env, {
+    system: [
+      'You help a learner narrow down what they want to learn. Reply with JSON only, in exactly this shape:',
+      '{"topic":"","broad":true,"focuses":[{"title":"","description":""}]}.',
+      '"topic" is the subject in two to five words. "broad" is true when the goal is a whole field that contains several distinct areas (such as psychology, finance, or programming) and false when it is already specific.',
+      'List six to eight "focuses": distinct, specific areas within the subject that someone might want to study, ordered from the usual starting point to more specialised areas. Include a foundational or introductory focus first. "title" is two to five words; "description" is one short sentence.',
+      'If the goal is already specific, list focuses that are different angles on it (for example theory, practice, exam preparation).',
+    ].join(' '),
+    prompt: `Learner's goal: ${goal}`,
+    maxOutputTokens: 1_200,
+    temperature: 0.4,
+    json: true,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  let parsed: { topic?: unknown; broad?: unknown; focuses?: unknown }
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+  const focuses = (Array.isArray(parsed.focuses) ? parsed.focuses : [])
+    .flatMap((item) => {
+      const row = (item ?? {}) as Record<string, unknown>
+      const title = typeof row.title === 'string' ? row.title.trim().slice(0, 60) : ''
+      const description = typeof row.description === 'string' ? row.description.trim().slice(0, 140) : ''
+      return title ? [{ title, description }] : []
+    })
+    .slice(0, 8)
+  if (focuses.length < 2)
+    return json({ ok: false, error: 'Noema could not narrow that down. Try describing it differently.' }, 502)
+  const topic = typeof parsed.topic === 'string' ? parsed.topic.trim().slice(0, 60) : ''
+  return json({ ok: true, topic, broad: parsed.broad !== false, focuses })
+}
+
+// Turns a learner's goal into structured paths, plus books and free
+// resources to look up. Books are verified one by one through /api/book.
+async function planPath(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'path',
+    6,
+    'Too many requests. Try again in a few minutes.',
+    'Sign in to create learning paths.',
+  )
+  if (refused) return refused
+  let input: { goal?: unknown; focuses?: unknown; level?: unknown; purpose?: unknown }
+  try {
+    input = (await request.json()) as typeof input
+  } catch {
+    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  }
+  const goal = typeof input.goal === 'string' ? input.goal.trim().slice(0, 400) : ''
   if (goal.length < 8) return json({ ok: false, error: 'Describe what you want to learn in a sentence or two.' }, 400)
+  const focuses = (Array.isArray(input.focuses) ? input.focuses : [])
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim().slice(0, 80))
+    .filter(Boolean)
+    .slice(0, MAX_PATHS)
+  const level = typeof input.level === 'string' ? input.level.trim().slice(0, 40) : ''
+  const purpose = typeof input.purpose === 'string' ? input.purpose.trim().slice(0, 80) : ''
+  const count = focuses.length || 4
 
   const system = [
     'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
-    '{"paths":[{"title":"","summary":"","weeks":"","level":"","milestones":[{"title":"","timeframe":"","outcome":"","topics":[""],"resources":[""],"books":[""]}]}],',
-    '"books":[{"title":"","author":"","note":""}],',
+    '{"paths":[{"title":"","summary":"","level":"","milestones":[{"title":"","outcome":"","hours":0,"topics":[""],"resources":[""],"books":[""]}],"reading":[{"title":"","author":"","note":""}]}],',
     '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
-    "Give exactly three paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).",
-    'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "weeks" is a realistic range such as "6–8 weeks". "level" is Beginner, Intermediate, or Advanced.',
-    'For every milestone give a "timeframe" that places it within the path\'s total duration, such as "Week 1" or "Weeks 2–3"; an "outcome", one sentence starting with a verb that says what the learner can do once the milestone is finished; and "resources" and "books", each listing one or two items taken from your own lists below that best fit that milestone, written with their exact titles.',
-    'List twenty real, published books you are confident exist and that are widely read or recommended for this subject, as a mix of overview, practical, and reference titles, with the author\'s name. "note" is one of: ' +
-      BOOK_NOTES.join(', ') +
+    focuses.length
+      ? `Give exactly ${focuses.length} paths, one for each of these focus areas, in this order, using the focus area as the basis of the title: ${focuses.map((item) => `"${item}"`).join(', ')}.`
+      : `Give exactly ${count} paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).`,
+    'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "level" is Beginner, Intermediate, or Advanced' +
+      (level ? `; the learner described their level as "${level}", so pitch every path for that level` : '') +
       '.',
-    'List four to six free, reputable resources such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
+    purpose ? `The learner wants this for: ${purpose}. Let that shape what each path emphasises.` : '',
+    'For every milestone give an "outcome", one sentence starting with a verb that says what the learner can do once the milestone is finished; "hours", your honest estimate of the total study hours an average learner needs for the whole milestone (a whole number); and "resources" and "books", each listing one or two items taken from your own lists that best fit that milestone, written with their exact titles. Do not give dates or durations.',
+    'Every path has its own "reading" list of six real, published books you are confident exist, specific to that path\'s focus (include the standard foundational textbooks or introductions for that focus, not just general titles), with the author\'s name. "note" is one of: ' +
+      BOOK_NOTES.join(', ') +
+      '. The "books" in each milestone must use titles from that path\'s own reading list.',
+    'List four to six free, reputable resources for the whole goal, such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
       RESOURCE_KINDS.join(', ') +
       '.',
     "Never invent a book, an author, or a web address. If you are not sure of an exact address, use the provider's main website address.",
-  ].join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
   const result = await generate(env, {
     system,
     prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 7_000,
+    maxOutputTokens: 12_000,
     temperature: 0.5,
     json: true,
   })
@@ -931,6 +1000,10 @@ const worker = {
     if (url.pathname === '/api/path') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return planPath(request, env)
+    }
+    if (url.pathname === '/api/clarify') {
+      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
+      return clarifyGoal(request, env)
     }
     if (url.pathname === '/api/book') {
       if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)

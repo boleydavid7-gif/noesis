@@ -31,21 +31,37 @@ function writeCache(cache: Record<string, CacheEntry>) {
 
 export const bookKey = (candidate: BookCandidate) => `${candidate.title}|${candidate.author}`.toLowerCase()
 
-export async function requestSuggestion(goal: string): Promise<Suggestion> {
+export type Focus = { title: string; description: string }
+export type Clarification = { topic: string; broad: boolean; focuses: Focus[] }
+export type PlanOptions = { focuses?: string[]; level?: string; purpose?: string }
+
+async function post<T>(route: string, body: unknown, fallback: string): Promise<T> {
   let response: Response
   try {
-    response = await fetch('/api/path', {
+    response = await fetch(route, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ goal }),
+      body: JSON.stringify(body),
     })
   } catch {
     throw new Error('Could not reach Noesis. Check your connection and try again.')
   }
-  const result = (await response.json().catch(() => ({}))) as { ok?: boolean; suggestion?: Suggestion; error?: string }
-  if (!response.ok || !result.ok || !result.suggestion) {
-    throw new Error(result.error || 'Noema could not build a path right now. Try again in a moment.')
-  }
+  const result = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T
+  if (!response.ok || !result.ok) throw new Error(result.error || fallback)
+  return result
+}
+
+export async function requestClarification(goal: string): Promise<Clarification> {
+  return post<Clarification>('/api/clarify', { goal }, 'Noema could not narrow that down right now. Try again.')
+}
+
+export async function requestSuggestion(goal: string, options: PlanOptions = {}): Promise<Suggestion> {
+  const result = await post<{ suggestion?: Suggestion }>(
+    '/api/path',
+    { goal, ...options },
+    'Noema could not build a path right now. Try again in a moment.',
+  )
+  if (!result.suggestion) throw new Error('Noema could not build a path right now. Try again in a moment.')
   return result.suggestion
 }
 

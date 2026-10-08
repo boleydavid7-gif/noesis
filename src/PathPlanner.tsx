@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star } from 'lucide-react'
-import { requestSuggestion, resolveBooks } from './lib/pathClient'
+import { requestClarification, requestSuggestion, resolveBooks, type Clarification } from './lib/pathClient'
 import {
   EXAMPLE_GOALS,
+  HOURS_PER_TOPIC,
+  stageHours,
+  withSchedule,
   milestoneDone,
   milestoneGuide,
   nextTopic,
@@ -16,8 +19,11 @@ import {
   type PlanMilestone,
   type PlanResource,
   type ResolvedBook,
+  type SuggestedPath,
   type Suggestion,
 } from './lib/pathPlan'
+
+const totalHours = (path: SuggestedPath) => path.milestones.reduce((sum, m) => sum + stageHours(m), 0)
 
 function Timeline({ milestones }: { milestones: PlanMilestone[] }) {
   return (
@@ -25,7 +31,7 @@ function Timeline({ milestones }: { milestones: PlanMilestone[] }) {
       {milestones.map((milestone) => (
         <li key={milestone.id} className={milestoneDone(milestone) ? 'plan-step plan-step-done' : 'plan-step'}>
           <i aria-hidden="true" />
-          <span>{milestone.title}</span>
+          <span title={milestone.title}>{milestone.title}</span>
         </li>
       ))}
     </ol>
@@ -272,6 +278,38 @@ export function PathPlanDetail({
   )
 }
 
+const LEVELS = ['Complete beginner', 'Know the basics', 'Experienced']
+const PURPOSES = ['Curiosity', 'Career or job', 'School or an exam', 'A specific project']
+const HOURS = [2, 4, 6, 10, 15]
+const MAX_FOCUS = 6
+
+function MiniBooks({ books, loading }: { books: ResolvedBook[]; loading: boolean }) {
+  return (
+    <div className="path-reads">
+      <h5>Most Popular Reads</h5>
+      {books.length ? (
+        <ol>
+          {books.slice(0, 5).map((book) => (
+            <li key={`${book.title}-${book.isbn ?? ''}`}>
+              <span>
+                <strong title={book.title}>{book.title}</strong>
+                <small>{book.authors.slice(0, 2).join(', ')}</small>
+              </span>
+              {book.rating ? (
+                <em>
+                  <Star size={11} fill="currentColor" /> {book.rating.toFixed(1)}
+                </em>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="context-empty">{loading ? 'Finding books…' : 'No matching books were found.'}</p>
+      )}
+    </div>
+  )
+}
+
 export function PathPlanner({
   onSave,
   onNotice,
@@ -280,84 +318,140 @@ export function PathPlanner({
   onNotice: (message: string) => void
 }) {
   const [goal, setGoal] = useState('')
-  const [status, setStatus] = useState<'idle' | 'planning' | 'ready' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'clarifying' | 'asking' | 'planning' | 'ready' | 'error'>('idle')
+  const [clarification, setClarification] = useState<Clarification | null>(null)
+  const [picked, setPicked] = useState<string[]>([])
+  const [level, setLevel] = useState(LEVELS[0])
+  const [purpose, setPurpose] = useState(PURPOSES[0])
+  const [hours, setHours] = useState(4)
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
-  const [books, setBooks] = useState<ResolvedBook[]>([])
+  const [booksByPath, setBooksByPath] = useState<Record<string, ResolvedBook[]>>({})
   const [lookingUp, setLookingUp] = useState(false)
-  const [lookup, setLookup] = useState({ done: 0, total: 0 })
   const [error, setError] = useState('')
   const [open, setOpen] = useState<string | null>(null)
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [examples, setExamples] = useState(false)
   const run = useRef(0)
 
-  async function find(event?: React.FormEvent) {
+  const paths = useMemo(
+    () => (suggestion ? suggestion.paths.map((path) => withSchedule(path, hours)) : []),
+    [suggestion, hours],
+  )
+
+  function fail(reason: unknown, id: number, fallback: string) {
+    if (id !== run.current) return
+    setError(reason instanceof Error ? reason.message : fallback)
+    setStatus('error')
+    setLookingUp(false)
+  }
+
+  function reset() {
+    run.current += 1
+    setSuggestion(null)
+    setBooksByPath({})
+    setClarification(null)
+    setPicked([])
+    setOpen(null)
+    setError('')
+  }
+
+  // Step 1: find out what the learner means before planning anything.
+  async function clarify(event?: React.FormEvent) {
     event?.preventDefault()
-    if (goal.trim().length < 8) {
-      setError('Describe what you want to learn in a sentence or two.')
+    if (goal.trim().length < 3) {
+      setError('Tell Noema what you want to learn.')
       setStatus('error')
       return
     }
+    reset()
+    const id = run.current
+    setStatus('clarifying')
+    try {
+      const result = await requestClarification(goal.trim())
+      if (id !== run.current) return
+      setClarification(result)
+      setStatus('asking')
+    } catch (reason) {
+      fail(reason, id, 'Noema could not narrow that down right now.')
+    }
+  }
+
+  // Step 2: build one path per chosen focus, each with its own books.
+  async function build(skip = false) {
     const id = (run.current += 1)
     setStatus('planning')
     setError('')
     setSuggestion(null)
-    setBooks([])
+    setBooksByPath({})
     setOpen(null)
     try {
-      const plan = await requestSuggestion(goal.trim())
+      const plan = await requestSuggestion(goal.trim(), {
+        focuses: skip ? [] : picked,
+        level: skip ? undefined : level,
+        purpose: skip ? undefined : purpose,
+      })
       if (id !== run.current) return
       setSuggestion(plan)
       setStatus('ready')
       setLookingUp(true)
-      setLookup({ done: 0, total: plan.books.length })
-      const resolved = await resolveBooks(plan.books, (_list, done, total) => {
-        if (id === run.current) setLookup({ done, total })
-      })
-      if (id !== run.current) return
-      // Show the ten best-rated of everything that was found.
-      setBooks(rankBooks(resolved, 10))
+      // Look up each path's own books, filling its card in as soon as they arrive.
+      for (const path of plan.paths) {
+        const found = await resolveBooks(path.books ?? [])
+        if (id !== run.current) return
+        const seen = new Set<string>()
+        const unique = found.filter((book) => !seen.has(book.title.toLowerCase()) && seen.add(book.title.toLowerCase()))
+        setBooksByPath((current) => ({ ...current, [path.id]: rankBooks(unique, 10) }))
+      }
       setLookingUp(false)
     } catch (reason) {
-      if (id !== run.current) return
-      setError(reason instanceof Error ? reason.message : 'Noema could not build a path right now.')
-      setStatus('error')
-      setLookingUp(false)
+      fail(reason, id, 'Noema could not build a path right now.')
     }
   }
 
-  function save(path: Suggestion['paths'][number]) {
+  function toggleFocus(title: string) {
+    setPicked((current) =>
+      current.includes(title)
+        ? current.filter((item) => item !== title)
+        : current.length < MAX_FOCUS
+          ? [...current, title]
+          : current,
+    )
+  }
+
+  function save(path: SuggestedPath) {
     if (!suggestion) return
-    onSave(pathFromSuggestion(suggestion, path, books))
+    onSave(pathFromSuggestion(suggestion, path, booksByPath[path.id] ?? [], undefined, hours))
     setSaved((current) => new Set(current).add(path.id))
     onNotice(`Saved “${path.title}” to your learning paths.`)
   }
 
+  const busy = status === 'clarifying' || status === 'planning'
+
   return (
     <section className="planner" aria-label="Create a learning path">
       <div className="planner-top">
-        <form className="planner-goal panel-card" onSubmit={find}>
+        <form className="planner-goal panel-card" onSubmit={clarify}>
           <div className="planner-goal-head">
             <span className="planner-spark">
               <Sparkles size={20} />
             </span>
             <div>
-              <h3>Describe your goal</h3>
-              <p>Be specific or broad. Noema will design guided paths and look up real books and free resources.</p>
+              <h3>What do you want to learn?</h3>
+              <p>Start broad or specific. Noema will ask a few questions so the paths fit you.</p>
             </div>
           </div>
           <div className="planner-goal-body">
             <textarea
               value={goal}
               onChange={(event) => setGoal(event.target.value)}
-              placeholder="e.g. I want to understand computer networking from beginner to job-ready, with hands-on practice."
+              placeholder="e.g. Psychology, or: I want to understand computer networking and become job-ready."
               maxLength={400}
               rows={3}
               aria-label="Your learning goal"
             />
             <div className="planner-actions">
-              <button className="primary-button" type="submit" disabled={status === 'planning'}>
-                <Search size={15} /> {status === 'planning' ? 'Planning…' : 'Find paths'}
+              <button className="primary-button" type="submit" disabled={busy}>
+                <Search size={15} /> {status === 'clarifying' ? 'Thinking…' : 'Continue'}
               </button>
               <button
                 className="secondary-button"
@@ -397,11 +491,11 @@ export function PathPlanner({
           </h3>
           <ul>
             {[
-              'Matched to your goal and level',
-              'Practical, with a clear order to follow',
+              'Narrowed to what you actually want',
+              'A separate path and reading list for each focus',
               'Real books found in a public catalogue',
+              'Weeks worked out from your hours per week',
               'Free resources whose links were checked',
-              'You can edit and track every step',
             ].map((line) => (
               <li key={line}>
                 <Check size={14} /> {line}
@@ -411,23 +505,96 @@ export function PathPlanner({
         </aside>
       </div>
 
+      {clarification && (status === 'asking' || status === 'planning' || status === 'ready' || status === 'error') ? (
+        <section className="planner-clarify panel-card" aria-label="Tell Noema more">
+          <h3>
+            {clarification.broad && clarification.topic
+              ? `${clarification.topic} covers a lot. What do you want to focus on?`
+              : 'Which angles interest you?'}
+          </h3>
+          <p>Pick up to {MAX_FOCUS}. Each one becomes its own path with its own books.</p>
+          <div className="planner-focuses">
+            {clarification.focuses.map((focus) => {
+              const on = picked.includes(focus.title)
+              return (
+                <button
+                  type="button"
+                  key={focus.title}
+                  className={on ? 'planner-focus planner-focus-on' : 'planner-focus'}
+                  aria-pressed={on}
+                  onClick={() => toggleFocus(focus.title)}
+                >
+                  <strong>
+                    {on ? <Check size={13} /> : null} {focus.title}
+                  </strong>
+                  <small>{focus.description}</small>
+                </button>
+              )
+            })}
+          </div>
+          <div className="planner-questions">
+            <label>
+              Your level
+              <select value={level} onChange={(event) => setLevel(event.target.value)}>
+                {LEVELS.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Why you’re learning
+              <select value={purpose} onChange={(event) => setPurpose(event.target.value)}>
+                {PURPOSES.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Hours per week
+              <select value={hours} onChange={(event) => setHours(Number(event.target.value))}>
+                {HOURS.map((item) => (
+                  <option key={item} value={item}>
+                    {item} hours
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="planner-actions">
+            <button className="primary-button" onClick={() => void build()} disabled={busy || picked.length === 0}>
+              <Sparkles size={15} />{' '}
+              {status === 'planning'
+                ? 'Building…'
+                : `Build ${picked.length || ''} path${picked.length === 1 ? '' : 's'}`}
+            </button>
+            <button className="text-button" onClick={() => void build(true)} disabled={busy}>
+              Skip, just suggest paths
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {status === 'planning' ? <p className="planner-status">Noema is designing your paths…</p> : null}
 
       {suggestion ? (
         <>
           <div className="planner-heading">
             <h3>Recommended paths</h3>
-            <p>Each path orders what to learn, from the basics to real-world practice.</p>
+            <p>
+              Time estimates assume {hours} hours a week and about {HOURS_PER_TOPIC} hours per topic unless a stage
+              needs more. Change the hours above and they update.
+            </p>
           </div>
           <div className="planner-paths">
-            {suggestion.paths.map((path) => {
+            {paths.map((path) => {
               const expanded = open === path.id
+              const own = booksByPath[path.id] ?? []
               return (
                 <article className="planner-path panel-card" key={path.id}>
                   <h4>{path.title}</h4>
                   <p>{path.summary}</p>
                   <div className="plan-meta">
-                    <span>
+                    <span title={`${totalHours(path)} study hours at ${hours} hours a week`}>
                       <Clock size={13} /> {path.weeks}
                     </span>
                     <span>
@@ -436,19 +603,37 @@ export function PathPlanner({
                     <span>{path.level}</span>
                   </div>
                   <Timeline milestones={path.milestones} />
+                  <MiniBooks books={own} loading={lookingUp} />
                   {expanded ? (
-                    <ul className="plan-topics">
-                      {path.milestones.map((milestone) => (
-                        <li key={milestone.id}>
-                          <strong>
-                            {milestone.title}
-                            {milestone.timeframe ? ` · ${milestone.timeframe}` : ''}
-                          </strong>
-                          {milestone.outcome ? <em>{milestone.outcome}</em> : null}
-                          <span>{milestone.topics.map((topic) => topic.label).join(' · ')}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <ul className="plan-topics">
+                        {path.milestones.map((milestone) => (
+                          <li key={milestone.id}>
+                            <strong>
+                              {milestone.title}
+                              {milestone.timeframe ? ` · ${milestone.timeframe}` : ''}
+                            </strong>
+                            {milestone.outcome ? <em>{milestone.outcome}</em> : null}
+                            <span>{milestone.topics.map((topic) => topic.label).join(' · ')}</span>
+                            {milestoneGuide({ books: own, resources: [] }, milestone).books.length ? (
+                              <small className="plan-stage-books">
+                                Read:{' '}
+                                {milestoneGuide({ books: own, resources: [] }, milestone)
+                                  .books.map((b) => b.title)
+                                  .join(' · ')}
+                              </small>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                      {own.length > 5 ? (
+                        <div className="plan-books">
+                          {own.map((book, index) => (
+                            <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} rank={index + 1} />
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                   <div className="planner-path-actions">
                     {saved.has(path.id) ? (
@@ -473,36 +658,15 @@ export function PathPlanner({
             })}
           </div>
 
-          <div className="planner-lower">
-            <section className="planner-resources panel-card">
-              <h3>Free resources</h3>
-              <p>Official and free ways to get started. Each link was checked.</p>
-              <ResourceList resources={suggestion.resources} />
-            </section>
-            <section className="planner-books panel-card">
-              <h3>Top 10 books on this subject</h3>
-              <p>
-                Ranked by reader ratings from Google Books and Open Library, weighted so a few votes don’t beat
-                thousands. Books without ratings come last.
-              </p>
-              {lookingUp ? (
-                <p className="context-empty">
-                  Finding and rating books… {lookup.done} of {lookup.total}
-                </p>
-              ) : null}
-              <div className="plan-books">
-                {books.map((book, index) => (
-                  <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} rank={index + 1} />
-                ))}
-              </div>
-              {!lookingUp && books.length === 0 ? (
-                <p className="context-empty">No matching books were found for this goal.</p>
-              ) : null}
-            </section>
-          </div>
+          <section className="planner-resources panel-card">
+            <h3>Free resources</h3>
+            <p>Official and free ways to get started. Each link was checked.</p>
+            <ResourceList resources={suggestion.resources} />
+          </section>
           <p className="planner-footnote">
-            Paths are suggested by AI, so treat them as a starting point. Book details come from Google Books. Store
-            links open in a new tab, and prices can differ there.
+            Paths are suggested by AI, so treat them as a starting point. Study hours per stage are Noema’s estimate;
+            the weeks come from dividing them by your hours per week. Book details come from Google Books and Open
+            Library. Store links open in a new tab, and prices can differ there.
           </p>
         </>
       ) : null}
