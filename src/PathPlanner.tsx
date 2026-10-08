@@ -5,6 +5,7 @@ import {
   EXAMPLE_GOALS,
   milestoneDone,
   pathFromSuggestion,
+  rankBooks,
   toggleTopic,
   topicCount,
   type LearningPath,
@@ -27,9 +28,10 @@ function Timeline({ milestones }: { milestones: PlanMilestone[] }) {
   )
 }
 
-export function BookCard({ book }: { book: ResolvedBook }) {
+export function BookCard({ book, rank }: { book: ResolvedBook; rank?: number }) {
   return (
     <article className="plan-book">
+      {rank ? <span className="plan-rank">#{rank}</span> : null}
       {book.coverUrl ? (
         <img src={book.coverUrl} alt={`Cover of ${book.title}`} loading="lazy" referrerPolicy="no-referrer" />
       ) : (
@@ -40,7 +42,10 @@ export function BookCard({ book }: { book: ResolvedBook }) {
       <strong title={book.title}>{book.title}</strong>
       {book.authors.length ? <small>{book.authors.slice(0, 2).join(', ')}</small> : null}
       {book.rating ? (
-        <span className="plan-rating" title="Average reader rating from Google Books">
+        <span
+          className="plan-rating"
+          title={`Reader rating: ${(book.ratings ?? []).map((part) => `${part.source} ${part.average.toFixed(1)} (${part.count.toLocaleString()})`).join(', ') || 'combined'}`}
+        >
           <Star size={12} fill="currentColor" /> {book.rating.toFixed(1)}
           {book.ratingsCount ? <em>({book.ratingsCount.toLocaleString()})</em> : null}
         </span>
@@ -156,6 +161,7 @@ export function PathPlanner({
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null)
   const [books, setBooks] = useState<ResolvedBook[]>([])
   const [lookingUp, setLookingUp] = useState(false)
+  const [lookup, setLookup] = useState({ done: 0, total: 0 })
   const [error, setError] = useState('')
   const [open, setOpen] = useState<string | null>(null)
   const [saved, setSaved] = useState<Set<string>>(new Set())
@@ -181,11 +187,13 @@ export function PathPlanner({
       setSuggestion(plan)
       setStatus('ready')
       setLookingUp(true)
-      const resolved = await resolveBooks(plan.books, (list) => {
-        if (id === run.current) setBooks(list)
+      setLookup({ done: 0, total: plan.books.length })
+      const resolved = await resolveBooks(plan.books, (_list, done, total) => {
+        if (id === run.current) setLookup({ done, total })
       })
       if (id !== run.current) return
-      setBooks(resolved)
+      // Show the ten best-rated of everything that was found.
+      setBooks(rankBooks(resolved, 10))
       setLookingUp(false)
     } catch (reason) {
       if (id !== run.current) return
@@ -345,12 +353,19 @@ export function PathPlanner({
               <ResourceList resources={suggestion.resources} />
             </section>
             <section className="planner-books panel-card">
-              <h3>Books on this subject</h3>
-              <p>Real titles from a public catalogue. Ratings are from readers on Google Books.</p>
-              {lookingUp && books.length === 0 ? <p className="context-empty">Looking up books…</p> : null}
+              <h3>Top 10 books on this subject</h3>
+              <p>
+                Ranked by reader ratings from Google Books and Open Library, weighted so a few votes don’t beat
+                thousands. Books without ratings come last.
+              </p>
+              {lookingUp ? (
+                <p className="context-empty">
+                  Finding and rating books… {lookup.done} of {lookup.total}
+                </p>
+              ) : null}
               <div className="plan-books">
-                {books.map((book) => (
-                  <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} />
+                {books.map((book, index) => (
+                  <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} rank={index + 1} />
                 ))}
               </div>
               {!lookingUp && books.length === 0 ? (

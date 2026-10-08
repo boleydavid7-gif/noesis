@@ -8,6 +8,7 @@ export type PlanMilestone = { id: string; title: string; topics: PlanTopic[] }
 export type PlanResource = { title: string; publisher: string; url: string; kind: string; note?: string }
 
 export type BookLinks = { store: string; url: string }
+export type RatingSource = { source: string; average: number; count: number }
 export type ResolvedBook = {
   title: string
   authors: string[]
@@ -16,6 +17,7 @@ export type ResolvedBook = {
   coverUrl?: string
   rating?: number
   ratingsCount?: number
+  ratings?: RatingSource[] // where the combined rating came from
   price?: string
   note?: string // the AI's reason for suggesting it, e.g. "Best overview"
   description?: string
@@ -130,7 +132,7 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
   if (paths.length === 0) return null
 
   const seenBooks = new Set<string>()
-  const books: BookCandidate[] = (Array.isArray(root.books) ? root.books : []).slice(0, 12).flatMap((item) => {
+  const books: BookCandidate[] = (Array.isArray(root.books) ? root.books : []).slice(0, 24).flatMap((item) => {
     const row = item as Record<string, unknown>
     const title = clip(row.title, 140)
     const author = clip(row.author, 100)
@@ -233,6 +235,7 @@ export type BookRecord = {
   coverUrl?: string
   rating?: number
   ratingsCount?: number
+  ratings?: RatingSource[]
   price?: string
   description?: string
   buyLink?: string
@@ -285,6 +288,47 @@ export function buyLinks(record: Pick<BookRecord, 'title' | 'authors' | 'isbn10'
   return links
 }
 
+// Joins ratings from several sites into one average, weighted by how many people
+// rated on each. Ignores sources with no ratings or an impossible average.
+export function combineRatings(parts: RatingSource[]): {
+  rating?: number
+  ratingsCount?: number
+  ratings?: RatingSource[]
+} {
+  const usable = parts.filter((part) => part.count > 0 && part.average >= 1 && part.average <= 5)
+  if (usable.length === 0) return {}
+  const total = usable.reduce((sum, part) => sum + part.count, 0)
+  const average = usable.reduce((sum, part) => sum + part.average * part.count, 0) / total
+  return { rating: Math.round(average * 100) / 100, ratingsCount: total, ratings: usable }
+}
+
+function ratingFields(record: BookRecord) {
+  if (record.ratings?.length) return combineRatings(record.ratings)
+  if (record.rating && record.ratingsCount) {
+    return combineRatings([{ source: 'Google Books', average: record.rating, count: record.ratingsCount }])
+  }
+  return { rating: record.rating, ratingsCount: record.ratingsCount }
+}
+
+// Picks the best-reviewed books from a set of candidates. Raw averages mislead
+// (a 5.0 from three people should not beat a 4.5 from thousands), so each book
+// is scored by the rating we can be fairly sure it deserves: its average minus a
+// penalty that shrinks as more people rate it. Books with enough ratings to trust
+// come first; then books with only a handful of ratings; then books with none,
+// in the order the AI listed them.
+export function rankBooks(books: ResolvedBook[], limit = 10, doubt = 1.5, trustedVotes = 25): ResolvedBook[] {
+  const indexed = books.map((book, index) => ({ book, index, votes: book.ratingsCount ?? 0 }))
+  const isRated = (item: { book: ResolvedBook; votes: number }) => item.votes > 0 && Boolean(item.book.rating)
+  const rated = indexed.filter(isRated)
+  const unrated = indexed.filter((item) => !isRated(item))
+  const score = (item: { book: ResolvedBook; votes: number }) => (item.book.rating ?? 0) - doubt / Math.sqrt(item.votes)
+  const byScore = (a: (typeof rated)[number], b: (typeof rated)[number]) =>
+    score(b) - score(a) || b.votes - a.votes || a.index - b.index
+  const trusted = rated.filter((item) => item.votes >= trustedVotes).sort(byScore)
+  const thin = rated.filter((item) => item.votes < trustedVotes).sort(byScore)
+  return [...trusted, ...thin, ...unrated].map((item) => item.book).slice(0, limit)
+}
+
 export function resolvedFromRecord(record: BookRecord, note?: string): ResolvedBook {
   return {
     title: record.title,
@@ -292,8 +336,7 @@ export function resolvedFromRecord(record: BookRecord, note?: string): ResolvedB
     year: record.year,
     isbn: record.isbn13 ?? record.isbn10,
     coverUrl: record.coverUrl,
-    rating: record.rating,
-    ratingsCount: record.ratingsCount,
+    ...ratingFields(record),
     price: record.price,
     note,
     description: record.description,

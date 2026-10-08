@@ -1156,3 +1156,5 @@ body { background: #060d14; }
 @media (max-width: 900px) {
   .planner-top, .planner-lower, .planner-goal-body { grid-template-columns: 1fr; }
 }
+.plan-book { position: relative; }
+.plan-rank { position: absolute; top: 14px; left: 14px; z-index: 1; padding: 2px 8px; border-radius: 999px; color: #111820; background: var(--accent-fill, #b48b4e); font-size: 11px; font-weight: 800; box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }

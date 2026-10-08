@@ -402,3 +402,105 @@ describe('when Gemini is overloaded', () => {
     expect(mock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('book ratings from two sources', () => {
+  const lookup = (query: string, ip: string) => call(`/api/book?${query}`, { headers: { 'cf-connecting-ip': ip } })
+  const google = (extra: Record<string, unknown> = {}) => ({
+    items: [
+      {
+        volumeInfo: {
+          title: 'Network Warrior',
+          authors: ['Gary Donahue'],
+          publishedDate: '2011',
+          averageRating: 4,
+          ratingsCount: 100,
+          ...extra,
+        },
+      },
+    ],
+  })
+  const openLibrary = (docs: unknown[]) => ({ docs })
+  const route = (googleBody: unknown | null, olBody: unknown | null) =>
+    vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      const body = url.includes('googleapis.com') ? googleBody : olBody
+      if (body === null) return new Response('down', { status: 500 })
+      return new Response(JSON.stringify(body))
+    })
+
+  it('combines the ratings from Google Books and Open Library', async () => {
+    vi.stubGlobal(
+      'fetch',
+      route(
+        google(),
+        openLibrary([
+          {
+            title: 'Network Warrior',
+            author_name: ['Gary Donahue'],
+            ratings_average: 5,
+            ratings_count: 100,
+            cover_i: 77,
+          },
+        ]),
+      ),
+    )
+    const body = (await (await lookup('title=Network%20Warrior&author=Donahue', '10.0.0.1')).json()) as {
+      book: { rating: number; ratingsCount: number; ratings: Array<{ source: string }>; coverUrl: string }
+    }
+    expect(body.book.rating).toBe(4.5)
+    expect(body.book.ratingsCount).toBe(200)
+    expect(body.book.ratings.map((part) => part.source)).toEqual(['Google Books', 'Open Library'])
+    expect(body.book.coverUrl).toContain('covers.openlibrary.org/b/id/77')
+  })
+
+  it('still answers from Open Library when Google Books is down', async () => {
+    vi.stubGlobal(
+      'fetch',
+      route(
+        null,
+        openLibrary([
+          {
+            title: 'Network Warrior',
+            author_name: ['Gary Donahue'],
+            ratings_average: 4.2,
+            ratings_count: 60,
+            first_publish_year: 2007,
+          },
+        ]),
+      ),
+    )
+    const response = await lookup('title=Network%20Warrior&author=Donahue', '10.0.0.2')
+    const body = (await response.json()) as { book: { title: string; year: number; rating: number; buy: unknown[] } }
+    expect(response.status).toBe(200)
+    expect(body.book).toMatchObject({ title: 'Network Warrior', year: 2007, rating: 4.2 })
+    expect(body.book.buy.length).toBeGreaterThan(0)
+  })
+
+  it('works with Google Books alone when Open Library is down', async () => {
+    vi.stubGlobal('fetch', route(google(), null))
+    const body = (await (await lookup('title=Network%20Warrior&author=Donahue', '10.0.0.3')).json()) as {
+      book: { rating: number; ratings: unknown[] }
+    }
+    expect(body.book.rating).toBe(4)
+    expect(body.book.ratings).toHaveLength(1)
+  })
+
+  it('reports an outage only when both catalogues fail', async () => {
+    vi.stubGlobal('fetch', route(null, null))
+    expect((await lookup('title=Network%20Warrior', '10.0.0.4')).status).toBe(502)
+  })
+
+  it('does not accept an Open Library match that is a different book', async () => {
+    vi.stubGlobal(
+      'fetch',
+      route(
+        google({ title: 'Something Else', authors: ['Other Person'] }),
+        openLibrary([{ title: 'Gardening Basics', author_name: ['Pat Green'], ratings_average: 5, ratings_count: 9 }]),
+      ),
+    )
+    const body = (await (await lookup('title=Network%20Warrior&author=Donahue', '10.0.0.5')).json()) as {
+      book: unknown
+    }
+    expect(body.book).toBeNull()
+  })
+})

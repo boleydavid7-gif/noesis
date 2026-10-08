@@ -176,3 +176,87 @@ describe('plan progress', () => {
     expect(saved.updated).toBe(saved.createdAt)
   })
 })
+
+import { combineRatings, rankBooks, type ResolvedBook } from '../lib/pathPlan'
+
+const book = (title: string, rating?: number, ratingsCount?: number): ResolvedBook => ({
+  title,
+  authors: [],
+  rating,
+  ratingsCount,
+  buy: [],
+})
+
+describe('combineRatings', () => {
+  it('weights each source by how many people rated', () => {
+    const combined = combineRatings([
+      { source: 'Google Books', average: 4, count: 100 },
+      { source: 'Open Library', average: 5, count: 100 },
+    ])
+    expect(combined.rating).toBe(4.5)
+    expect(combined.ratingsCount).toBe(200)
+    expect(combined.ratings).toHaveLength(2)
+    const lopsided = combineRatings([
+      { source: 'A', average: 4, count: 900 },
+      { source: 'B', average: 5, count: 100 },
+    ])
+    expect(lopsided.rating).toBe(4.1)
+  })
+
+  it('ignores sources with no ratings or impossible values', () => {
+    expect(
+      combineRatings([
+        { source: 'A', average: 0, count: 0 },
+        { source: 'B', average: 9, count: 10 },
+      ]),
+    ).toEqual({})
+    expect(
+      combineRatings([
+        { source: 'A', average: 4.2, count: 10 },
+        { source: 'B', average: 5, count: 0 },
+      ]).ratings,
+    ).toHaveLength(1)
+  })
+})
+
+describe('rankBooks', () => {
+  it('does not let a perfect score from a few votes beat a well-rated book with many', () => {
+    const ranked = rankBooks([book('Few votes', 5, 3), book('Many votes', 4.5, 5000), book('Middling', 4.0, 800)])
+    expect(ranked.map((item) => item.title)).toEqual(['Many votes', 'Middling', 'Few votes'])
+  })
+
+  it('is not skewed by one hugely popular book when ranking the rest', () => {
+    const ranked = rankBooks([
+      book('Blockbuster', 4.8, 90000),
+      book('Well rated', 4.2, 1200),
+      book('Fewer raters', 4.1, 60),
+    ])
+    expect(ranked.map((item) => item.title)).toEqual(['Blockbuster', 'Well rated', 'Fewer raters'])
+  })
+
+  it('does not let a handful of raters outrank a book thousands have rated', () => {
+    const ranked = rankBooks([book('Fifteen raters', 4.8, 15), book('Thousands', 4.5, 5000)])
+    expect(ranked.map((item) => item.title)).toEqual(['Thousands', 'Fifteen raters'])
+  })
+
+  it('ranks books with only a few ratings after trusted ones, but before unrated books', () => {
+    const ranked = rankBooks([book('Unrated'), book('Handful', 5, 4), book('Established', 3.8, 300)])
+    expect(ranked.map((item) => item.title)).toEqual(['Established', 'Handful', 'Unrated'])
+  })
+
+  it('puts unrated books last, in the order given', () => {
+    const ranked = rankBooks([book('Unrated A'), book('Rated', 3.5, 40), book('Unrated B')])
+    expect(ranked.map((item) => item.title)).toEqual(['Rated', 'Unrated A', 'Unrated B'])
+  })
+
+  it('returns only the requested number', () => {
+    const many = Array.from({ length: 15 }, (_, index) => book(`Book ${index}`, 4, 100 + index))
+    expect(rankBooks(many, 10)).toHaveLength(10)
+    expect(rankBooks(many, 10)[0].title).toBe('Book 14')
+    expect(rankBooks([], 10)).toEqual([])
+  })
+
+  it('still orders sensibly when nothing has been rated', () => {
+    expect(rankBooks([book('One'), book('Two')]).map((item) => item.title)).toEqual(['One', 'Two'])
+  })
+})

@@ -1,10 +1,13 @@
 import {
   BOOK_NOTES,
   RESOURCE_KINDS,
+  buyLinks,
   cleanSuggestion,
+  matchScore,
   pickBook,
   resolvedFromRecord,
   type BookRecord,
+  type RatingSource,
 } from './lib/pathPlan'
 
 type Env = {
@@ -298,7 +301,7 @@ async function planPath(request: Request, env: Env): Promise<Response> {
     '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
     "Give exactly three paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).",
     'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "weeks" is a realistic range such as "6–8 weeks". "level" is Beginner, Intermediate, or Advanced.',
-    'List eight real, published books you are confident exist, as a mix of overview, practical, and reference titles, with the author\'s name. "note" is one of: ' +
+    'List twenty real, published books you are confident exist and that are widely read or recommended for this subject, as a mix of overview, practical, and reference titles, with the author\'s name. "note" is one of: ' +
       BOOK_NOTES.join(', ') +
       '.',
     'List four to six free, reputable resources such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
@@ -309,7 +312,7 @@ async function planPath(request: Request, env: Env): Promise<Response> {
   const result = await generate(env, {
     system,
     prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 4_000,
+    maxOutputTokens: 5_000,
     temperature: 0.5,
     json: true,
   })
@@ -387,9 +390,63 @@ function toRecord(volume: GoogleVolume): BookRecord | null {
   }
 }
 
-// Finds the real catalogue record for a book the AI named. Answers
-// { book: null } when nothing matches closely enough, and a 502 when the
-// catalogue itself could not be reached.
+type OpenLibraryDoc = {
+  title?: string
+  author_name?: string[]
+  ratings_average?: number
+  ratings_count?: number
+  cover_i?: number
+  first_publish_year?: number
+}
+
+// Open Library's own reader ratings: a second source next to Google Books.
+async function openLibraryMatch(
+  title: string,
+  author: string,
+): Promise<{ doc: OpenLibraryDoc; rating?: RatingSource } | null> {
+  try {
+    const params = new URLSearchParams({
+      title,
+      limit: '6',
+      fields: 'title,author_name,ratings_average,ratings_count,cover_i,first_publish_year',
+    })
+    if (author) params.set('author', author)
+    const response = await fetchWithTimeout(
+      `https://openlibrary.org/search.json?${params.toString()}`,
+      { headers: { accept: 'application/json' } },
+      4_000,
+    )
+    if (!response.ok) return null
+    const docs = ((await response.json()) as { docs?: OpenLibraryDoc[] }).docs ?? []
+    const best = docs
+      .filter((doc) => doc.title)
+      .map((doc) => ({
+        doc,
+        score: matchScore({ title: doc.title ?? '', authors: doc.author_name ?? [] }, title, author),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || (b.doc.ratings_count ?? 0) - (a.doc.ratings_count ?? 0))[0]
+    if (!best) return null
+    const { ratings_average: average, ratings_count: count } = best.doc
+    return {
+      doc: best.doc,
+      rating:
+        typeof average === 'number' && typeof count === 'number'
+          ? { source: 'Open Library', average, count }
+          : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+function olCover(doc: OpenLibraryDoc | undefined): string | undefined {
+  return doc?.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined
+}
+
+// Finds the real catalogue record for a book the AI named, with reader ratings
+// combined from Google Books and Open Library. Answers { book: null } when
+// nothing matches closely enough, and a 502 when no catalogue could be reached.
 async function lookupBook(request: Request, env: Env): Promise<Response> {
   if (rateLimited(request, 'book', 80))
     return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
@@ -403,20 +460,48 @@ async function lookupBook(request: Request, env: Env): Promise<Response> {
   const fields =
     'items(volumeInfo(title,subtitle,authors,publishedDate,industryIdentifiers,imageLinks,averageRating,ratingsCount,infoLink,description),saleInfo(saleability,buyLink,listPrice),accessInfo(publicDomain,epub))'
   const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books&fields=${encodeURIComponent(fields)}${key ? `&key=${encodeURIComponent(key)}` : ''}`
-  let volumes: GoogleVolume[]
-  try {
-    const response = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, 6_000)
-    if (!response.ok) return json({ ok: false, error: 'Book lookup is unavailable right now.' }, 502)
-    volumes = ((await response.json()) as { items?: GoogleVolume[] }).items ?? []
-  } catch {
-    return json({ ok: false, error: 'Book lookup is unavailable right now.' }, 502)
+
+  const google = (async (): Promise<BookRecord[] | null> => {
+    try {
+      const response = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, 6_000)
+      if (!response.ok) return null
+      const volumes = ((await response.json()) as { items?: GoogleVolume[] }).items ?? []
+      return volumes.flatMap((volume) => {
+        const record = toRecord(volume)
+        return record ? [record] : []
+      })
+    } catch {
+      return null
+    }
+  })()
+  const [records, openLibrary] = await Promise.all([google, openLibraryMatch(title, author)])
+
+  const picked = records ? pickBook(records, title, author) : null
+  const ratings: RatingSource[] = []
+  if (picked?.rating && picked.ratingsCount) {
+    ratings.push({ source: 'Google Books', average: picked.rating, count: picked.ratingsCount })
   }
-  const records = volumes.flatMap((volume) => {
-    const record = toRecord(volume)
-    return record ? [record] : []
-  })
-  const picked = pickBook(records, title, author)
-  return json({ ok: true, book: picked ? resolvedFromRecord(picked, note) : null })
+  if (openLibrary?.rating) ratings.push(openLibrary.rating)
+
+  if (picked) {
+    return json({
+      ok: true,
+      book: resolvedFromRecord({ ...picked, ratings, coverUrl: picked.coverUrl ?? olCover(openLibrary?.doc) }, note),
+    })
+  }
+  // Google Books had no match (or was down) but Open Library knows the book.
+  if (openLibrary?.doc.title) {
+    const record: BookRecord = {
+      title: openLibrary.doc.title,
+      authors: openLibrary.doc.author_name ?? [],
+      year: openLibrary.doc.first_publish_year,
+      coverUrl: olCover(openLibrary.doc),
+      ratings,
+    }
+    return json({ ok: true, book: { ...resolvedFromRecord(record, note), buy: buyLinks(record) } })
+  }
+  if (records === null) return json({ ok: false, error: 'Book lookup is unavailable right now.' }, 502)
+  return json({ ok: true, book: null })
 }
 
 const MAX_PASSAGE_LENGTH = 6_000

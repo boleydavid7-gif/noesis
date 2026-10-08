@@ -48,8 +48,11 @@ The current app is a working reader-first build:
   Detect, via Open-Meteo) and quick actions.
 - Learning Paths: describe a goal and Noema (via `/api/path`) designs three
   structured paths with milestones and topics, plus books and free resources.
-  Books are matched to real Google Books records (`/api/book`: covers, ratings,
-  buy links) and AI books with no match are dropped; free-resource links are
+  The AI nominates twenty books; each is matched to a real record (`/api/book`:
+  Google Books + Open Library, covers, combined reader ratings, buy links),
+  books with no match are dropped, and the ten best-rated are shown (ranked by
+  rating minus a doubt penalty for few ratings). Goodreads has no public API;
+  Hardcover could be added as a third rating source; free-resource links are
   checked before showing. A saved plan tracks ticked-off topics and syncs.
 - Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
   AI Companion, Notifications, Privacy, and About. Every setting is stored
