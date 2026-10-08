@@ -4556,12 +4556,15 @@ body {
   filter: saturate(0.86) contrast(1.04);
 }
 .sidebar::after {
-  background: linear-gradient(
-    180deg,
-    rgba(3, 9, 16, 0.5) 0%,
-    rgba(3, 9, 16, 0.58) 38%,
-    rgba(3, 9, 16, 0.78) 73%,
-    rgba(3, 9, 16, 0.98) 100%
+  background: var(
+    --sidebar-shade,
+    linear-gradient(
+      180deg,
+      rgba(3, 9, 16, 0.5) 0%,
+      rgba(3, 9, 16, 0.58) 38%,
+      rgba(3, 9, 16, 0.78) 73%,
+      rgba(3, 9, 16, 0.98) 100%
+    )
   );
 }
 .home-reading-hero {
@@ -8724,4 +8727,17 @@ body {
 }
 .pdf-toolbar select {
   max-width: 150px;
+}
+
+/* On desktop the sidebar stays as tall as the screen, so its picture is always in view. */
+@media (min-width: 901px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    align-self: flex-start;
+  }
+  .sidebar-content {
+    overflow-y: auto;
+  }
 }
