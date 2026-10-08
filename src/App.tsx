@@ -77,6 +77,7 @@ import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
+import { applyImages } from './lib/images'
 import { notesToZip } from './lib/exportNotes'
 import { bookmarkletCode, decodeCollection, encodeCollection, readIncoming, type SharedCollection } from './lib/share'
 import { excerpt, searchLibrary, searchPhrase, type LibraryHit } from './lib/librarySearch'
@@ -111,7 +112,7 @@ import { readEvents, toggleDone, writeEvents, type CalendarEvent } from './lib/c
 import { applyFocusSync, focusToSync, sameItems, type SyncBundle } from './lib/syncData'
 import { readWeatherSettings, writeWeatherSettings, type WeatherSettings } from './lib/weather'
 import { timeAgo } from './lib/time'
-import { readSettings, rootAppearance, writeSettings, type Settings as AppSettings } from './lib/settings'
+import { readSettings, rootAppearance, SURFACE_VARS, writeSettings, type Settings as AppSettings } from './lib/settings'
 import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
 import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
@@ -509,6 +510,7 @@ function App() {
     const { classes, vars } = rootAppearance(settings)
     for (const name of ['no-scenery', 'reduce-motion', 'compact']) root.classList.toggle(name, classes.includes(name))
     for (const key of [
+      ...SURFACE_VARS,
       '--gold-warm',
       '--gold-soft',
       '--accent-light',
@@ -521,6 +523,7 @@ function App() {
       root.style.removeProperty(key)
     }
     for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value)
+    applyImages(root)
   }, [settings])
   useEffect(() => {
     const count = dueCount

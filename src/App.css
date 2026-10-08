@@ -194,7 +194,7 @@
   border: 1px solid var(--line);
   border-radius: 9px;
   color: #9bc8ef;
-  background: rgba(28, 60, 91, 0.5);
+  background: var(--surface-card-a, rgba(28, 60, 91, 0.5));
   transition: 0.2s ease;
 }
 .quick-icon:hover {
@@ -298,10 +298,10 @@
   width: 34px;
   height: 34px;
   margin-top: 4px;
-  border: 1px solid rgba(128, 182, 232, 0.48);
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.5);
   border-radius: 50%;
-  color: #eaf4ff;
-  background: linear-gradient(145deg, #407bb3, #1d3454);
+  color: #111820;
+  background: linear-gradient(145deg, var(--gold-warm, #c7a36a), var(--accent-hover, #b48b4e));
   font-weight: 700;
 }
 .account-top-button {
@@ -310,10 +310,10 @@
   width: 34px;
   height: 34px;
   margin-top: 4px;
-  border: 1px solid rgba(128, 182, 232, 0.48);
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.5);
   border-radius: 50%;
-  color: #eaf4ff;
-  background: linear-gradient(145deg, #407bb3, #1d3454);
+  color: #111820;
+  background: linear-gradient(145deg, var(--gold-warm, #c7a36a), var(--accent-hover, #b48b4e));
   font-size: 12px;
   font-weight: 700;
 }
@@ -513,7 +513,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #4899ff, #54d5dc);
+  background: linear-gradient(90deg, var(--gold-warm, #c7a36a), var(--accent-light, #e2bc69));
 }
 .progress-row strong {
   color: #dcecff;
@@ -1256,7 +1256,7 @@
   overflow-y: auto;
   padding: 26px 22px 32px;
   border-left: 1px solid rgba(132, 190, 238, 0.2);
-  background: linear-gradient(165deg, #0b2035, #071321 72%);
+  background: linear-gradient(165deg, var(--surface-card-a, #0b2035), var(--surface-card-b, #071321) 72%);
   box-shadow: -20px 0 55px rgba(0, 0, 0, 0.3);
 }
 .brain-panel-head {
@@ -2475,7 +2475,7 @@
   padding: 25px 22px 28px;
   border: 1px solid rgba(132, 190, 238, 0.2);
   border-radius: 16px;
-  background: linear-gradient(165deg, #0b2035, #071321 72%);
+  background: linear-gradient(165deg, var(--surface-card-a, #0b2035), var(--surface-card-b, #071321) 72%);
   box-shadow: 0 18px 65px rgba(0, 0, 0, 0.45);
 }
 .noema-reader-context {
@@ -3221,7 +3221,7 @@ body {
   width: 204px;
   flex-basis: 204px;
   border-right-color: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
-  background: #071019;
+  background: var(--surface-deep, #071019);
 }
 .sidebar::after {
   background: linear-gradient(180deg, rgba(3, 9, 16, 0.28), rgba(3, 11, 18, 0.62) 48%, rgba(3, 9, 14, 0.97) 100%);
@@ -3282,7 +3282,7 @@ body {
 .rail-card {
   border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
   border-radius: 12px;
-  background: rgba(11, 24, 35, 0.88);
+  background: var(--surface-panel, rgba(11, 24, 35, 0.88));
   box-shadow: 0 24px 55px rgba(0, 0, 0, 0.2);
   backdrop-filter: none;
 }
@@ -4066,7 +4066,7 @@ body {
   border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.23);
   border-radius: 16px;
   color: #e8eef0;
-  background: linear-gradient(165deg, #0b2035, #071321 72%);
+  background: linear-gradient(165deg, var(--surface-card-a, #0b2035), var(--surface-card-b, #071321) 72%);
   box-shadow: 0 22px 75px rgba(0, 0, 0, 0.5);
 }
 .utility-panel-head {
@@ -4547,7 +4547,7 @@ body {
 
 /* Cinematic imagery */
 .sidebar-image {
-  background-image: url('/noesis-sidebar.webp');
+  background-image: var(--img-sidebar, url('/noesis-sidebar.webp'));
   background-position: center bottom;
   background-size: cover;
   opacity: 0.9;
@@ -4565,14 +4565,14 @@ body {
 .home-reading-hero {
   background-image:
     linear-gradient(90deg, rgba(5, 14, 22, 0.9) 0%, rgba(7, 19, 29, 0.58) 46%, rgba(7, 20, 30, 0.2) 100%),
-    url('/noesis-header.webp');
+    var(--img-banner, url('/noesis-header.webp'));
   background-position: center;
   background-size: cover;
 }
 
 /* Deep navy shell and desktop reading context */
 .app-shell {
-  background: #06172a;
+  background: var(--surface-shell, #06172a);
 }
 .ambient {
   display: none;
@@ -4582,7 +4582,7 @@ body {
   max-width: none;
   flex: 1 1 auto;
   margin: 0;
-  background: linear-gradient(105deg, #06172a 0%, #071d34 100%);
+  background: linear-gradient(105deg, var(--surface-main-a, #06172a) 0%, var(--surface-main-b, #071d34) 100%);
   box-shadow: inset 1px 0 0 rgba(141, 179, 210, 0.07);
 }
 .desktop-context-sidebar {
@@ -4596,7 +4596,12 @@ body {
   padding: 38px 17px 34px;
   border-left: 1px solid rgba(155, 190, 218, 0.1);
   color: #dbe8ef;
-  background: linear-gradient(180deg, #061421 0%, #07192a 52%, #061321 100%);
+  background: linear-gradient(
+    180deg,
+    var(--surface-ctx-a, #061421) 0%,
+    var(--surface-ctx-b, #07192a) 52%,
+    var(--surface-ctx-a, #061321) 100%
+  );
 }
 .context-date-row {
   display: flex;
@@ -5440,7 +5445,7 @@ body {
   padding: 16px;
   border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.14);
   border-radius: 14px;
-  background: rgba(8, 20, 32, 0.62);
+  background: var(--surface-panel, rgba(8, 20, 32, 0.62));
 }
 .desktop-context-sidebar .context-section-heading h2 {
   font-size: 17px;
@@ -7528,7 +7533,7 @@ body {
   list-style: none;
   border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
   border-radius: 14px;
-  background: #0a1626;
+  background: var(--surface-pop, #0a1626);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
 }
 .shelf-menu-item {
@@ -7678,7 +7683,7 @@ body {
   font-size: 13px;
   border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
   border-radius: 10px;
-  background: #0a1626;
+  background: var(--surface-pop, #0a1626);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
 }
 .shelf-picker-pop label {
@@ -7846,7 +7851,7 @@ body {
   padding: 8px;
   border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
   border-radius: 10px;
-  background: #0a1626;
+  background: var(--surface-pop, #0a1626);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
 }
 .reader-ambient-pop button {
@@ -8453,4 +8458,31 @@ body {
 }
 .reader-theme-contrast {
   background: #000;
+}
+
+.image-picker {
+  display: grid;
+  gap: 6px;
+}
+.image-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-option {
+  display: inline-flex;
+  min-width: 44px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--text, #e8eef0);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+.image-option-on {
+  border-color: var(--gold-warm, #c7a36a);
 }

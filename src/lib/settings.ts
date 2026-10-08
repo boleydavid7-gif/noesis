@@ -3,6 +3,7 @@
 
 export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
 export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy'
+export type SurfaceName = 'midnight' | 'charcoal' | 'forest' | 'plum' | 'espresso'
 export type LetterSpacing = 'normal' | 'wide'
 export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
@@ -25,7 +26,7 @@ export type Settings = {
     dropCap: boolean
     letterSpacing: LetterSpacing
   }
-  appearance: { accent: AccentName; scenery: boolean; reduceMotion: boolean; compact: boolean }
+  appearance: { accent: AccentName; surface: SurfaceName; scenery: boolean; reduceMotion: boolean; compact: boolean }
   library: {
     defaultSort: LibrarySortSetting
     indexText: boolean
@@ -59,7 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
     dropCap: false,
     letterSpacing: 'normal',
   },
-  appearance: { accent: 'gold', scenery: true, reduceMotion: false, compact: false },
+  appearance: { accent: 'gold', surface: 'midnight', scenery: true, reduceMotion: false, compact: false },
   library: {
     defaultSort: 'recent',
     indexText: true,
@@ -179,6 +180,7 @@ export function sanitizeSettings(input: unknown): Settings {
     },
     appearance: {
       accent: pick(appearance.accent, ['gold', 'blue', 'green', 'rose'], d.appearance.accent),
+      surface: pick(appearance.surface, ['midnight', 'charcoal', 'forest', 'plum', 'espresso'], d.appearance.surface),
       scenery: bool(appearance.scenery, d.appearance.scenery),
       reduceMotion: bool(appearance.reduceMotion, d.appearance.reduceMotion),
       compact: bool(appearance.compact, d.appearance.compact),
@@ -223,6 +225,72 @@ export function writeSettings(settings: Settings): void {
   }
 }
 
+// The dark colours behind the whole app. Midnight is the stylesheet's own default.
+export const SURFACES: Record<SurfaceName, { label: string; vars: Record<string, string> }> = {
+  midnight: { label: 'Midnight', vars: {} },
+  charcoal: {
+    label: 'Charcoal',
+    vars: {
+      '--surface-panel': 'rgba(24, 27, 30, 0.9)',
+      '--surface-shell': '#101214',
+      '--surface-main-a': '#121416',
+      '--surface-main-b': '#181b1e',
+      '--surface-ctx-a': '#0d0f10',
+      '--surface-ctx-b': '#131618',
+      '--surface-card-a': '#1c2024',
+      '--surface-card-b': '#111315',
+      '--surface-pop': '#16191c',
+      '--surface-deep': '#0b0c0e',
+    },
+  },
+  forest: {
+    label: 'Forest',
+    vars: {
+      '--surface-panel': 'rgba(13, 30, 21, 0.9)',
+      '--surface-shell': '#08180f',
+      '--surface-main-a': '#0a1b12',
+      '--surface-main-b': '#0e2418',
+      '--surface-ctx-a': '#07140d',
+      '--surface-ctx-b': '#0b1d13',
+      '--surface-card-a': '#12291c',
+      '--surface-card-b': '#09170f',
+      '--surface-pop': '#0e2016',
+      '--surface-deep': '#06110a',
+    },
+  },
+  plum: {
+    label: 'Plum',
+    vars: {
+      '--surface-panel': 'rgba(30, 18, 41, 0.9)',
+      '--surface-shell': '#160d1f',
+      '--surface-main-a': '#190f24',
+      '--surface-main-b': '#21142e',
+      '--surface-ctx-a': '#120a1a',
+      '--surface-ctx-b': '#1a1025',
+      '--surface-card-a': '#291a38',
+      '--surface-card-b': '#150c1e',
+      '--surface-pop': '#1d1229',
+      '--surface-deep': '#0e0714',
+    },
+  },
+  espresso: {
+    label: 'Espresso',
+    vars: {
+      '--surface-panel': 'rgba(34, 24, 17, 0.9)',
+      '--surface-shell': '#1a120d',
+      '--surface-main-a': '#1c130e',
+      '--surface-main-b': '#261a13',
+      '--surface-ctx-a': '#150e0a',
+      '--surface-ctx-b': '#1e1510',
+      '--surface-card-a': '#2d2018',
+      '--surface-card-b': '#18100b',
+      '--surface-pop': '#221711',
+      '--surface-deep': '#100a07',
+    },
+  },
+}
+export const SURFACE_VARS = [...new Set(Object.values(SURFACES).flatMap((item) => Object.keys(item.vars)))]
+
 // Sets one value inside one section, returning a new object.
 export function updateSetting<S extends keyof Settings, K extends keyof Settings[S]>(
   settings: Settings,
@@ -244,17 +312,20 @@ export function rootAppearance(settings: Settings): { classes: string[]; vars: R
       settings.appearance.reduceMotion ? 'reduce-motion' : '',
       settings.appearance.compact ? 'compact' : '',
     ].filter(Boolean),
-    vars: custom
-      ? {
-          '--gold-warm': accent.main,
-          '--gold-soft': accent.soft,
-          '--accent-light': accent.light,
-          '--accent-fill': accent.fill,
-          '--accent-border': accent.border,
-          '--accent-hover': accent.hover,
-          '--accent-rgb': accent.rgb,
-          '--accent-mark': accent.main,
-        }
-      : {},
+    vars: {
+      ...SURFACES[settings.appearance.surface].vars,
+      ...(custom
+        ? {
+            '--gold-warm': accent.main,
+            '--gold-soft': accent.soft,
+            '--accent-light': accent.light,
+            '--accent-fill': accent.fill,
+            '--accent-border': accent.border,
+            '--accent-hover': accent.hover,
+            '--accent-rgb': accent.rgb,
+            '--accent-mark': accent.main,
+          }
+        : {}),
+    },
   }
 }
