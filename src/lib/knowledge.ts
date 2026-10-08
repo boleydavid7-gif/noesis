@@ -21,6 +21,7 @@ export type BrainNote = {
   body: string
   source: string
   createdAt: string
+  updated?: string // set when a note is edited, so edits win when devices sync
   synced?: boolean
   bookId?: string
   bookTitle?: string
@@ -187,4 +188,32 @@ export async function syncPendingNotes(notes: BrainNote[]): Promise<BrainNote[]>
   const pending = notes.filter((note) => !note.synced)
   for (const note of pending) await persistNote(note)
   return hydrateRemoteNotes(readLocalNotes())
+}
+
+const isRemoteId = (id: string) => !id.startsWith('local-')
+
+// Saves an edit to a note. Notes that only exist on this device are just stored locally.
+export async function updateNote(note: BrainNote): Promise<'remote' | 'local'> {
+  writeLocalNotes([note, ...readLocalNotes().filter((item) => item.id !== note.id)])
+  if (!isRemoteId(note.id)) return 'local'
+  const client = await getAuthenticatedSupabase()
+  if (!client) return 'local'
+  const result = await client
+    .from('knowledge_items')
+    .update({
+      kind: note.kind,
+      title: note.title || 'Quick note',
+      source_url: note.source || null,
+      notes: note.body,
+      content: JSON.stringify({ __noesisBrainNote: 1, ...note, synced: undefined }),
+    })
+    .eq('id', note.id)
+  return result.error ? 'local' : 'remote'
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  writeLocalNotes(readLocalNotes().filter((item) => item.id !== id))
+  if (!isRemoteId(id)) return
+  const client = await getAuthenticatedSupabase()
+  if (client) await client.from('knowledge_items').delete().eq('id', id)
 }
