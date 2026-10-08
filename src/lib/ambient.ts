@@ -47,13 +47,21 @@ function noiseBuffer(ctx: AudioContext, kind: 'white' | 'brown'): AudioBuffer {
 
 export const canPlayAmbient = () => typeof window !== 'undefined' && 'AudioContext' in window
 
-export function startAmbient(kind: AmbientKind, volume: number): AmbientPlayer {
-  const ctx = new AudioContext()
-  const master = ctx.createGain()
-  master.gain.value = volume * 0.5
-  master.connect(ctx.destination)
-  const stops: Array<() => void> = []
+// Real recordings are used when their files are present (see scripts/make-ambient-loop.sh);
+// otherwise the sound is made in the browser.
+async function loadRecording(ctx: AudioContext, kind: AmbientKind): Promise<AudioBuffer | null> {
+  try {
+    const response = await fetch(`/audio/ambient/${kind}.ogg`)
+    const type = response.headers.get('content-type') ?? ''
+    if (!response.ok || type.includes('text/html')) return null
+    return await ctx.decodeAudioData(await response.arrayBuffer())
+  } catch {
+    return null
+  }
+}
 
+function synthesize(ctx: AudioContext, master: GainNode, kind: AmbientKind): () => void {
+  const stops: Array<() => void> = []
   const loop = (type: 'white' | 'brown') => {
     const source = ctx.createBufferSource()
     source.buffer = noiseBuffer(ctx, type)
@@ -62,7 +70,6 @@ export function startAmbient(kind: AmbientKind, volume: number): AmbientPlayer {
     stops.push(() => source.stop())
     return source
   }
-
   if (kind === 'rain') {
     const filter = ctx.createBiquadFilter()
     filter.type = 'bandpass'
@@ -112,19 +119,46 @@ export function startAmbient(kind: AmbientKind, volume: number): AmbientPlayer {
     }, 140)
     stops.push(() => window.clearInterval(crackle))
   }
+  return () => {
+    for (const stop of stops) {
+      try {
+        stop()
+      } catch {
+        // Already stopped.
+      }
+    }
+  }
+}
+
+export function startAmbient(kind: AmbientKind, volume: number): AmbientPlayer {
+  const ctx = new AudioContext()
+  const master = ctx.createGain()
+  master.gain.value = volume * 0.5
+  master.connect(ctx.destination)
+  let stopped = false
+  let stopSound: () => void = () => undefined
+
+  void loadRecording(ctx, kind).then((buffer) => {
+    if (stopped) return
+    if (buffer) {
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.loop = true
+      source.connect(master)
+      source.start()
+      stopSound = () => source.stop()
+    } else {
+      stopSound = synthesize(ctx, master, kind)
+    }
+  })
 
   return {
     setVolume: (next) => {
       master.gain.value = Math.max(0, Math.min(1, next)) * 0.5
     },
     stop: () => {
-      for (const stop of stops) {
-        try {
-          stop()
-        } catch {
-          // Already stopped.
-        }
-      }
+      stopped = true
+      stopSound()
       void ctx.close()
     },
   }
