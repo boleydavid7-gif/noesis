@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Plus, Search, Trash2 } from 'lucide-react'
+import { BookOpen, Image, Plus, Search, Trash2 } from 'lucide-react'
+import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import type { BrainNote, BrainNoteKind } from './lib/knowledge'
 
 const TABS: Array<{ id: 'all' | BrainNoteKind; label: string }> = [
@@ -204,11 +205,25 @@ export function SecondBrainPage({
             <>
               <div className="brain-page-editor-head">
                 <span className="plan-pill">{selected ? KIND_LABEL[selected.kind] : 'New note'}</span>
-                {selected?.bookId ? (
-                  <button className="text-button" onClick={() => onOpenNote(selected)}>
-                    <BookOpen size={13} /> Open in book
-                  </button>
-                ) : null}
+                <span className="brain-page-links">
+                  {selected ? (
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        void renderQuoteCard(selected.body, sourceLine(selected))
+                          .then((blob) => downloadBlob(blob, 'noesis-quote.png'))
+                          .catch(() => undefined)
+                      }
+                    >
+                      <Image size={13} /> Quote card
+                    </button>
+                  ) : null}
+                  {selected?.bookId ? (
+                    <button className="text-button" onClick={() => onOpenNote(selected)}>
+                      <BookOpen size={13} /> Open in book
+                    </button>
+                  ) : null}
+                </span>
               </div>
               <label>
                 Title

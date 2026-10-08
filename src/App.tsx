@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowRight,
+  Tag,
   Check,
   ChevronDown,
   Clock,
@@ -68,6 +69,9 @@ import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } f
 import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
+import { goalProgress } from './lib/goal'
+import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
+import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
@@ -283,6 +287,8 @@ function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
+  const [shelfFilter, setShelfFilter] = useState('')
+  const [shuffle, setShuffle] = useState(0)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -321,7 +327,10 @@ function App() {
   const selectedBook = useMemo(() => books.find((book) => book.id === selectedBookId) ?? null, [books, selectedBookId])
   const filteredBooks = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase()
-    const matches = q ? books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q)) : [...books]
+    const inShelf = shelfFilter ? books.filter((book) => book.shelves?.includes(shelfFilter)) : books
+    const matches = q
+      ? inShelf.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q))
+      : [...inShelf]
     return matches.sort((a, b) =>
       librarySort === 'title'
         ? a.title.localeCompare(b.title)
@@ -329,7 +338,11 @@ function App() {
           ? b.progress - a.progress
           : b.updated.localeCompare(a.updated),
     )
-  }, [books, libraryQuery, librarySort])
+  }, [books, libraryQuery, librarySort, shelfFilter])
+  const allShelves = useMemo(
+    () => [...new Set(books.flatMap((book) => book.shelves ?? []))].sort((a, b) => a.localeCompare(b)),
+    [books],
+  )
   const overallProgress = books.length
     ? Math.round(books.reduce((sum, book) => sum + book.progress, 0) / books.length)
     : 0
@@ -786,6 +799,13 @@ function App() {
     setUtilityOverlay(null)
     setOverlay('brain')
   }
+  // "Where was I?": a spoiler-free recap of what's been read so far.
+  function recap(book: LibraryBook | null) {
+    if (!book) return
+    setNoemaUseContext(true)
+    openNoemaPanel(RECAP_QUESTION)
+    void askNoema(RECAP_QUESTION, undefined, { book, recap: true })
+  }
   function openTopicNote(title: string, source: string) {
     setNoteDraft({ title, body: '', source, kind: 'note' })
     setUtilityOverlay(null)
@@ -859,6 +879,7 @@ function App() {
               chapter: chapter ?? book.chapter,
               chapterIndex: chapterIndex ?? book.chapterIndex,
               chapterProgress: chapterProgress ?? book.chapterProgress,
+              finished: book.finished ?? (progress >= 99 ? new Date().toISOString() : undefined),
               updated: new Date().toISOString(),
             }
           : book,
@@ -867,6 +888,14 @@ function App() {
       if (changed) upsertLibraryBook(changed)
       return next
     })
+  }
+  function setBookShelves(book: LibraryBook, shelves: string[]) {
+    const changed: LibraryBook = {
+      ...book,
+      shelves: shelves.length ? shelves : undefined,
+      updated: new Date().toISOString(),
+    }
+    setBooks(upsertLibraryBook(changed))
   }
   function toggleBookmark(id: string) {
     setBooks((current) => {
@@ -942,7 +971,12 @@ function App() {
     void deleteNote(note.id)
     showNotice('Note deleted.')
   }
-  async function askNoema(prompt: string, readingContext?: ReaderTutorContext) {
+  async function askNoema(
+    prompt: string,
+    readingContext?: ReaderTutorContext,
+    options?: { book?: LibraryBook; recap?: boolean },
+  ) {
+    const activeBook = options?.book ?? selectedBook
     const question = prompt.trim()
     if (!question) return
     if (!settings.ai.enabled) {
@@ -958,8 +992,10 @@ function App() {
     setTutorOk(false)
     setTutorBusy(true)
     let bookText = ''
-    if (noemaUseContext && settings.ai.useReadingText && selectedBook?.format === 'epub')
-      bookText = (await loadBookText(selectedBook.id).catch(() => '')) || ''
+    if (noemaUseContext && settings.ai.useReadingText && activeBook?.format === 'epub')
+      bookText = (await loadBookText(activeBook.id).catch(() => '')) || ''
+    const spoilerSafe = settings.ai.avoidSpoilers && activeBook?.format === 'epub' && activeBook.progress < 99
+    if (spoilerSafe && activeBook) bookText = readSoFar(bookText, activeBook.progress)
     const contextText = settings.ai.useNotes
       ? notes
           .slice(0, 30)
@@ -977,25 +1013,36 @@ function App() {
             .join('\n\n')
         : ''
     const additionalBookText =
-      selectedBook?.format === 'epub' && bookText
-        ? `Additional book context:\n${retrievedContext(bookText, `${question} ${activeContext?.selectedText ?? ''}`, activeContext?.visibleText ? 10_000 : 24_000)}`
+      activeBook?.format === 'epub' && bookText
+        ? `Additional book context:\n${
+            options?.recap
+              ? recapExcerpt(bookText)
+              : retrievedContext(
+                  bookText,
+                  `${question} ${activeContext?.selectedText ?? ''}`,
+                  activeContext?.visibleText ? 10_000 : 24_000,
+                )
+          }`
         : ''
     const bookContext =
-      selectedBook && noemaUseContext
+      activeBook && noemaUseContext
         ? [
-            `Title: ${selectedBook.title}`,
-            `Author: ${selectedBook.author}`,
-            `Current location: ${activeContext?.chapter ?? selectedBook.chapter}`,
-            `Format: ${selectedBook.format}`,
+            `Title: ${activeBook.title}`,
+            spoilerSafe
+              ? `Spoiler rule: the reader is ${Math.round(activeBook.progress)}% through the book. Use only the text supplied, and never reveal or hint at anything that comes later.`
+              : '',
+            `Author: ${activeBook.author}`,
+            `Current location: ${activeContext?.chapter ?? activeBook.chapter}`,
+            `Format: ${activeBook.format}`,
             activeContext?.bookTitle ? `Reader source: ${activeContext.bookTitle}` : '',
             position,
-            selectedBook.description ? `Catalog description: ${selectedBook.description}` : '',
-            selectedBook.accessType
-              ? `Access: ${selectedBook.accessType === 'borrow' ? 'borrowed from an external library' : 'public hosted reader'}`
+            activeBook.description ? `Catalog description: ${activeBook.description}` : '',
+            activeBook.accessType
+              ? `Access: ${activeBook.accessType === 'borrow' ? 'borrowed from an external library' : 'public hosted reader'}`
               : '',
-            selectedBook.sourceName ? `Provider: ${selectedBook.sourceName}` : '',
+            activeBook.sourceName ? `Provider: ${activeBook.sourceName}` : '',
             additionalBookText,
-            selectedBook.format === 'web' || selectedBook.format === 'resource'
+            activeBook.format === 'web' || activeBook.format === 'resource'
               ? 'The full text may be inside a cross-origin or protected reader. Use only supplied notes or pasted passages and do not claim to have read unavailable text.'
               : '',
           ]
@@ -1531,6 +1578,11 @@ function App() {
                     <button className="primary-button" onClick={() => openSavedBook(current)}>
                       Continue reading <ArrowRight size={16} />
                     </button>
+                    {current.format === 'epub' && current.progress > 0 ? (
+                      <button className="secondary-button" onClick={() => recap(current)}>
+                        Where was I?
+                      </button>
+                    ) : null}
                     <button className="icon-button" onClick={() => openNotePanel('', 'note')} aria-label="Add a note">
                       <MoreVertical size={16} />
                     </button>
@@ -1557,6 +1609,27 @@ function App() {
             </span>
             <ArrowRight size={15} />
           </button>
+        ) : null}
+        {settings.library.goal.enabled || (settings.library.resurface && notes.length > 0) ? (
+          <div className="home-extras">
+            {settings.library.resurface && notes.length > 0 ? (
+              <ResurfaceCard
+                notes={notes}
+                shuffle={shuffle}
+                onShuffle={() => setShuffle((value) => value + 1)}
+                onOpenNote={openNoteLocation}
+                onOpenPage={() => selectNav('Notes')}
+                onHide={() => {
+                  updateSettings({ ...settings, library: { ...settings.library, resurface: false } })
+                  showNotice('Hidden. You can turn it back on in Settings → Library.')
+                }}
+                onNotice={showNotice}
+              />
+            ) : null}
+            {settings.library.goal.enabled ? (
+              <GoalCard books={books} goal={settings.library.goal} onEdit={() => openSettings('library')} />
+            ) : null}
+          </div>
         ) : null}
         {books.length + paths.length + notes.length === 0 ? (
           <section className="start-card panel-card">
@@ -1649,11 +1722,28 @@ function App() {
             </button>
           </div>
         </div>
+        {allShelves.length > 0 ? (
+          <div className="shelf-chips" role="tablist" aria-label="Shelves">
+            {['', ...allShelves].map((name) => (
+              <button
+                key={name || 'all'}
+                role="tab"
+                aria-selected={shelfFilter === name}
+                className={shelfFilter === name ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
+                onClick={() => setShelfFilter(name)}
+              >
+                {name || 'All books'}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <BookSection
           books={filteredBooks}
           onOpen={openSavedBook}
           onImport={() => fileInput.current?.click()}
           onDelete={deleteBook}
+          shelves={allShelves}
+          onShelves={setBookShelves}
         />
       </Page>
     )
@@ -2176,6 +2266,7 @@ function App() {
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
         onAsk={openNoemaPanel}
+        onRecap={() => recap(selectedBook)}
         onBookmark={() => toggleBookmark(selectedBook.id)}
         reading={settings.reading}
         onReadingChange={(patch) => updateSettings({ ...settings, reading: { ...settings.reading, ...patch } })}
@@ -2605,16 +2696,83 @@ function SuggestedSection({ resources, onExplore }: { resources: Resource[]; onE
     </section>
   )
 }
+// Lets the reader put a book on shelves of their own making.
+function ShelfPicker({
+  book,
+  all,
+  onChange,
+}: {
+  book: LibraryBook
+  all: string[]
+  onChange: (book: LibraryBook, shelves: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+  const root = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [open])
+  const mine = book.shelves ?? []
+  const toggle = (name: string) =>
+    onChange(book, mine.includes(name) ? mine.filter((item) => item !== name) : [...mine, name])
+  return (
+    <div className="shelf-picker" ref={root}>
+      <button
+        className="book-shelf-button"
+        onClick={() => setOpen((value) => !value)}
+        aria-label={`Shelves for ${book.title}`}
+        aria-expanded={open}
+      >
+        <Tag size={13} />
+      </button>
+      {open ? (
+        <div className="shelf-picker-pop">
+          {all.map((name) => (
+            <label key={name}>
+              <input type="checkbox" checked={mine.includes(name)} onChange={() => toggle(name)} /> {name}
+            </label>
+          ))}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              const name = draft.trim().slice(0, 30)
+              if (name && !mine.includes(name)) onChange(book, [...mine, name])
+              setDraft('')
+            }}
+          >
+            <input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="New shelf"
+              maxLength={30}
+              aria-label="New shelf name"
+            />
+          </form>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function BookSection({
   books,
   onOpen,
   onImport,
   onDelete,
+  shelves,
+  onShelves,
 }: {
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
   onImport?: () => void
   onDelete?: (book: LibraryBook) => void
+  shelves?: string[]
+  onShelves?: (book: LibraryBook, shelves: string[]) => void
 }) {
   return (
     <section className="section-block library-section">
@@ -2647,6 +2805,7 @@ function BookSection({
                 <div className="book-card-title">{book.title}</div>
                 <div className="book-card-author">{book.author}</div>
               </button>
+              {onShelves ? <ShelfPicker book={book} all={shelves ?? []} onChange={onShelves} /> : null}
               {onDelete ? (
                 <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
                   <Trash2 size={13} />
@@ -2668,6 +2827,85 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
+function ResurfaceCard({
+  notes,
+  shuffle,
+  onShuffle,
+  onOpenNote,
+  onOpenPage,
+  onHide,
+  onNotice,
+}: {
+  notes: Note[]
+  shuffle: number
+  onShuffle: () => void
+  onOpenNote: (note: Note) => void
+  onOpenPage: () => void
+  onHide: () => void
+  onNotice: (message: string) => void
+}) {
+  const [day] = useState(() => Math.floor(Date.now() / 86_400_000))
+  const pool = notes.filter((note) => note.body.trim().length >= 40)
+  if (pool.length === 0) return null
+  // One note per day, and "Another" moves along the list.
+  const note = pool[(day + shuffle) % pool.length]
+  const source = note.bookTitle ? `${note.bookTitle}${note.chapter ? ` · ${note.chapter}` : ''}` : note.source
+  const makeCard = async () => {
+    try {
+      downloadBlob(await renderQuoteCard(note.body, source), 'noesis-quote.png')
+    } catch (reason) {
+      onNotice(reason instanceof Error ? reason.message : 'Could not make the card.')
+    }
+  }
+  return (
+    <section className="resurface-card panel-card" aria-label="From your notes">
+      <blockquote>{note.body.length > 320 ? `${note.body.slice(0, 320)}…` : note.body}</blockquote>
+      <small>{source}</small>
+      <div className="resurface-actions">
+        <button className="text-button" onClick={() => (note.bookId ? onOpenNote(note) : onOpenPage())}>
+          {note.bookId ? 'Open in book' : 'Open'}
+        </button>
+        {pool.length > 1 ? (
+          <button className="text-button" onClick={onShuffle}>
+            Another
+          </button>
+        ) : null}
+        <button className="text-button" onClick={() => void makeCard()}>
+          Quote card
+        </button>
+        <button className="text-button" onClick={onHide}>
+          Hide
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function GoalCard({
+  books,
+  goal,
+  onEdit,
+}: {
+  books: LibraryBook[]
+  goal: { target: number; period: 'month' | 'year' }
+  onEdit: () => void
+}) {
+  const { done, target, percent } = goalProgress(books, goal)
+  return (
+    <section className="goal-card panel-card" aria-label="Reading goal">
+      <strong>
+        {done} of {target} {target === 1 ? 'book' : 'books'} this {goal.period}
+      </strong>
+      <div className="progress-track">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <button className="text-button" onClick={onEdit}>
+        Change goal
+      </button>
+    </section>
+  )
+}
+
 const SHELF_OPTIONS: Array<{ id: ShelfMode; label: string; detail: string; icon: typeof Clock }> = [
   { id: 'added', label: 'Recently added', detail: 'Newest books in your library', icon: Clock },
   { id: 'reading', label: 'Recently reading', detail: 'Books you’ve opened recently', icon: BookOpen },

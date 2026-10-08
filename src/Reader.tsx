@@ -7,19 +7,25 @@ import {
   Brain,
   CircleHelp,
   FileText,
+  Headphones,
   Highlighter,
+  History,
   Lightbulb,
   Link2,
   Maximize2,
   MessageCircleQuestion,
   Minimize2,
+  Pause,
+  Play,
   Plus,
   Search,
+  Square,
   Sparkles,
   Type,
 } from 'lucide-react'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
+import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
 import type { BrainNote, BrainNoteKind, BrainNoteLocation } from './lib/knowledge'
 import { openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
@@ -124,6 +130,7 @@ export function Reader({
   onNote,
   onOpenNote,
   onAsk,
+  onRecap,
   onBookmark,
   reading,
   onReadingChange,
@@ -143,6 +150,7 @@ export function Reader({
   onNote: ReaderNoteHandler
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
+  onRecap: () => void
   onBookmark: () => void
   reading: Settings['reading']
   onReadingChange: (patch: Partial<Settings['reading']>) => void
@@ -227,6 +235,65 @@ export function Reader({
     window.setTimeout(() => setPageTurn(null), 360)
   }
   const goToChapterRef = useLatest(goToChapter)
+  // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
+  const [listening, setListening] = useState<'off' | 'on' | 'paused'>('off')
+  const listenRef = useRef<ListenController | null>(null)
+  const chapterIndexRef = useLatest(chapterIndex)
+  const rateRef = useLatest(reading.speechRate)
+  const collectBlocks = (fromView: boolean): ListenBlock[] => {
+    const iframe = frame.current?.querySelector('iframe')
+    const doc = iframe?.contentDocument
+    if (!doc?.body) return []
+    const all = Array.from(doc.body.querySelectorAll('h1, h2, h3, h4, h5, p, li, blockquote'))
+      .map((element) => ({ element, text: normalizeReaderText(element.textContent ?? '') }))
+      .filter((block) => block.text.length > 1)
+    if (!fromView) return all
+    const start = all.findIndex((block) => block.element.getBoundingClientRect().bottom > 4)
+    return start >= 0 ? all.slice(start) : all
+  }
+  const stopListening = () => {
+    listenRef.current?.stop()
+    listenRef.current = null
+    setListening('off')
+  }
+  const listen = (fromView: boolean) => {
+    const blocks = collectBlocks(fromView)
+    if (blocks.length === 0) {
+      setListening('off')
+      return
+    }
+    listenRef.current?.stop()
+    listenRef.current = startListening(blocks, {
+      rate: rateRef.current,
+      onBlock: (block) => block.element?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+      onDone: () => {
+        const next = chapterIndexRef.current + 1
+        if (next < chaptersRef.current.length) {
+          goToChapterRef.current(next)
+          window.setTimeout(() => listen(false), 1600)
+        } else {
+          setListening('off')
+        }
+      },
+    })
+    setListening('on')
+  }
+  const toggleListening = () => {
+    if (listening === 'off') listen(true)
+    else if (listening === 'on') {
+      listenRef.current?.pause()
+      setListening('paused')
+    } else {
+      listenRef.current?.resume()
+      setListening('on')
+    }
+  }
+  useEffect(
+    () => () => {
+      listenRef.current?.stop()
+    },
+    [],
+  )
   useEffect(() => {
     if (!wideLayout) return
     const previousOverflow = document.body.style.overflow
@@ -691,6 +758,36 @@ export function Reader({
             >
               <Bookmark size={16} fill={book.bookmarked ? 'currentColor' : 'none'} />
             </button>
+            {book.format === 'epub' ? (
+              <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
+                <History size={16} />
+              </button>
+            ) : null}
+            {book.format === 'epub' && canListen() ? (
+              <>
+                <button
+                  className={'icon-button' + (listening === 'on' ? ' reader-listening' : '')}
+                  onClick={toggleListening}
+                  aria-label={
+                    listening === 'on' ? 'Pause listening' : listening === 'paused' ? 'Resume listening' : 'Listen'
+                  }
+                  title={listening === 'on' ? 'Pause' : listening === 'paused' ? 'Resume' : 'Listen to this chapter'}
+                >
+                  {listening === 'on' ? (
+                    <Pause size={16} />
+                  ) : listening === 'paused' ? (
+                    <Play size={16} />
+                  ) : (
+                    <Headphones size={16} />
+                  )}
+                </button>
+                {listening !== 'off' ? (
+                  <button className="icon-button" onClick={stopListening} aria-label="Stop listening" title="Stop">
+                    <Square size={14} />
+                  </button>
+                ) : null}
+              </>
+            ) : null}
             {book.format === 'epub' ? (
               <button
                 className="icon-button"
