@@ -339,3 +339,66 @@ describe('learning path routes', () => {
     expect((await call('/api/book', { method: 'POST' })).status).toBe(405)
   })
 })
+
+describe('when Gemini is overloaded', () => {
+  const ok = () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'answer' }] } }] }))
+  const overloaded = () =>
+    new Response(JSON.stringify({ error: { message: 'This model is currently experiencing high demand.' } }), {
+      status: 503,
+    })
+  const ask = (ip: string) =>
+    call(
+      '/api/tutor',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify({ question: 'What is this?' }) },
+      { GEMINI_API_KEY: 'k' },
+    )
+  const modelOf = (call: unknown[]) => decodeURIComponent(String(call[0]).split('/models/')[1].split(':')[0])
+
+  it('falls back to a lighter model instead of giving up', async () => {
+    const mock = vi.fn(async (input: string | URL) => (/flash-lite/.test(String(input)) ? ok() : overloaded()))
+    vi.stubGlobal('fetch', mock)
+    const response = await ask('9.9.9.1')
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { model: string }).model).toMatch(/flash-lite/)
+    expect(mock.mock.calls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('treats a rate-limited model as a reason to try the next one', async () => {
+    const mock = vi.fn(async (input: string | URL) =>
+      /flash-lite/.test(String(input))
+        ? ok()
+        : new Response(JSON.stringify({ error: { message: 'quota' } }), { status: 429 }),
+    )
+    vi.stubGlobal('fetch', mock)
+    expect((await ask('9.9.9.2')).status).toBe(200)
+  })
+
+  it('pauses and tries every model again before giving up, then shows a friendly message', async () => {
+    vi.useFakeTimers()
+    try {
+      const mock = vi.fn(async () => overloaded())
+      vi.stubGlobal('fetch', mock)
+      const pending = ask('9.9.9.3')
+      await vi.advanceTimersByTimeAsync(3_000)
+      const response = await pending
+      expect(response.status).toBe(503)
+      const body = (await response.json()) as { error: string }
+      expect(body.error).toBe('Noema is very busy right now. Please try again in a moment.')
+      expect(body.error).not.toMatch(/Gemini|503/)
+      const models = mock.mock.calls.map((entry) => modelOf(entry as unknown[]))
+      expect(models.length).toBeGreaterThanOrEqual(8) // two rounds over at least four models
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry a request that is simply wrong', async () => {
+    const mock = vi.fn(
+      async () => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 403 }),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await ask('9.9.9.4')
+    expect(response.status).toBe(502)
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+})
