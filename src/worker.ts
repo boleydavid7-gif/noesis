@@ -296,11 +296,12 @@ async function planPath(request: Request, env: Env): Promise<Response> {
 
   const system = [
     'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
-    '{"paths":[{"title":"","summary":"","weeks":"","level":"","milestones":[{"title":"","topics":[""]}]}],',
+    '{"paths":[{"title":"","summary":"","weeks":"","level":"","milestones":[{"title":"","timeframe":"","outcome":"","topics":[""],"resources":[""],"books":[""]}]}],',
     '"books":[{"title":"","author":"","note":""}],',
     '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
     "Give exactly three paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).",
     'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "weeks" is a realistic range such as "6–8 weeks". "level" is Beginner, Intermediate, or Advanced.',
+    'For every milestone give a "timeframe" that places it within the path\'s total duration, such as "Week 1" or "Weeks 2–3"; an "outcome", one sentence starting with a verb that says what the learner can do once the milestone is finished; and "resources" and "books", each listing one or two items taken from your own lists below that best fit that milestone, written with their exact titles.',
     'List twenty real, published books you are confident exist and that are widely read or recommended for this subject, as a mix of overview, practical, and reference titles, with the author\'s name. "note" is one of: ' +
       BOOK_NOTES.join(', ') +
       '.',
@@ -312,7 +313,7 @@ async function planPath(request: Request, env: Env): Promise<Response> {
   const result = await generate(env, {
     system,
     prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 5_000,
+    maxOutputTokens: 7_000,
     temperature: 0.5,
     json: true,
   })

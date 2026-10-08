@@ -247,6 +247,18 @@ describe('learning path routes', () => {
     expect(body.suggestion.resources).toHaveLength(3)
   })
 
+  it('asks the model for a start point, timeframe and study materials for every stage', async () => {
+    const mock = geminiThen(() => new Response('ok'))
+    vi.stubGlobal('fetch', mock)
+    await ask('I want to understand networking from scratch', '7.7.7.9')
+    const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    const instructions = sent.systemInstruction.parts[0].text as string
+    expect(instructions).toContain('"timeframe"')
+    expect(instructions).toContain('"outcome"')
+    expect(instructions).toContain('"resources"')
+    expect(instructions).toContain('twenty real, published books')
+  })
+
   it('fails cleanly when the model returns something unusable', async () => {
     vi.stubGlobal(
       'fetch',

@@ -260,3 +260,80 @@ describe('rankBooks', () => {
     expect(rankBooks([book('One'), book('Two')]).map((item) => item.title)).toEqual(['One', 'Two'])
   })
 })
+
+import { milestoneGuide, nextTopic } from '../lib/pathPlan'
+
+describe('guided stages', () => {
+  it('keeps a stage’s timeframe, outcome and chosen study materials, and bounds them', () => {
+    const suggestion = cleanSuggestion('g', {
+      paths: [
+        {
+          title: 'Path',
+          milestones: [
+            {
+              title: 'Hardware',
+              timeframe: 'Week 1',
+              outcome: 'Identify the main parts of a PC',
+              topics: ['Parts'],
+              resources: ['Professor Messer', 'x'.repeat(500), '', 'Third', 'Fourth'],
+              books: ['Network Warrior'],
+            },
+            { title: 'Networking', topics: ['Basics'] },
+          ],
+        },
+      ],
+    })
+    const [first, second] = suggestion!.paths[0].milestones
+    expect(first.timeframe).toBe('Week 1')
+    expect(first.outcome).toBe('Identify the main parts of a PC')
+    expect(first.resourceTitles).toHaveLength(3)
+    expect(first.resourceTitles?.[1].length).toBe(140)
+    expect(first.bookTitles).toEqual(['Network Warrior'])
+    expect(second.timeframe).toBeUndefined()
+    expect(second.resourceTitles).toEqual([])
+  })
+
+  const stage = (id: string, done: boolean[]) => ({
+    id,
+    title: id,
+    topics: done.map((value, index) => ({ id: `${id}-${index}`, label: `${id} topic ${index}`, done: value })),
+  })
+
+  it('finds the first topic that is not done, in order', () => {
+    const plan = { milestones: [stage('a', [true, true]), stage('b', [true, false, false]), stage('c', [false])] }
+    const next = nextTopic(plan)
+    expect(next?.milestoneIndex).toBe(1)
+    expect(next?.topic.id).toBe('b-1')
+  })
+
+  it('starts at the very first topic on a fresh plan and returns null when everything is done', () => {
+    expect(nextTopic({ milestones: [stage('a', [false, false])] })?.topic.id).toBe('a-0')
+    expect(nextTopic({ milestones: [stage('a', [true]), stage('b', [true])] })).toBeNull()
+    expect(nextTopic({ milestones: [] })).toBeNull()
+  })
+
+  it('attaches only the resources and books that exist in the plan', () => {
+    const plan = {
+      resources: [
+        {
+          title: 'Professor Messer IT Certification Training',
+          publisher: 'p',
+          url: 'https://a.example.com',
+          kind: 'Video series',
+        },
+        { title: 'Other', publisher: 'p', url: 'https://b.example.com', kind: 'Free course' },
+      ],
+      books: [
+        { title: 'Computer Networking: A Top-Down Approach, 7th Edition', authors: ['James Kurose'], buy: [] },
+        { title: 'Network Warrior', authors: ['Gary Donahue'], buy: [] },
+      ],
+    }
+    const guide = milestoneGuide(plan, {
+      resourceTitles: ['professor messer it certification training', 'A link that was dropped'],
+      bookTitles: ['Computer Networking: A Top-Down Approach', 'A book with no match'],
+    })
+    expect(guide.resources.map((resource) => resource.url)).toEqual(['https://a.example.com'])
+    expect(guide.books.map((item) => item.title)).toEqual(['Computer Networking: A Top-Down Approach, 7th Edition'])
+    expect(milestoneGuide(plan, {})).toEqual({ resources: [], books: [] })
+  })
+})

@@ -4,11 +4,15 @@ import { requestSuggestion, resolveBooks } from './lib/pathClient'
 import {
   EXAMPLE_GOALS,
   milestoneDone,
+  milestoneGuide,
+  nextTopic,
   pathFromSuggestion,
+  planProgress,
   rankBooks,
   toggleTopic,
   topicCount,
   type LearningPath,
+  type PathPlan,
   type PlanMilestone,
   type PlanResource,
   type ResolvedBook,
@@ -97,41 +101,160 @@ export function ResourceList({ resources }: { resources: PlanResource[] }) {
   )
 }
 
-// A saved path: milestones with tick-off topics, plus its books and resources.
-export function PathPlanDetail({ path, onChange }: { path: LearningPath; onChange: (path: LearningPath) => void }) {
+function StudyWith({ plan, milestone }: { plan: PathPlan; milestone: PlanMilestone }) {
+  const { resources, books } = milestoneGuide(plan, milestone)
+  if (resources.length === 0 && books.length === 0) return null
+  return (
+    <div className="plan-study">
+      <strong>Study with</strong>
+      <ul>
+        {resources.map((resource) => (
+          <li key={resource.url}>
+            <a href={resource.url} target="_blank" rel="noreferrer noopener">
+              {resource.title} <ExternalLink size={11} />
+            </a>
+            <em>{resource.kind}</em>
+          </li>
+        ))}
+        {books.map((book) => (
+          <li key={book.title}>
+            <details className="buy-menu plan-study-book">
+              <summary>{book.title}</summary>
+              <ul>
+                {book.buy.map((link) => (
+                  <li key={link.store}>
+                    <a href={link.url} target="_blank" rel="noreferrer noopener">
+                      {link.store} <ExternalLink size={11} />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+            <em>Book</em>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// A saved path. It tells the learner where to begin and what comes next, opens
+// only the stage they are on, and attaches the right materials to each stage.
+export function PathPlanDetail({
+  path,
+  onChange,
+  onAsk,
+}: {
+  path: LearningPath
+  onChange: (path: LearningPath) => void
+  onAsk?: (prompt: string) => void
+}) {
   const plan = path.plan
   if (!plan) return null
+  const next = nextTopic(plan)
+  const { done } = planProgress(plan)
+  const tick = (topicId: string) =>
+    onChange({ ...path, plan: toggleTopic(plan, topicId), updated: new Date().toISOString() })
+  const explain = (topic: string) =>
+    onAsk?.(
+      `Explain “${topic}” for someone working toward this goal: ${plan.goal}. Keep it beginner friendly, then suggest one small way to practice it.`,
+    )
   return (
     <div className="plan-detail">
-      {plan.milestones.map((milestone, index) => (
-        <section
-          key={milestone.id}
-          className={milestoneDone(milestone) ? 'plan-milestone plan-milestone-done' : 'plan-milestone'}
-        >
-          <h4>
-            <span>{index + 1}</span> {milestone.title}
-          </h4>
-          <ul>
-            {milestone.topics.map((topic) => (
-              <li key={topic.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={topic.done}
-                    onChange={() =>
-                      onChange({ ...path, plan: toggleTopic(plan, topic.id), updated: new Date().toISOString() })
-                    }
-                  />
-                  <span>{topic.label}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <section className="plan-next" aria-label={done === 0 ? 'Where to start' : 'What to do next'}>
+        {next ? (
+          <>
+            <p className="plan-next-label">{done === 0 ? 'Start here' : 'Up next'}</p>
+            <h4>{next.topic.label}</h4>
+            <p className="plan-next-where">
+              Stage {next.milestoneIndex + 1} of {plan.milestones.length}: {next.milestone.title}
+              {next.milestone.timeframe ? ` · ${next.milestone.timeframe}` : ''}
+            </p>
+            {done === 0 ? (
+              <ol className="plan-how">
+                <li>Pick one of the materials listed for this stage and start with it.</li>
+                <li>Work through the topics in order. Tick one when you could explain it in your own words.</li>
+                <li>
+                  {next.milestone.outcome
+                    ? `You’re ready for the next stage when you can: ${next.milestone.outcome.replace(/^./, (c) => c.toLowerCase())}`
+                    : 'Move to the next stage once every topic here is ticked.'}
+                </li>
+              </ol>
+            ) : null}
+            <StudyWith plan={plan} milestone={next.milestone} />
+            <div className="plan-next-actions">
+              <button className="primary-button" onClick={() => tick(next.topic.id)}>
+                <Check size={14} /> Mark done
+              </button>
+              {onAsk ? (
+                <button className="secondary-button" onClick={() => explain(next.topic.label)}>
+                  <Sparkles size={14} /> Ask Noema to explain it
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="plan-next-label">Path complete</p>
+            <h4>You’ve finished every topic.</h4>
+            <p className="plan-next-where">
+              Turn what you learned into review questions on the Review page so it sticks, then start another path.
+            </p>
+          </>
+        )}
+      </section>
+      {plan.milestones.map((milestone, index) => {
+        const finished = milestoneDone(milestone)
+        const current = next?.milestoneIndex === index
+        const ticked = milestone.topics.filter((topic) => topic.done).length
+        return (
+          <details
+            key={milestone.id}
+            className={`plan-milestone${finished ? ' plan-milestone-done' : ''}${current ? ' plan-milestone-current' : ''}`}
+            open={current}
+          >
+            <summary>
+              <span className="plan-num">{finished ? <Check size={13} /> : index + 1}</span>
+              <span className="plan-milestone-title">
+                {milestone.title}
+                {milestone.timeframe ? <small>{milestone.timeframe}</small> : null}
+              </span>
+              <span className="plan-status">
+                {finished ? 'Done' : current ? 'Current' : 'Upcoming'} · {ticked}/{milestone.topics.length}
+              </span>
+            </summary>
+            {milestone.outcome ? (
+              <p className="plan-outcome">
+                By the end you can: {milestone.outcome.replace(/^./, (c) => c.toLowerCase())}
+              </p>
+            ) : null}
+            <ul>
+              {milestone.topics.map((topic) => (
+                <li key={topic.id}>
+                  <label>
+                    <input type="checkbox" checked={topic.done} onChange={() => tick(topic.id)} />
+                    <span>{topic.label}</span>
+                  </label>
+                  {onAsk ? (
+                    <button
+                      className="plan-ask"
+                      onClick={() => explain(topic.label)}
+                      aria-label={`Ask Noema about ${topic.label}`}
+                      title="Ask Noema to explain this"
+                    >
+                      <Sparkles size={13} />
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            {!current ? <StudyWith plan={plan} milestone={milestone} /> : null}
+          </details>
+        )
+      })}
       {plan.resources.length ? (
         <div>
-          <h4 className="plan-subhead">Free resources</h4>
+          <h4 className="plan-subhead">All free resources</h4>
           <ResourceList resources={plan.resources} />
         </div>
       ) : null}
@@ -139,8 +262,8 @@ export function PathPlanDetail({ path, onChange }: { path: LearningPath; onChang
         <div>
           <h4 className="plan-subhead">Books for this path</h4>
           <div className="plan-books">
-            {plan.books.map((book) => (
-              <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} />
+            {plan.books.map((book, index) => (
+              <BookCard key={`${book.title}-${book.isbn ?? ''}`} book={book} rank={index + 1} />
             ))}
           </div>
         </div>
@@ -317,7 +440,11 @@ export function PathPlanner({
                     <ul className="plan-topics">
                       {path.milestones.map((milestone) => (
                         <li key={milestone.id}>
-                          <strong>{milestone.title}</strong>
+                          <strong>
+                            {milestone.title}
+                            {milestone.timeframe ? ` · ${milestone.timeframe}` : ''}
+                          </strong>
+                          {milestone.outcome ? <em>{milestone.outcome}</em> : null}
                           <span>{milestone.topics.map((topic) => topic.label).join(' · ')}</span>
                         </li>
                       ))}
