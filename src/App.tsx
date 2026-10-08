@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Clock,
+  ExternalLink,
   ListFilter,
   BookOpen,
   Brain,
@@ -2188,11 +2189,19 @@ function App() {
           <ul>
             {DRM_FREE_SOURCES.map((source) => (
               <li key={source.name}>
-                <a href={source.url(resourceQuery.trim())} target="_blank" rel="noreferrer noopener">
-                  <strong>{source.name}</strong>
-                  <small>{source.note}</small>
+                <a
+                  href={source.url(resourceQuery.trim())}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  aria-label={`${source.name}: ${source.note}. Opens in a new tab.`}
+                >
+                  <span className="drm-source-text">
+                    <strong>{source.name}</strong>
+                    <small>{source.note}</small>
+                  </span>
+                  <em>{source.always ? 'No DRM' : 'Check each book'}</em>
+                  <ExternalLink size={14} aria-hidden="true" />
                 </a>
-                <em>{source.always ? 'No DRM' : 'Check each book'}</em>
               </li>
             ))}
           </ul>
