@@ -145,6 +145,10 @@ function applyReadingStyle(
   themes.override('color', colors.color, true)
   themes.override('line-height', String(reading.lineHeight), true)
   themes.override('font-family', FONT_STACKS[reading.font] ?? 'inherit', true)
+  if (reading.letterSpacing === 'wide') {
+    themes.override('letter-spacing', '0.06em', true)
+    themes.override('word-spacing', '0.16em', true)
+  }
   // How a page of fiction looks: line length, paragraph style, justified text, drop caps.
   const width = { full: 'none', comfortable: '40em', narrow: '30em' }[reading.lineWidth]
   themes.override('max-width', width, true)
@@ -1228,6 +1232,7 @@ export function Reader({
             <option value="paper">Paper</option>
             <option value="sepia">Sepia</option>
             <option value="night">Night</option>
+            <option value="contrast">High contrast</option>
           </select>
           <button className="secondary-button" onClick={() => setWideLayout(true)}>
             <Maximize2 size={14} /> Expand
@@ -1280,7 +1285,13 @@ export function Reader({
             'reader-body ' +
             (book.format === 'pdf' ? 'reader-body-pdf' : '') +
             (external ? ' reader-body-web' : '') +
-            (readerTheme === 'night' ? ' reader-theme-night' : readerTheme === 'sepia' ? ' reader-theme-sepia' : '')
+            (readerTheme === 'night'
+              ? ' reader-theme-night'
+              : readerTheme === 'sepia'
+                ? ' reader-theme-sepia'
+                : readerTheme === 'contrast'
+                  ? ' reader-theme-contrast'
+                  : '')
           }
         >
           <div className={'reader-frame-wrap ' + (book.format === 'epub' ? 'reader-frame-epub' : '')}>
