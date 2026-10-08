@@ -6,7 +6,7 @@ export function BookCover({ book, compact = false }: { book: LibraryBook; compac
     <div
       className={`book-cover ${compact ? 'book-cover-compact' : ''} ${image ? 'book-cover-image' : ''}`}
       aria-label={book.title}
-      style={image ? { backgroundImage: `url(${image})` } : undefined}
+      style={image ? { backgroundImage: `url("${image.replace(/"/g, '%22')}")` } : undefined}
     >
       {!image ? <div className="book-cover-mark">N</div> : null}
     </div>
