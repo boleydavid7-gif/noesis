@@ -18,6 +18,8 @@ import {
   Home,
   Library,
   ListChecks,
+  ChevronRight,
+  Folder,
   Link2,
   Lightbulb,
   Menu,
@@ -277,6 +279,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
   const [recovering, setRecovering] = useState(false)
+  const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [newPassword, setNewPassword] = useState('')
   const [justSavedPath, setJustSavedPath] = useState<string | null>(null)
   const [signOutClear, setSignOutClear] = useState(false)
@@ -919,13 +922,13 @@ function App() {
       setTutorReply('Noema is turned off. You can turn it back on in Settings → AI Companion.')
       return
     }
-    const activeContext = readingContext ?? tutorContext
+    const activeContext = noemaUseContext ? (readingContext ?? tutorContext) : null
     if (readingContext) setTutorContext(readingContext)
     setTutorPrompt(question)
     setTutorReply('')
     setTutorBusy(true)
     let bookText = ''
-    if (settings.ai.useReadingText && selectedBook?.format === 'epub')
+    if (noemaUseContext && settings.ai.useReadingText && selectedBook?.format === 'epub')
       bookText = (await loadBookText(selectedBook.id).catch(() => '')) || ''
     const contextText = settings.ai.useNotes
       ? notes
@@ -947,27 +950,28 @@ function App() {
       selectedBook?.format === 'epub' && bookText
         ? `Additional book context:\n${retrievedContext(bookText, `${question} ${activeContext?.selectedText ?? ''}`, activeContext?.visibleText ? 10_000 : 24_000)}`
         : ''
-    const bookContext = selectedBook
-      ? [
-          `Title: ${selectedBook.title}`,
-          `Author: ${selectedBook.author}`,
-          `Current location: ${activeContext?.chapter ?? selectedBook.chapter}`,
-          `Format: ${selectedBook.format}`,
-          activeContext?.bookTitle ? `Reader source: ${activeContext.bookTitle}` : '',
-          position,
-          selectedBook.description ? `Catalog description: ${selectedBook.description}` : '',
-          selectedBook.accessType
-            ? `Access: ${selectedBook.accessType === 'borrow' ? 'borrowed from an external library' : 'public hosted reader'}`
-            : '',
-          selectedBook.sourceName ? `Provider: ${selectedBook.sourceName}` : '',
-          additionalBookText,
-          selectedBook.format === 'web' || selectedBook.format === 'resource'
-            ? 'The full text may be inside a cross-origin or protected reader. Use only supplied notes or pasted passages and do not claim to have read unavailable text.'
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n')
-      : position
+    const bookContext =
+      selectedBook && noemaUseContext
+        ? [
+            `Title: ${selectedBook.title}`,
+            `Author: ${selectedBook.author}`,
+            `Current location: ${activeContext?.chapter ?? selectedBook.chapter}`,
+            `Format: ${selectedBook.format}`,
+            activeContext?.bookTitle ? `Reader source: ${activeContext.bookTitle}` : '',
+            position,
+            selectedBook.description ? `Catalog description: ${selectedBook.description}` : '',
+            selectedBook.accessType
+              ? `Access: ${selectedBook.accessType === 'borrow' ? 'borrowed from an external library' : 'public hosted reader'}`
+              : '',
+            selectedBook.sourceName ? `Provider: ${selectedBook.sourceName}` : '',
+            additionalBookText,
+            selectedBook.format === 'web' || selectedBook.format === 'resource'
+              ? 'The full text may be inside a cross-origin or protected reader. Use only supplied notes or pasted passages and do not claim to have read unavailable text.'
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n')
+        : position
     try {
       const response = await fetch('/api/tutor', {
         method: 'POST',
@@ -2444,6 +2448,8 @@ function App() {
                 prompt={tutorPrompt}
                 reply={tutorReply}
                 busy={tutorBusy}
+                useContext={noemaUseContext}
+                setUseContext={setNoemaUseContext}
                 setPrompt={setTutorPrompt}
                 onAsk={askNoema}
                 onClose={() => setOverlay(null)}
@@ -3085,6 +3091,8 @@ function NoemaOverlay({
   prompt,
   reply,
   busy,
+  useContext: contextOn,
+  setUseContext,
   setPrompt,
   onAsk,
   onClose,
@@ -3093,53 +3101,66 @@ function NoemaOverlay({
   prompt: string
   reply: string
   busy: boolean
+  useContext: boolean
+  setUseContext: (value: boolean) => void
   setPrompt: (value: string) => void
   onAsk: TutorHandler
   onClose: () => void
 }) {
-  const location = context
-    ? [context.chapter, context.page ? `p. ${context.page}` : ''].filter(Boolean).join(' · ')
-    : ''
   const hasPassage = Boolean(context?.selectedText || context?.visibleText)
   const explainPrompt = context?.selectedText ? 'Explain the selected passage' : 'Explain the current page'
+  const actions = [
+    {
+      icon: <FileText size={20} />,
+      title: context?.selectedText ? 'Explain this passage' : hasPassage ? 'Explain this page' : 'Explain',
+      detail: 'Clear, structured explanation',
+      ask: explainPrompt,
+    },
+    {
+      icon: <ListChecks size={20} />,
+      title: 'Summarize',
+      detail: 'Key ideas, briefly',
+      ask: 'Summarize the ideas on this page',
+    },
+    {
+      icon: <Brain size={20} />,
+      title: 'Test my understanding',
+      detail: 'Questions with feedback',
+      ask: 'Test my understanding of what I am reading',
+    },
+    {
+      icon: <Folder size={20} />,
+      title: 'Connect to my notes',
+      detail: 'Link it to what you saved',
+      ask: 'Connect this passage to my saved notes',
+    },
+  ]
   return (
     <div className="brain-backdrop" data-overlay onMouseDown={onClose}>
       <section className="noema-panel" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="brain-panel-head">
+        <button className="icon-button noema-close" onClick={onClose} aria-label="Close Noema">
+          <X size={18} />
+        </button>
+        <div className="noema-head">
           <div>
-            <h2>Ask Noema</h2>
-            <p>{hasPassage ? 'About the passage you’re reading.' : 'Ask about your book or notes.'}</p>
+            <p className="eyebrow">Noema</p>
+            <h2>Ask about your book or notes</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close Noema">
-            <X size={18} />
-          </button>
-        </div>
-        {context ? (
-          <div className="noema-reader-context">
-            <BookOpen size={15} />
-            <span>
-              <strong>{hasPassage ? 'Reading context' : 'Book context'}</strong>
-              <small>
-                {context.bookTitle}
-                {location ? ` · ${location}` : ''}
-              </small>
-            </span>
+          <div className="noema-orb">
+            <Sparkles size={26} />
           </div>
-        ) : null}
-        <div className="noema-orb">
-          <Sparkles size={24} />
         </div>
-        <div className="tutor-chips">
-          <button onClick={() => onAsk(explainPrompt)}>
-            {context?.selectedText
-              ? 'Explain this passage'
-              : context?.visibleText
-                ? 'Explain this page'
-                : 'Explain this book'}
-          </button>
-          <button onClick={() => onAsk('Summarize the ideas on this page')}>Summarize this page</button>
-          <button onClick={() => onAsk('Test my understanding of what I am reading')}>Test my understanding</button>
-          <button onClick={() => onAsk('Connect this passage to my saved notes')}>Connect to my notes</button>
+        <div className="noema-actions">
+          {actions.map((action) => (
+            <button key={action.title} className="noema-action" onClick={() => onAsk(action.ask)} disabled={busy}>
+              <span className="noema-action-icon">{action.icon}</span>
+              <span className="noema-action-text">
+                <strong>{action.title}</strong>
+                <small>{action.detail}</small>
+              </span>
+              <ChevronRight size={16} />
+            </button>
+          ))}
         </div>
         <div className="noema-input">
           <textarea
@@ -3151,13 +3172,21 @@ function NoemaOverlay({
                 onAsk(prompt)
               }
             }}
-            placeholder="Ask about the page, passage, or book…"
+            placeholder="Ask about this page, a passage, or your notes…"
             rows={3}
+            aria-label="Ask Noema"
           />
-          <button className="primary-button" onClick={() => onAsk(prompt)} disabled={busy}>
-            {busy ? 'Thinking…' : 'Ask Noema'}
-          </button>
         </div>
+        {context ? (
+          <div className="noema-context-toggle">
+            <Toggle checked={contextOn} onChange={setUseContext} label="Use this page as context" />
+            <span>Use this page as context</span>
+            <small>{[context.bookTitle, context.chapter].filter(Boolean).join(' · ')}</small>
+          </div>
+        ) : null}
+        <button className="noema-ask" onClick={() => onAsk(prompt)} disabled={busy}>
+          {busy ? 'Thinking…' : 'Ask Noema'} <Sparkles size={15} />
+        </button>
         {reply ? (
           <div className="tutor-reply">
             <strong>{prompt}</strong>
