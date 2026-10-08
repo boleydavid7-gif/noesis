@@ -107,7 +107,7 @@ export function ContextSidebar(props: Props) {
             <ArrowRight size={12} />
           </button>
         </div>
-        <p className="context-intro">Make reading part of the day, one quiet session at a time.</p>
+
         <div className="focus-session">
           <button
             className="focus-play"
@@ -177,7 +177,7 @@ export function ContextSidebar(props: Props) {
           </button>
         </div>
         {coming.length === 0 ? (
-          <p className="context-empty">Nothing coming up. Add classes, assignments, or exams.</p>
+          <p className="context-empty">Nothing coming up.</p>
         ) : (
           <ul className="cal-list">
             {coming.map(({ event, date, done }) => {
@@ -274,12 +274,10 @@ export function ContextSidebar(props: Props) {
           <button onClick={props.onAddNote}>
             <FileText size={18} />
             <strong>Add Note</strong>
-            <small>Capture a thought quickly</small>
           </button>
           <button onClick={props.onAskNoema}>
             <Lightbulb size={18} />
             <strong>Ask Noema</strong>
-            <small>Explore an idea</small>
           </button>
         </div>
       </section>

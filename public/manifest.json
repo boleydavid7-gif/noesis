@@ -1,7 +1,7 @@
 {
-  "name": "Noesis \u00b7 Your reading space",
+  "name": "Noesis",
   "short_name": "Noesis",
-  "description": "A calm reading space where books become knowledge.",
+  "description": "Read, take notes, and learn.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

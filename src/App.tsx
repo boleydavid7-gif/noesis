@@ -1282,16 +1282,12 @@ function App() {
   function focusPage() {
     const completed = focusState.tasks.filter((task) => task.done).length
     return (
-      <Page
-        title={focusState.title}
-        subtitle="Choose one quiet intention, set a timer, and let the reading session begin."
-      >
+      <Page title={focusState.title} subtitle="">
         <div className="focus-workspace">
           <section className="focus-plan panel-card">
             <div className="focus-panel-heading">
               <div>
-                <p className="eyebrow">Your intention</p>
-                <h3>Set today’s focus</h3>
+                <h3>Today’s focus</h3>
               </div>
               <button className="text-button" type="button" onClick={resetFocusTimer}>
                 Reset timer
@@ -1361,8 +1357,7 @@ function App() {
           <section className="focus-timer-panel panel-card">
             <div className="focus-panel-heading">
               <div>
-                <p className="eyebrow">Reading timer</p>
-                <h3>Protect the session</h3>
+                <h3>Timer</h3>
               </div>
               <select
                 value={focusState.durationMinutes}
@@ -1381,10 +1376,10 @@ function App() {
             </div>
             <p className="focus-timer-status">
               {focusState.running
-                ? 'Focus session in progress'
+                ? 'In progress'
                 : focusRemaining < focusState.durationMinutes * 60
-                  ? 'Session paused'
-                  : 'Ready when you are.'}
+                  ? 'Paused'
+                  : 'Ready'}
             </p>
             <div className="focus-timer-actions">
               <button
@@ -1414,12 +1409,11 @@ function App() {
       <div className="reading-home">
         <section className="home-reading-hero">
           <div className="home-hero-content">
-            <p className="eyebrow">Your reading space</p>
             <h2>
               {timeGreeting}
               {displayName ? `, ${displayName}.` : '.'}
             </h2>
-            <p>Pick up where you left off, or choose your next read.</p>
+
             {current ? (
               <div className="hero-continue">
                 <div className="continue-cover-wrap">
@@ -1430,7 +1424,7 @@ function App() {
                   <h2>{current.title}</h2>
                   <p className="muted">{current.author}</p>
                   <p className="chapter-line">
-                    <BookOpen size={14} /> {current.chapter || 'Opening chapter'}
+                    <BookOpen size={14} /> {current.chapter || 'Not started'}
                   </p>
                   <div className="progress-row">
                     <div className="progress-track">
@@ -1543,7 +1537,7 @@ function App() {
   }
   function pathsPage() {
     return (
-      <Page title="Learning paths" subtitle="Describe a goal and Noema will plan the path, or group books yourself.">
+      <Page title="Learning paths" subtitle="">
         <FreeCopyContext.Provider value={addResource}>
           <PathPlanner onSave={savePlannedPath} onNotice={showNotice} />
           <h3 className="paths-own-heading">Or build your own</h3>
@@ -1597,7 +1591,7 @@ function App() {
   }
   function notesPage() {
     return (
-      <Page title="Second Brain" subtitle="Capture, organize, and revisit what matters.">
+      <Page title="Second Brain" subtitle="">
         <SecondBrainPage
           notes={notes}
           onSave={(note) => void editNote(note)}
@@ -1611,7 +1605,7 @@ function App() {
   function progressPage() {
     const readCount = books.filter((book) => book.progress > 0).length
     return (
-      <Page title="Progress" subtitle="A clear view of the reading you have actually done.">
+      <Page title="Progress" subtitle="">
         <div className="metric-grid">
           <Metric label="Overall progress" value={`${overallProgress}%`} detail="Across your library" />
           <Metric label="Books started" value={`${readCount}`} detail={`of ${books.length} saved titles`} />
@@ -1621,7 +1615,7 @@ function App() {
         <div className="progress-list panel-card">
           <h3>Reading progress</h3>
           {books.length === 0 ? (
-            <div className="empty-state">Add a book or save a reading source to track progress here.</div>
+            <div className="empty-state">Add a book to track your progress.</div>
           ) : (
             books.map((book) => (
               <div className="progress-book" key={book.id}>
@@ -1646,7 +1640,7 @@ function App() {
       ? books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(resourceQuery.toLowerCase()))
       : []
     return (
-      <Page title="Explore" subtitle="Search books, open-access articles, journals, and academic papers.">
+      <Page title="Explore" subtitle="Free books, articles and papers.">
         <form className="explore-search panel-card" onSubmit={searchResources}>
           <Search size={18} />
           <input
@@ -1663,7 +1657,6 @@ function App() {
             <div className="section-heading">
               <div>
                 <h2>In your library</h2>
-                <p>Books and documents already saved here.</p>
               </div>
             </div>
             <BookSection books={localMatches} onOpen={openSavedBook} />
@@ -1672,15 +1665,11 @@ function App() {
         <section className="resource-section">
           <div className="section-heading">
             <div>
-              <h2>Books and research</h2>
-              <p>
-                Project Gutenberg, Open Library, OpenAlex, and Internet Archive. Import files or read official source
-                pages inside Noesis.
-              </p>
+              <h2>Results</h2>
             </div>
           </div>
           {resources.length === 0 && !searching ? (
-            <div className="empty-state">Search for a topic, author, journal, or research question.</div>
+            <div className="empty-state">Search for a topic, author or title.</div>
           ) : (
             <div className="resource-grid">
               {resources.map((resource) => (
@@ -1819,8 +1808,8 @@ function App() {
         </section>
         <Group title="Cloud backup" icon={<Cloud size={18} />}>
           <p className="setting-note">
-            Signed-in accounts sync to private Noesis storage automatically. You can also connect your own cloud
-            storage. Each provider only sees a Noesis app folder, and a connection is per device.
+            Signed-in accounts sync automatically. You can also connect your own cloud storage; it only sees a Noesis
+            folder, and each device connects separately.
           </p>
         </Group>
         <section className="cloud-provider-grid">
@@ -1880,28 +1869,26 @@ function App() {
                   </div>
                 )}
                 {!provider.configured ? (
-                  <p className="cloud-provider-note">
-                    Add the provider client ID/app key as a Cloudflare build or Worker variable, then redeploy.
-                  </p>
+                  <p className="cloud-provider-note">Not set up yet. Add its client ID in Cloudflare, then redeploy.</p>
                 ) : null}
               </article>
             )
           })}
         </section>
         <Group title="Offline backup" icon={<Download size={18} />}>
-          <Row title="Export a ZIP" detail="A copy of your books, notes, and learning paths for one-off transfers.">
+          <Row title="Export a ZIP" detail="Books, notes and learning paths in one file.">
             <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
               <Download size={15} /> Export
             </button>
           </Row>
-          <Row title="Restore from a ZIP" detail="Brings back a Noesis export on this device.">
+          <Row title="Restore from a ZIP" detail="Load a file you exported earlier.">
             <button className="secondary-button" onClick={() => backupInput.current?.click()}>
               <Upload size={15} /> Restore
             </button>
           </Row>
         </Group>
         <Group title="Backup options" icon={<RotateCcw size={18} />}>
-          <Row title="Automatic sync" detail="Sync in the background when your library or notes change.">
+          <Row title="Automatic sync" detail="Sync in the background when something changes.">
             <Toggle
               checked={settings.backup.autoSync}
               onChange={(value) => updateSettings({ ...settings, backup: { ...settings.backup, autoSync: value } })}
@@ -1909,8 +1896,8 @@ function App() {
             />
           </Row>
           <p className="setting-note">
-            Synced: books and files, highlights and notes, reading progress, learning paths, your calendar, today’s
-            focus steps, and review cards. These settings and the focus timer stay on this device.
+            Synced: books, notes, progress, paths, calendar, focus steps and review cards. Settings and the timer stay
+            on this device.
           </p>
         </Group>
       </>
@@ -1922,12 +1909,8 @@ function App() {
       <>
         <section className="profile-settings panel-card">
           <div>
-            <p className="eyebrow">Personalize Noesis</p>
-            <h3>Your greeting</h3>
-            <p>
-              Set the first name Noesis should use on the home page. Leave it blank to use your account name or the
-              first part of your email.
-            </p>
+            <h3>Your name</h3>
+            <p>Shown in the greeting on Home. Leave blank to use your account name.</p>
           </div>
           <form className="profile-name-form" onSubmit={saveFirstName}>
             <label>
@@ -1952,7 +1935,7 @@ function App() {
             <div>
               <span className="eyebrow">Signed in</span>
               <h3>{displayName || authUser.email}</h3>
-              <p>{authUser.email} · Your Second Brain and cloud backup use this account.</p>
+              <p>{authUser.email}</p>
             </div>
             <button className="secondary-button" onClick={() => void handleSignOut()}>
               Sign out
@@ -1978,8 +1961,7 @@ function App() {
             </div>
             {anonymous ? (
               <div className="auth-callout">
-                <Sparkles size={15} /> Create an account to preserve this anonymous session’s notes and use the same
-                library on another device.
+                <Sparkles size={15} /> Create an account to keep your notes and use your library on another device.
               </div>
             ) : null}
             {authMode === 'sign-up' ? (
@@ -2027,9 +2009,7 @@ function App() {
                 Forgot password?
               </button>
             ) : null}
-            <p className="auth-footnote">
-              Your library stays available locally. Sign in when you want notes and cloud sync on another device.
-            </p>
+            <p className="auth-footnote">Your library stays on this device. Sign in to sync notes and books.</p>
           </form>
         )}
       </>
@@ -2069,7 +2049,7 @@ function App() {
     ) : activeNav === 'Notes' ? (
       notesPage()
     ) : activeNav === 'Review' ? (
-      <Page title="Review" subtitle="Short questions from your own notes, scheduled so you remember them.">
+      <Page title="Review" subtitle="">
         <ReviewPage
           key={reviewRemount}
           notes={notes}
@@ -2184,7 +2164,6 @@ function App() {
             <Menu size={20} />
           </button>
           <div className="greeting">
-            <p className="eyebrow">{navItems.find((item) => item.label === activeNav)?.text ?? activeNav}</p>
             <h1>
               {activeNav === 'Home' ? 'Noesis' : (navItems.find((item) => item.label === activeNav)?.text ?? activeNav)}
             </h1>
@@ -2377,16 +2356,14 @@ function App() {
   )
 }
 
-function Page({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Page({ subtitle, children }: { title?: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="page-view">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">Noesis</p>
-          <h2>{title}</h2>
-          {subtitle ? <p>{subtitle}</p> : null}
+      {subtitle ? (
+        <div className="page-heading">
+          <p>{subtitle}</p>
         </div>
-      </div>
+      ) : null}
       {children}
     </div>
   )
@@ -2397,11 +2374,6 @@ function SuggestedSection({ resources, onExplore }: { resources: Resource[]; onE
       <div className="section-heading">
         <div>
           <h2>Suggested for you</h2>
-          <p>
-            {resources.length
-              ? 'Based on your latest search.'
-              : 'Search books, journals, and research for your next idea.'}
-          </p>
         </div>
         <button className="text-button" onClick={onExplore}>
           Explore <ArrowRight size={15} />
@@ -2410,7 +2382,7 @@ function SuggestedSection({ resources, onExplore }: { resources: Resource[]; onE
       {resources.length === 0 ? (
         <button className="suggested-empty panel-card" onClick={onExplore}>
           <Search size={18} />
-          <span>Find a book, article, or journal</span>
+          <span>Find a book or article</span>
           <ArrowRight size={16} />
         </button>
       ) : (
@@ -2451,7 +2423,6 @@ function BookSection({
       <div className="section-heading">
         <div>
           <h2>My library</h2>
-          <p>Local books, articles, and reading sources.</p>
         </div>
         {onImport ? (
           <button className="text-button" onClick={onImport}>
@@ -2460,7 +2431,7 @@ function BookSection({
         ) : null}
       </div>
       {books.length === 0 ? (
-        <div className="empty-state">No books here yet. Import an EPUB or search Explore for a free resource.</div>
+        <div className="empty-state">No books yet. Import an EPUB or PDF, or look in Explore.</div>
       ) : (
         <div className="book-grid">
           {books.map((book) => (
@@ -2545,11 +2516,6 @@ function ReadingShelfSection({
               <option value="added">Recently added</option>
             </select>
           </h2>
-          <p>
-            {mode === 'reading'
-              ? 'A quiet shelf for the books you are spending time with.'
-              : 'The newest books in your library.'}
-          </p>
         </div>
         <button className="text-button" onClick={onImport}>
           Add book <Plus size={14} />
@@ -2557,10 +2523,10 @@ function ReadingShelfSection({
       </div>
       {books.length === 0 ? (
         <button className="empty-state" onClick={onImport}>
-          Your shelf is waiting for its first book.
+          No books yet. Add one to get started.
         </button>
       ) : shelf.length === 0 ? (
-        <div className="empty-state">You haven’t started a book yet. Open one and it will appear here.</div>
+        <div className="empty-state">No books started yet.</div>
       ) : (
         <div className="bookshelf-row">
           {shelf.slice(0, 8).map((book) => (
@@ -2635,7 +2601,6 @@ function PathSection({
       <div className="section-heading">
         <div>
           <h2>Learning paths</h2>
-          <p>Journeys that connect books around one question or goal.</p>
         </div>
         {onOpen ? (
           <button className="text-button" onClick={onOpen}>
@@ -2644,7 +2609,7 @@ function PathSection({
         ) : null}
       </div>
       {paths.length === 0 ? (
-        <div className="empty-state">Create a path when you want to connect several books around one goal.</div>
+        <div className="empty-state">No paths yet.</div>
       ) : (
         <div className="path-tiles">
           {paths.map((path) => {
@@ -2770,7 +2735,6 @@ function NotesSection({
       <div className="section-heading">
         <div>
           <h2>My notes</h2>
-          <p>Highlights and ideas worth returning to.</p>
         </div>
         <div className="section-actions">
           {onViewAll ? (
@@ -2784,7 +2748,7 @@ function NotesSection({
         </div>
       </div>
       {notes.length === 0 ? (
-        <div className="empty-state">Select text anywhere or add a note to start your Second Brain.</div>
+        <div className="empty-state">No notes yet. Highlight text while reading, or add one.</div>
       ) : (
         <div className="notes-grid">
           {notes.slice(0, expanded ? 100 : 6).map((note) => (
@@ -2855,9 +2819,7 @@ function BrainOverlay({
       <section className="brain-panel" onMouseDown={(event) => event.stopPropagation()}>
         <div className="brain-panel-head">
           <div>
-            <p className="eyebrow">Second Brain</p>
-            <h2>Keep what matters</h2>
-            <p>Separate highlights, notes, ideas, and questions without losing their source.</p>
+            <h2>Quick note</h2>
           </div>
           <div className="brain-head-actions">
             <button className="text-button" onClick={onOpenPage}>
@@ -2908,11 +2870,7 @@ function BrainOverlay({
               readOnly={Boolean(draft.location?.bookId)}
             />
           </label>
-          {draft.location?.bookId ? (
-            <p className="brain-source-hint">
-              This location is captured automatically from the open reader. Clicking the saved item will return here.
-            </p>
-          ) : null}
+          {draft.location?.bookId ? <p className="brain-source-hint">Linked to the page you’re reading.</p> : null}
           <button className="primary-button" type="submit">
             <Plus size={16} /> Save to Second Brain
           </button>
@@ -2960,7 +2918,7 @@ function BrainOverlay({
               </article>
             ))
           ) : (
-            <p className="brain-rail-empty">Nothing saved in this section yet.</p>
+            <p className="brain-rail-empty">Nothing here yet.</p>
           )}
         </div>
       </section>
@@ -2994,13 +2952,8 @@ function NoemaOverlay({
       <section className="noema-panel" onMouseDown={(event) => event.stopPropagation()}>
         <div className="brain-panel-head">
           <div>
-            <p className="eyebrow">Noema</p>
-            <h2>Your learning guide</h2>
-            <p>
-              {hasPassage
-                ? 'This conversation is grounded in the passage you are reading.'
-                : 'Ask about your book or notes. Paste a borrowed passage when you need a precise explanation.'}
-            </p>
+            <h2>Ask Noema</h2>
+            <p>{hasPassage ? 'About the passage you’re reading.' : 'Ask about your book or notes.'}</p>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close Noema">
             <X size={18} />

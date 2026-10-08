@@ -7192,3 +7192,6 @@ body {
 .brain-page-editor-head {
   margin-bottom: 2px;
 }
+.planner-top {
+  grid-template-columns: minmax(0, 1fr);
+}
