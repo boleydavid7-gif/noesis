@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowRight,
   BookOpen,
@@ -38,6 +39,8 @@ import './App.css'
 import {
   hydrateRemoteNotes,
   persistNote,
+  updateNote,
+  deleteNote,
   readLocalNotes,
   syncPendingNotes,
   type BrainNote,
@@ -64,6 +67,7 @@ import { SettingsPage } from './SettingsPage'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
+import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
 import { planProgress, type LearningPath } from './lib/pathPlan'
@@ -618,6 +622,15 @@ function App() {
     }
   }, [])
   const closeUtility = useCallback(() => setUtilityOverlay(null), [])
+  // Escape closes whichever popup is open.
+  useEffect(() => {
+    if (!overlay) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOverlay(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [overlay])
   function updateEvents(next: CalendarEvent[]) {
     markRemoved('event', events, next)
     setEvents(next)
@@ -699,8 +712,11 @@ function App() {
   }
   function selectNav(label: string) {
     setMobileNavOpen(false)
+    setUtilityOverlay(null)
     if (label === 'Second Brain' || label === 'Notes') {
-      setOverlay('brain')
+      setOverlay(null)
+      setActiveNav('Notes')
+      setSelectedBookId(null)
       return
     }
     if (label === 'Ask Noema') {
@@ -736,12 +752,14 @@ function App() {
       ? `${sourceLocation.bookTitle}${sourceLocation.chapter ? ` · ${sourceLocation.chapter}` : ''}${sourceLocation.page ? ` · p. ${sourceLocation.page}` : ''}`
       : 'Noesis'
     setNoteDraft({ title: choice.title, body: seed, source, kind: choice.kind, location: sourceLocation })
+    setUtilityOverlay(null)
     setOverlay('brain')
   }
   function openNoemaPanel(seed = '', context?: ReaderTutorContext) {
     setTutorPrompt(seed)
     setTutorContext(context ?? null)
     setTutorReply('')
+    setUtilityOverlay(null)
     setOverlay('noema')
   }
   async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
@@ -831,23 +849,45 @@ function App() {
       showNotice('Write a note or highlight first.')
       return
     }
+    setNoteDraft({ title: '', body: '', source: '', kind: 'note' })
+    await addNote({ ...noteDraft, body, tags: [] })
+  }
+  async function addNote(fields: {
+    title: string
+    body: string
+    source: string
+    kind: BrainNoteKind
+    tags: string[]
+    location?: BrainNoteLocation
+  }) {
     const note: Note = {
       id: `local-${crypto.randomUUID()}`,
-      kind: noteDraft.kind,
-      title: noteDraft.title.trim() || (noteDraft.kind === 'highlight' ? 'Highlight' : 'Quick note'),
-      body,
-      source: noteDraft.source.trim() || 'Noesis',
+      kind: fields.kind,
+      title: fields.title.trim() || (fields.kind === 'highlight' ? 'Highlight' : 'Quick note'),
+      body: fields.body.trim(),
+      source: fields.source.trim() || 'Noesis',
       createdAt: new Date().toISOString(),
-      ...noteDraft.location,
+      tags: fields.tags.length ? fields.tags : undefined,
+      ...fields.location,
     }
     setNotes((current) => [note, ...current])
-    setNoteDraft({ title: '', body: '', source: '', kind: 'note' })
     const destination = await persistNote(note)
     showNotice(
       destination === 'remote'
         ? 'Saved to your Second Brain.'
         : 'Saved on this device. It will sync when Supabase is available.',
     )
+  }
+  async function editNote(note: Note) {
+    setNotes((current) => current.map((item) => (item.id === note.id ? note : item)))
+    const destination = await updateNote(note)
+    showNotice(destination === 'remote' ? 'Note updated.' : 'Note updated on this device.')
+  }
+  function removeNote(note: Note) {
+    markDeleted('note', note.id)
+    setNotes((current) => current.filter((item) => item.id !== note.id))
+    void deleteNote(note.id)
+    showNotice('Note deleted.')
   }
   async function askNoema(prompt: string, readingContext?: ReaderTutorContext) {
     const question = prompt.trim()
@@ -1044,6 +1084,7 @@ function App() {
     setSelectedBookId(book.id)
     setActiveNav('Read')
     setOverlay(null)
+    setUtilityOverlay(null)
   }
   function createPath(event: React.FormEvent) {
     event.preventDefault()
@@ -1436,7 +1477,12 @@ function App() {
             }}
           />
         </FreeCopyContext.Provider>
-        <NotesSection notes={notes} onOpen={() => setOverlay('brain')} onOpenNote={openNoteLocation} />
+        <NotesSection
+          notes={notes}
+          onOpen={() => setOverlay('brain')}
+          onViewAll={() => selectNav('Notes')}
+          onOpenNote={openNoteLocation}
+        />
         <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
       </div>
     )
@@ -1551,8 +1597,14 @@ function App() {
   }
   function notesPage() {
     return (
-      <Page title="Notes" subtitle="Your highlights, questions, and ideas in one place.">
-        <NotesSection notes={notes} expanded onOpen={openNotePanel} onOpenNote={openNoteLocation} />
+      <Page title="Second Brain" subtitle="Capture, organize, and revisit what matters.">
+        <SecondBrainPage
+          notes={notes}
+          onSave={(note) => void editNote(note)}
+          onCreate={(fields) => void addNote(fields)}
+          onDelete={removeNote}
+          onOpenNote={openNoteLocation}
+        />
       </Page>
     )
   }
@@ -2248,40 +2300,46 @@ function App() {
             </button>
           </div>
         ) : null}
-        {overlay === 'brain' ? (
-          <BrainOverlay
-            notes={notes}
-            draft={noteDraft}
-            setDraft={setNoteDraft}
-            onClose={() => setOverlay(null)}
-            onSave={saveNote}
-            onOpenNote={openNoteLocation}
-          />
-        ) : null}
-        {overlay === 'noema' ? (
-          <NoemaOverlay
-            context={tutorContext}
-            prompt={tutorPrompt}
-            reply={tutorReply}
-            busy={tutorBusy}
-            setPrompt={setTutorPrompt}
-            onAsk={askNoema}
-            onClose={() => setOverlay(null)}
-          />
-        ) : null}
-        {utilityOverlay === 'calendar' ? (
-          <CalendarPanel
-            now={now}
-            events={events}
-            onChange={updateEvents}
-            initialDate={calendarSeed.date}
-            startAdding={calendarSeed.adding}
-            onClose={closeUtility}
-          />
-        ) : null}
-        {utilityOverlay === 'weather' ? (
-          <WeatherPanel settings={weatherSettings} onChange={updateWeather} onClose={closeUtility} />
-        ) : null}
+        {createPortal(
+          <>
+            {overlay === 'brain' ? (
+              <BrainOverlay
+                notes={notes}
+                draft={noteDraft}
+                setDraft={setNoteDraft}
+                onClose={() => setOverlay(null)}
+                onSave={saveNote}
+                onOpenNote={openNoteLocation}
+                onOpenPage={() => selectNav('Notes')}
+              />
+            ) : null}
+            {overlay === 'noema' ? (
+              <NoemaOverlay
+                context={tutorContext}
+                prompt={tutorPrompt}
+                reply={tutorReply}
+                busy={tutorBusy}
+                setPrompt={setTutorPrompt}
+                onAsk={askNoema}
+                onClose={() => setOverlay(null)}
+              />
+            ) : null}
+            {utilityOverlay === 'calendar' ? (
+              <CalendarPanel
+                now={now}
+                events={events}
+                onChange={updateEvents}
+                initialDate={calendarSeed.date}
+                startAdding={calendarSeed.adding}
+                onClose={closeUtility}
+              />
+            ) : null}
+            {utilityOverlay === 'weather' ? (
+              <WeatherPanel settings={weatherSettings} onChange={updateWeather} onClose={closeUtility} />
+            ) : null}
+          </>,
+          document.body,
+        )}
         <footer className="legal-footer">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
@@ -2698,11 +2756,13 @@ function NotesSection({
   notes,
   expanded = false,
   onOpen,
+  onViewAll,
   onOpenNote,
 }: {
   notes: Note[]
   expanded?: boolean
   onOpen: (seed?: string) => void
+  onViewAll?: () => void
   onOpenNote?: (note: Note) => void
 }) {
   return (
@@ -2712,9 +2772,16 @@ function NotesSection({
           <h2>My notes</h2>
           <p>Highlights and ideas worth returning to.</p>
         </div>
-        <button className="text-button" onClick={() => onOpen()}>
-          Add note <Plus size={14} />
-        </button>
+        <div className="section-actions">
+          {onViewAll ? (
+            <button className="text-button" onClick={onViewAll}>
+              View all <ArrowRight size={14} />
+            </button>
+          ) : null}
+          <button className="text-button" onClick={() => onOpen()}>
+            Add note <Plus size={14} />
+          </button>
+        </div>
       </div>
       {notes.length === 0 ? (
         <div className="empty-state">Select text anywhere or add a note to start your Second Brain.</div>
@@ -2763,6 +2830,7 @@ function BrainOverlay({
   onClose,
   onSave,
   onOpenNote,
+  onOpenPage,
 }: {
   notes: Note[]
   draft: NoteDraft
@@ -2770,6 +2838,7 @@ function BrainOverlay({
   onClose: () => void
   onSave: (event: React.FormEvent<HTMLFormElement>) => void
   onOpenNote: (note: Note) => void
+  onOpenPage: () => void
 }) {
   const [filter, setFilter] = useState<'all' | BrainNoteKind>('all')
   const labels: Array<{ id: 'all' | BrainNoteKind; label: string }> = [
@@ -2790,9 +2859,14 @@ function BrainOverlay({
             <h2>Keep what matters</h2>
             <p>Separate highlights, notes, ideas, and questions without losing their source.</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close Second Brain">
-            <X size={18} />
-          </button>
+          <div className="brain-head-actions">
+            <button className="text-button" onClick={onOpenPage}>
+              Open full page <ArrowRight size={14} />
+            </button>
+            <button className="icon-button" onClick={onClose} aria-label="Close Second Brain">
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <form className="brain-form" onSubmit={onSave}>
           <label>
