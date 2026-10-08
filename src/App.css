@@ -8953,3 +8953,19 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+body.reader-wide-open .sidebar {
+  z-index: 0;
+  visibility: hidden;
+}
+.empty-state {
+  background: transparent;
+  font-family: inherit;
+}
+
+.reader-workspace-grid.reader-rail-off {
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+.reader-rail-off .reader-context-rail {
+  display: none;
+}
