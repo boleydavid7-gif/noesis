@@ -124,7 +124,11 @@ function chapterEntries(value: unknown): ReaderChapter[] {
 // Applies the reading settings to an epubjs rendition. Used when the book
 // opens and whenever a setting changes.
 function applyReadingStyle(
-  themes: { fontSize: (value: string) => void; override: (name: string, value: string, important?: boolean) => void },
+  themes: {
+    fontSize: (value: string) => void
+    override: (name: string, value: string, important?: boolean) => void
+    default: (rules: Record<string, Record<string, string>>) => void
+  },
   reading: Settings['reading'],
 ) {
   const colors = READER_COLORS[reading.theme]
@@ -133,6 +137,39 @@ function applyReadingStyle(
   themes.override('color', colors.color, true)
   themes.override('line-height', String(reading.lineHeight), true)
   themes.override('font-family', FONT_STACKS[reading.font] ?? 'inherit', true)
+  // How a page of fiction looks: line length, paragraph style, justified text, drop caps.
+  const width = { full: 'none', comfortable: '40em', narrow: '30em' }[reading.lineWidth]
+  themes.override('max-width', width, true)
+  themes.override('margin-left', 'auto', true)
+  themes.override('margin-right', 'auto', true)
+  const paragraph: Record<string, string> = {}
+  if (reading.justify) {
+    paragraph['text-align'] = 'justify !important'
+    paragraph['hyphens'] = 'auto !important'
+  }
+  if (reading.paragraphs === 'indent') {
+    paragraph['text-indent'] = '1.5em !important'
+    paragraph['margin-top'] = '0 !important'
+    paragraph['margin-bottom'] = '0 !important'
+  } else if (reading.paragraphs === 'space') {
+    paragraph['text-indent'] = '0 !important'
+    paragraph['margin-top'] = '0 !important'
+    paragraph['margin-bottom'] = '1em !important'
+  }
+  const rules: Record<string, Record<string, string>> = { p: paragraph }
+  if (reading.paragraphs === 'indent') {
+    rules['h1 + p, h2 + p, h3 + p, hr + p'] = { 'text-indent': '0 !important' }
+  }
+  if (reading.dropCap) {
+    rules['h1 + p::first-letter, h2 + p::first-letter, h3 + p::first-letter'] = {
+      float: 'left',
+      'font-size': '3.1em',
+      'line-height': '0.85',
+      padding: '0.06em 0.08em 0 0',
+      'font-weight': '700',
+    }
+  }
+  themes.default(rules)
 }
 
 export function Reader({

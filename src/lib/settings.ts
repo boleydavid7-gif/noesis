@@ -5,6 +5,8 @@ export type ReaderTheme = 'paper' | 'sepia' | 'night'
 export type ReaderFont = 'book' | 'serif' | 'sans'
 export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
+export type ParagraphStyle = 'book' | 'indent' | 'space'
+export type LineWidth = 'full' | 'comfortable' | 'narrow'
 export type AnswerLength = 'concise' | 'balanced' | 'detailed'
 export type GoalPeriod = 'month' | 'year'
 
@@ -16,6 +18,10 @@ export type Settings = {
     lineHeight: number
     startWide: boolean
     speechRate: number
+    justify: boolean
+    paragraphs: ParagraphStyle
+    lineWidth: LineWidth
+    dropCap: boolean
   }
   appearance: { accent: AccentName; scenery: boolean; reduceMotion: boolean; compact: boolean }
   library: {
@@ -31,7 +37,18 @@ export type Settings = {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  reading: { fontSize: 100, theme: 'paper', font: 'book', lineHeight: 1.65, startWide: false, speechRate: 1 },
+  reading: {
+    fontSize: 100,
+    theme: 'paper',
+    font: 'book',
+    lineHeight: 1.65,
+    startWide: false,
+    speechRate: 1,
+    justify: false,
+    paragraphs: 'book',
+    lineWidth: 'full',
+    dropCap: false,
+  },
   appearance: { accent: 'gold', scenery: true, reduceMotion: false, compact: false },
   library: {
     defaultSort: 'recent',
@@ -141,6 +158,10 @@ export function sanitizeSettings(input: unknown): Settings {
       lineHeight: Math.round(num(reading.lineHeight, 1.3, 2.2, d.reading.lineHeight) * 20) / 20,
       startWide: bool(reading.startWide, d.reading.startWide),
       speechRate: Math.round(num(reading.speechRate, 0.6, 1.6, d.reading.speechRate) * 10) / 10,
+      justify: bool(reading.justify, d.reading.justify),
+      paragraphs: pick(reading.paragraphs, ['book', 'indent', 'space'], d.reading.paragraphs),
+      lineWidth: pick(reading.lineWidth, ['full', 'comfortable', 'narrow'], d.reading.lineWidth),
+      dropCap: bool(reading.dropCap, d.reading.dropCap),
     },
     appearance: {
       accent: pick(appearance.accent, ['gold', 'blue', 'green', 'rose'], d.appearance.accent),
