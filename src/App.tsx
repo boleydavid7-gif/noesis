@@ -145,7 +145,6 @@ const PROFILE_NAME_KEY = 'noesis:profile:first-name:v1'
 const navItems = [
   { label: 'Home', text: 'Home', icon: Home },
   { label: 'My Library', text: 'Library', icon: Library },
-  { label: 'Read', text: 'Read', icon: BookOpen },
   { label: 'Notes', text: 'Second Brain', icon: Brain },
   { label: 'Review', text: 'Review', icon: RotateCcw },
   { label: 'Learning Paths', text: 'Paths', icon: ListChecks },
@@ -2071,7 +2070,7 @@ function App() {
             {navItems.map(({ label, text, icon: Icon }) => (
               <button
                 key={label}
-                className={`nav-item ${activeNav === label ? 'nav-item-active' : ''}`}
+                className={`nav-item ${activeNav === label || (label === 'My Library' && activeNav === 'Read') ? 'nav-item-active' : ''}`}
                 onClick={() => selectNav(label)}
                 title={text}
               >
