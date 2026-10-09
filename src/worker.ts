@@ -33,6 +33,8 @@ type Env = {
   GOOGLE_DRIVE_CLIENT_ID?: string
   ONEDRIVE_CLIENT_ID?: string
   DROPBOX_APP_KEY?: string
+  // Optional: lets Google Drive connections renew themselves (Google needs the secret for that).
+  GOOGLE_DRIVE_CLIENT_SECRET?: string
 }
 
 const RETRY_PAUSE_MS = 1_500
@@ -1469,10 +1471,56 @@ const worker = {
     if (url.pathname === '/api/config' && request.method === 'GET') {
       return json({
         ok: true,
+        googleRenews: Boolean(env.GOOGLE_DRIVE_CLIENT_SECRET?.trim()),
         googleDriveClientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim() || '',
         oneDriveClientId: env.VITE_ONEDRIVE_CLIENT_ID?.trim() || env.ONEDRIVE_CLIENT_ID?.trim() || '',
         dropboxAppKey: env.VITE_DROPBOX_APP_KEY?.trim() || env.DROPBOX_APP_KEY?.trim() || '',
       })
+    }
+    if (url.pathname === '/api/cloud-token' && request.method === 'POST') {
+      const secret = env.GOOGLE_DRIVE_CLIENT_SECRET?.trim()
+      const clientId = env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim()
+      if (!secret || !clientId) return json({ error: 'Not set up.' }, 503)
+      let input: Record<string, unknown>
+      try {
+        input = (await request.json()) as Record<string, unknown>
+      } catch {
+        return json({ error: 'Bad request.' }, 400)
+      }
+      const fields = new URLSearchParams({ client_id: clientId, client_secret: secret })
+      if (input.grant_type === 'refresh_token' && typeof input.refresh_token === 'string') {
+        fields.set('grant_type', 'refresh_token')
+        fields.set('refresh_token', input.refresh_token)
+      } else if (
+        input.grant_type === 'authorization_code' &&
+        typeof input.code === 'string' &&
+        typeof input.code_verifier === 'string' &&
+        typeof input.redirect_uri === 'string' &&
+        input.redirect_uri.startsWith(`${url.origin}/oauth/`)
+      ) {
+        fields.set('grant_type', 'authorization_code')
+        fields.set('code', input.code)
+        fields.set('code_verifier', input.code_verifier)
+        fields.set('redirect_uri', input.redirect_uri)
+      } else {
+        return json({ error: 'Bad request.' }, 400)
+      }
+      try {
+        const upstream = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: fields,
+        })
+        const body = (await upstream.json().catch(() => ({}))) as Record<string, unknown>
+        return json(
+          upstream.ok
+            ? { access_token: body.access_token, refresh_token: body.refresh_token, expires_in: body.expires_in }
+            : { error: String(body.error ?? 'Google refused the request.') },
+          upstream.ok ? 200 : upstream.status,
+        )
+      } catch {
+        return json({ error: 'Could not reach Google.' }, 502)
+      }
     }
     if (url.pathname === '/api/health' && request.method === 'GET') {
       return json({

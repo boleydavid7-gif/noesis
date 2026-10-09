@@ -4,6 +4,8 @@ export type CloudConnection = {
   provider: CloudProviderId
   accessToken: string
   expiresAt: number
+  /** Lets the connection renew itself when the hour-long access token ends. */
+  refreshToken?: string
   connectedAt: string
   /**
    * The Noesis account that authorized this browser connection. Older
@@ -28,23 +30,35 @@ function env(name: string): string {
   return (import.meta.env[name] as string | undefined)?.trim() ?? ''
 }
 
-const configs: Record<CloudProviderId, { clientId: string; scopes: string; authUrl: string }> = {
+const configs: Record<
+  CloudProviderId,
+  { clientId: string; scopes: string; authUrl: string; tokenUrl: string }
+> = {
   'google-drive': {
     clientId: env('VITE_GOOGLE_DRIVE_CLIENT_ID'),
     scopes: 'https://www.googleapis.com/auth/drive.file',
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
   },
   onedrive: {
     clientId: env('VITE_ONEDRIVE_CLIENT_ID'),
-    scopes: 'Files.ReadWrite.AppFolder User.Read',
+    scopes: 'Files.ReadWrite.AppFolder User.Read offline_access',
     authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
   },
   dropbox: {
     clientId: env('VITE_DROPBOX_APP_KEY'),
     scopes: 'files.content.write files.content.read files.metadata.read',
     authUrl: 'https://www.dropbox.com/oauth2/authorize',
+    tokenUrl: 'https://api.dropboxapi.com/oauth2/token',
   },
 }
+
+/**
+ * Google only hands out renewable access to a server holding the client secret,
+ * so its renewal runs through the Worker, and only when that secret is set there.
+ */
+let googleRenews = false
 
 /**
  * Cloudflare can expose these public OAuth identifiers at runtime. This keeps
@@ -57,6 +71,7 @@ export async function loadCloudProviderConfig(): Promise<CloudProviderInfo[]> {
     const response = await fetch('/api/config', { cache: 'no-store' })
     if (response.ok) {
       const body = (await response.json()) as {
+        googleRenews?: unknown
         googleDriveClientId?: unknown
         oneDriveClientId?: unknown
         dropboxAppKey?: unknown
@@ -66,6 +81,7 @@ export async function loadCloudProviderConfig(): Promise<CloudProviderInfo[]> {
         onedrive: body.oneDriveClientId,
         dropbox: body.dropboxAppKey,
       }
+      googleRenews = body.googleRenews === true
       for (const id of Object.keys(configs) as CloudProviderId[]) {
         const value = runtimeValues[id]
         if (typeof value === 'string' && value.trim()) configs[id].clientId = value.trim()
@@ -210,6 +226,7 @@ export function consumeCloudOAuthRedirect(): void {
       state: hash.get('state') || query.get('state'),
       provider,
       accessToken: hash.get('access_token'),
+      code: query.get('code'),
       expiresIn: Number(hash.get('expires_in') || 3600),
       error,
     },
@@ -226,15 +243,23 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
       `Add the ${providerDetails[provider].label} client ID/app key as a Cloudflare build or Worker variable first.`,
     )
   const state = randomState()
+  const renewable = canRenew(provider)
+  const verifier = randomState() + randomState()
   const params = new URLSearchParams({
     client_id: config.clientId,
-    response_type: 'token',
+    response_type: renewable ? 'code' : 'token',
     redirect_uri: redirectUri(provider),
     state,
-    scope: config.scopes,
+    scope: provider === 'onedrive' && !renewable ? config.scopes.replace(' offline_access', '') : config.scopes,
   })
+  if (renewable) {
+    params.set('code_challenge', await challengeFor(verifier))
+    params.set('code_challenge_method', 'S256')
+    if (provider === 'dropbox') params.set('token_access_type', 'offline')
+  }
   if (provider === 'google-drive') {
-    params.set('access_type', 'online')
+    params.set('access_type', renewable ? 'offline' : 'online')
+    if (renewable) params.set('prompt', 'consent')
     params.set('include_granted_scopes', 'true')
   }
   const popup = window.open(
@@ -256,6 +281,11 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
       cleanup()
       callback()
     }
+    const keep = (connection: CloudConnection) => {
+      const next = [...readCloudConnections().filter((item) => item.provider !== provider), connection]
+      writeCloudConnections(next)
+      finish(() => resolve(connection))
+    }
     const onMessage = (event: MessageEvent) => {
       if (
         event.origin !== window.location.origin ||
@@ -263,20 +293,45 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
         event.data?.state !== state
       )
         return
-      if (event.data.error || !event.data.accessToken) {
+      if (event.data.error || !(event.data.accessToken || event.data.code)) {
         finish(() => reject(new Error(event.data.error || 'Cloud provider authorization was cancelled.')))
         return
       }
-      const connection: CloudConnection = {
+      if (event.data.code) {
+        window.removeEventListener('message', onMessage)
+        void exchangeCode(provider, String(event.data.code), verifier).then(
+          (tokens) => {
+            rememberRenewalWorked(provider)
+            keep({
+              provider,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              expiresAt: Date.now() + tokens.expiresIn * 1000,
+              connectedAt: new Date().toISOString(),
+              ownerUserId,
+            })
+          },
+          () => {
+            // Next time connects the one-hour way, which always works.
+            rememberRenewalBroke(provider)
+            finish(() =>
+              reject(
+                new Error(
+                  `${providerDetails[provider].label} could not set up automatic renewal. Try connecting again.`,
+                ),
+              ),
+            )
+          },
+        )
+        return
+      }
+      keep({
         provider,
         accessToken: String(event.data.accessToken),
         expiresAt: Date.now() + Math.max(60, Number(event.data.expiresIn) || 3600) * 1000,
         connectedAt: new Date().toISOString(),
         ownerUserId,
-      }
-      const next = [...readCloudConnections().filter((item) => item.provider !== provider), connection]
-      writeCloudConnections(next)
-      finish(() => resolve(connection))
+      })
     }
     const timer = window.setInterval(() => {
       if (popup.closed) finish(() => reject(new Error('Cloud provider authorization was cancelled.')))
@@ -289,9 +344,143 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
   })
 }
 
-function requireToken(connection: CloudConnection): void {
-  if (!connection.accessToken || connection.expiresAt <= Date.now() + 30_000)
-    throw new Error('Your cloud connection has expired. Reconnect it from Cloud Backup.')
+const BROKE_KEY = 'noesis:cloud-renewal-broke:v1'
+
+function renewalBroke(provider: CloudProviderId): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[]).includes(provider)
+  } catch {
+    return false
+  }
+}
+
+function rememberRenewalBroke(provider: CloudProviderId): void {
+  try {
+    const now = new Set(JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[])
+    now.add(provider)
+    localStorage.setItem(BROKE_KEY, JSON.stringify([...now]))
+  } catch {
+    // Nothing to remember it with; the renewing way is tried again.
+  }
+}
+
+function rememberRenewalWorked(provider: CloudProviderId): void {
+  try {
+    const now = new Set(JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[])
+    now.delete(provider)
+    localStorage.setItem(BROKE_KEY, JSON.stringify([...now]))
+  } catch {
+    // Same as above.
+  }
+}
+
+function canRenew(provider: CloudProviderId): boolean {
+  if (renewalBroke(provider)) return false
+  return provider !== 'google-drive' || googleRenews
+}
+
+async function challengeFor(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  let text = ''
+  for (const byte of new Uint8Array(digest)) text += String.fromCharCode(byte)
+  return btoa(text).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+}
+
+type Tokens = { accessToken: string; refreshToken?: string; expiresIn: number }
+
+async function tokenRequest(provider: CloudProviderId, fields: Record<string, string>): Promise<Tokens> {
+  const config = configs[provider]
+  // Google's token call needs the client secret, which only the Worker holds.
+  const response =
+    provider === 'google-drive'
+      ? await fetch('/api/cloud-token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider, ...fields }),
+        })
+      : await fetch(config.tokenUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ client_id: config.clientId, ...fields }),
+        })
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  const accessToken = (body.access_token ?? body.accessToken) as string | undefined
+  if (!response.ok || !accessToken) {
+    const error = new Error(String(body.error ?? `Token request failed (${response.status}).`))
+    ;(error as Error & { rejected?: boolean }).rejected = response.status >= 400 && response.status < 500
+    throw error
+  }
+  const refreshToken = (body.refresh_token ?? body.refreshToken) as string | undefined
+  return {
+    accessToken,
+    refreshToken: refreshToken || undefined,
+    expiresIn: Math.max(60, Number(body.expires_in ?? body.expiresIn) || 3600),
+  }
+}
+
+function exchangeCode(provider: CloudProviderId, code: string, verifier: string): Promise<Tokens> {
+  return tokenRequest(provider, {
+    grant_type: 'authorization_code',
+    code,
+    code_verifier: verifier,
+    redirect_uri: redirectUri(provider),
+  })
+}
+
+/** True when the connection is good now, or can renew itself without the person doing anything. */
+export function cloudConnectionUsable(connection: CloudConnection): boolean {
+  return Boolean(connection.accessToken) && (connection.expiresAt > Date.now() + 30_000 || Boolean(connection.refreshToken))
+}
+
+const renewing = new Map<string, Promise<CloudConnection>>()
+
+/** The connection with a working access token, renewed and kept if the old one ended. */
+export async function freshCloudConnection(connection: CloudConnection): Promise<CloudConnection> {
+  const stored = readCloudConnections().find(
+    (item) => item.provider === connection.provider && item.ownerUserId === connection.ownerUserId,
+  )
+  const current = stored && stored.expiresAt >= connection.expiresAt ? stored : connection
+  if (current.accessToken && current.expiresAt > Date.now() + 30_000) return current
+  if (!current.refreshToken) throw new Error('Your cloud connection has expired. Reconnect it from Cloud Backup.')
+  const running = renewing.get(current.provider)
+  if (running) return running
+  const job = (async () => {
+    try {
+      const tokens = await tokenRequest(current.provider, {
+        grant_type: 'refresh_token',
+        refresh_token: current.refreshToken as string,
+      })
+      const next: CloudConnection = {
+        ...current,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken ?? current.refreshToken,
+        expiresAt: Date.now() + tokens.expiresIn * 1000,
+      }
+      writeCloudConnections(
+        readCloudConnections().map((item) =>
+          item.provider === next.provider && item.ownerUserId === next.ownerUserId ? next : item,
+        ),
+      )
+      return next
+    } catch (reason) {
+      // Only a refusal ends the renewal; a network hiccup leaves it to try again later.
+      if ((reason as { rejected?: boolean }).rejected) {
+        writeCloudConnections(
+          readCloudConnections().map((item) =>
+            item.provider === current.provider && item.ownerUserId === current.ownerUserId
+              ? { ...item, refreshToken: undefined }
+              : item,
+          ),
+        )
+        throw new Error('Your cloud connection has expired. Reconnect it from Cloud Backup.')
+      }
+      throw new Error('Could not reach your cloud to renew the connection. It will try again.')
+    } finally {
+      renewing.delete(current.provider)
+    }
+  })()
+  renewing.set(current.provider, job)
+  return job
 }
 
 function cloudFileName(path: string): string {
@@ -409,7 +598,7 @@ export async function writeCloudFile(
   data: Blob,
   contentType: string,
 ): Promise<void> {
-  requireToken(connection)
+  connection = await freshCloudConnection(connection)
   if (connection.provider === 'google-drive') {
     await googleWrite(connection, path, data, contentType)
     return
@@ -436,7 +625,7 @@ export async function writeCloudFile(
 }
 
 export async function readCloudFile(connection: CloudConnection, path: string): Promise<ArrayBuffer | null> {
-  requireToken(connection)
+  connection = await freshCloudConnection(connection)
   if (connection.provider === 'google-drive') return googleRead(connection, path)
   if (connection.provider === 'onedrive') {
     const response = await oneDriveRequest(connection, path)
