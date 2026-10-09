@@ -82,6 +82,29 @@ export async function requestMaterials(input: {
   return { books: result.books ?? [], resources: result.resources ?? [] }
 }
 
+// Six more books on one topic, skipping any already shown.
+export async function requestTopicBooks(input: {
+  goal: string
+  stage: string
+  topic: string
+  level?: string
+  exclude: string[]
+}): Promise<BookCandidate[]> {
+  const result = await post<{ books?: BookCandidate[] }>(
+    '/api/materials',
+    {
+      goal: input.goal,
+      stage: input.stage,
+      topics: [input.topic],
+      level: input.level,
+      booksOnly: true,
+      exclude: input.exclude,
+    },
+    'Noema could not find books right now. Try again in a moment.',
+  )
+  return result.books ?? []
+}
+
 export type QuizTopic = { goal: string; stage: string; topic: string; level?: string }
 export type QuizGrade = { verdict: 'correct' | 'partly' | 'incorrect'; feedback: string; ideal: string }
 

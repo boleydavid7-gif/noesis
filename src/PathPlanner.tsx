@@ -1,17 +1,6 @@
 import { libraryBooksForStage, readNextOnPath } from './lib/pathLink'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ArrowRight,
-  BookOpen,
-  Check,
-  Clock,
-  ExternalLink,
-  Lightbulb,
-  Search,
-  Sparkles,
-  Star,
-  StickyNote,
-} from 'lucide-react'
+import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import {
@@ -37,7 +26,6 @@ import {
   planProgress,
   rankBooks,
   toggleTopic,
-  moveOn,
   topicCount,
   type LearningPath,
   type PathPlan,
@@ -387,8 +375,6 @@ export function PathPlanDetail({
     (library ?? []).map((book) => ({ ...book, progress: book.progress ?? 0 })),
   )
   const { done } = planProgress(plan)
-  const moveOnFrom = (milestoneId: string) =>
-    onChange({ ...path, plan: moveOn(plan, milestoneId), updated: new Date().toISOString() })
   const tick = (topicId: string) =>
     onChange({ ...path, plan: toggleTopic(plan, topicId), updated: new Date().toISOString() })
   // Asks Noema for books and free resources for one stage, checks them, and
@@ -500,9 +486,6 @@ export function PathPlanDetail({
               onPassed={() => tick(next.topic.id)}
             />
             <div className="plan-next-actions">
-              <button className="primary-button" onClick={() => moveOnFrom(next.milestone.id)}>
-                <ArrowRight size={14} /> Move on to the next stage
-              </button>
               <button
                 className="secondary-button"
                 onClick={() => void findFor(next.milestone)}
