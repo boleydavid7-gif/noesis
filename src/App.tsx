@@ -2281,10 +2281,7 @@ function App() {
   }
   function libraryPage() {
     return (
-      <Page
-        title="My library"
-        subtitle={`${books.length} ${books.length === 1 ? 'title' : 'titles'} saved on this device.`}
-      >
+      <Page title="My library" subtitle={`${books.length} ${books.length === 1 ? 'title' : 'titles'}`}>
         <div
           className="library-drop"
           onDragOver={(event) => {
@@ -3931,6 +3928,11 @@ function BookSection({
                   <div className="book-card-cover">
                     <BookCover book={book} compact />
                     <ProgressRing value={book.progress} />
+                    {book.cloudAt ? (
+                      <span className="book-cloud-mark" title="Synced to your cloud" aria-label="Synced to your cloud">
+                        <Cloud size={12} />
+                      </span>
+                    ) : null}
                     {book.finished ? (
                       <span className="book-read-mark" title="Read" aria-label="Read">
                         <Check size={13} />
