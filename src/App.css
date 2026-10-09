@@ -4211,6 +4211,10 @@ body {
   box-shadow: -10px 16px 38px rgba(0, 0, 0, 0.26);
 }
 .reader-page-wide .reader-workspace-grid {
+  padding-right: 0;
+  transition: padding-right 0.28s ease;
+}
+.reader-page-wide.reader-tools-open .reader-workspace-grid {
   padding-right: 310px;
 }
 .reader-wide-sidebar-head {
