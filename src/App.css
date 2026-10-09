@@ -9671,3 +9671,19 @@ input[type='radio'] {
 .context-plus svg {
   display: block;
 }
+
+/* The expanded reader and its Second Brain panel follow the chosen colours. */
+.reader-page-wide,
+.reader-page.panel-card.reader-page-wide {
+  background: var(--surface-deep, #07121c);
+}
+.reader-wide-sidebar {
+  color: var(--text, #dbe8ef);
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.22);
+  background: var(--surface-pop, #0a1626);
+}
+.reader-wide-sidebar-actions button,
+.reader-wide-sidebar .chip {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.07);
+}
