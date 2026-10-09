@@ -153,6 +153,7 @@ export function ResourceList({ resources }: { resources: PlanResource[] }) {
               <small>{[resource.publisher, resource.note].filter(Boolean).join(' · ')}</small>
             </span>
             <em>{resource.kind}</em>
+            {resource.note ? <small className="plan-why">Why: {resource.note}</small> : null}
           </a>
         </li>
       ))}
@@ -210,6 +211,7 @@ function StudyWith({
               </ul>
             </details>
             <em>Book</em>
+            {book.note ? <small className="plan-why">Why: {book.note}</small> : null}
             <FreeCopyFinder book={book} />
           </li>
         ))}

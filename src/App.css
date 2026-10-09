@@ -9337,3 +9337,10 @@ input[type='radio'] {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.plan-why {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.7;
+}
