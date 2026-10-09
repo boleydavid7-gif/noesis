@@ -26,7 +26,6 @@ export function renderYearCard(stats: ReadingStats, accent = '#c7a36a'): Promise
     [`${stats.days}`, stats.days === 1 ? 'day with a book open' : 'days with a book open'],
     [`${stats.booksFinished}`, stats.booksFinished === 1 ? 'book finished' : 'books finished'],
     [`${stats.notes}`, stats.notes === 1 ? 'note saved' : 'notes saved'],
-    [`${stats.longestStreak}`, 'day longest streak'],
   ]
   let y = margin + 150
   for (const [big, small] of rows) {

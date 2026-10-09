@@ -327,7 +327,14 @@ export function Reader({
   // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
   const [controlsOpen, setControlsOpen] = useState(false)
   const [autoScroll, setAutoScroll] = useState(false)
+  const [chapterEnd, setChapterEnd] = useState<number | null>(null)
+  const dismissedEnds = useRef(new Set<string>())
   const bodyRef = useRef<HTMLDivElement>(null)
+  // On a phone the app's own header and tab bar step aside while a book is open.
+  useEffect(() => {
+    document.body.classList.add('reading-focus')
+    return () => document.body.classList.remove('reading-focus')
+  }, [])
   const speedRef = useLatest(reading.autoScrollSpeed)
   const [listening, setListening] = useState<'off' | 'on' | 'paused'>('off')
   const listenRef = useRef<ListenController | null>(null)
@@ -433,6 +440,25 @@ export function Reader({
     },
     [],
   )
+  // At the bottom of a long chapter a quiet card offers a pause. It appears once per chapter and never blocks reading.
+  useEffect(() => {
+    if (book.format !== 'epub' || loading || !reading.chapterEnd) return
+    const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container')
+    if (!container) return
+    const check = () => {
+      const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 12
+      const long = container.scrollHeight > container.clientHeight * 2.2
+      const index = chapterIndexRef.current
+      if (atEnd && long && !dismissedEnds.current.has(`${book.id}:${index}`)) setChapterEnd(index)
+      else if (!atEnd) setChapterEnd(null)
+    }
+    container.addEventListener('scroll', check, { passive: true })
+    return () => container.removeEventListener('scroll', check)
+  }, [book.format, book.id, loading, reading.chapterEnd, chapterIndexRef])
+  const closeChapterEnd = () => {
+    if (chapterEnd !== null) dismissedEnds.current.add(`${book.id}:${chapterEnd}`)
+    setChapterEnd(null)
+  }
   // Slowly scrolls the page; touching it or pressing a key hands control back.
   useEffect(() => {
     if (!autoScroll) return
@@ -1257,6 +1283,38 @@ export function Reader({
                       />
                     </label>
                     {book.format === 'epub' ? (
+                      <div className="reader-controls-narrow">
+                        <label>
+                          Text size
+                          <input
+                            type="range"
+                            min="85"
+                            max="125"
+                            step="5"
+                            value={fontSize}
+                            onChange={(event) => setFontSize(Number(event.target.value))}
+                            aria-label="Text size on a phone"
+                          />
+                        </label>
+                        <label>
+                          Page colour
+                          <select
+                            value={readerTheme}
+                            onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
+                            aria-label="Page colour on a phone"
+                          >
+                            <option value="paper">Paper</option>
+                            <option value="sepia">Sepia</option>
+                            <option value="night">Night</option>
+                            <option value="contrast">High contrast</option>
+                          </select>
+                        </label>
+                        <button className="secondary-button" onClick={() => setWideLayout(true)}>
+                          <Maximize2 size={14} /> Expand
+                        </button>
+                      </div>
+                    ) : null}
+                    {book.format === 'epub' ? (
                       <label className="reader-controls-check">
                         <input
                           type="checkbox"
@@ -1553,6 +1611,49 @@ export function Reader({
             ) : (
               <div ref={frame} className="reader-frame" />
             )}
+            {chapterEnd !== null && !pick ? (
+              <div className="reader-chapter-end" role="region" aria-label="End of chapter">
+                <strong>{toc[chapterEnd]?.label ? `End of ${toc[chapterEnd].label}` : 'End of the chapter'}</strong>
+                <div>
+                  {chapterEnd + 1 < toc.length ? (
+                    <button
+                      className="primary-button"
+                      onClick={() => {
+                        const next = chapterEnd + 1
+                        closeChapterEnd()
+                        goToChapter(next)
+                      }}
+                    >
+                      Next chapter
+                    </button>
+                  ) : null}
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      closeChapterEnd()
+                      onNote('', 'reflect', currentNoteLocation())
+                    }}
+                  >
+                    Keep a thought
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      closeChapterEnd()
+                      onAsk(
+                        'Recap this chapter in a few sentences, only up to where I have read.',
+                        currentTutorContext(),
+                      )
+                    }}
+                  >
+                    Recap
+                  </button>
+                  <button className="icon-button" onClick={closeChapterEnd} aria-label="Dismiss">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {pick ? (
               <div className="reader-pick" role="toolbar" aria-label="Highlight">
                 {HIGHLIGHT_COLORS.map((item) => (

@@ -9,16 +9,13 @@ import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteKind, type HighlightColor } from './lib/knowledge'
 
-type TabId = 'all' | BrainNoteKind | 'elsewhere' | 'words' | 'diary'
+type TabId = 'all' | 'highlight' | 'thoughts' | 'elsewhere' | 'words' | 'diary'
 const TABS: Array<{ id: TabId; label: string }> = [
-  { id: 'all', label: 'All notes' },
+  { id: 'all', label: 'Everything' },
   { id: 'highlight', label: 'Highlights' },
-  { id: 'note', label: 'Quick notes' },
-  { id: 'idea', label: 'Reflections' },
-  { id: 'question', label: 'Questions' },
-  { id: 'connection', label: 'Connections' },
-  { id: 'elsewhere', label: 'Elsewhere' },
+  { id: 'thoughts', label: 'My thoughts' },
   { id: 'words', label: 'Words' },
+  { id: 'elsewhere', label: 'From elsewhere' },
   { id: 'diary', label: 'Diary' },
 ]
 const KIND_LABEL: Record<BrainNoteKind, string> = {
@@ -116,7 +113,9 @@ export function SecondBrainPage({
             ? !note.bookId && !(note.tags ?? []).includes('word')
             : tab === 'words'
               ? (note.tags ?? []).includes('word')
-              : note.kind === tab,
+              : tab === 'thoughts'
+                ? note.kind !== 'highlight' && !(note.tags ?? []).includes('word')
+                : note.kind === tab,
       )
       .filter(
         (note) =>
@@ -568,10 +567,6 @@ function YearStats({
         <div>
           <dt>Days</dt>
           <dd>{stats.days}</dd>
-        </div>
-        <div>
-          <dt>Streak</dt>
-          <dd>{stats.currentStreak}</dd>
         </div>
         <div>
           <dt>Finished</dt>

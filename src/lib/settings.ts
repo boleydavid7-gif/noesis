@@ -26,6 +26,7 @@ export type Settings = {
     dropCap: boolean
     letterSpacing: LetterSpacing
     tapZones: boolean
+    chapterEnd: boolean
     dim: number // 0 to 60: how much the page is darkened
     autoScrollSpeed: number // 1 to 10
   }
@@ -63,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
     dropCap: false,
     letterSpacing: 'normal',
     tapZones: false,
+    chapterEnd: true,
     dim: 0,
     autoScrollSpeed: 3,
   },
@@ -184,6 +186,7 @@ export function sanitizeSettings(input: unknown): Settings {
       lineWidth: pick(reading.lineWidth, ['full', 'comfortable', 'narrow'], d.reading.lineWidth),
       dropCap: bool(reading.dropCap, d.reading.dropCap),
       tapZones: bool(reading.tapZones, d.reading.tapZones),
+      chapterEnd: bool(reading.chapterEnd, d.reading.chapterEnd),
       dim: Math.round(num(reading.dim, 0, 60, d.reading.dim) / 5) * 5,
       autoScrollSpeed: Math.round(num(reading.autoScrollSpeed, 1, 10, d.reading.autoScrollSpeed)),
       letterSpacing: pick(reading.letterSpacing, ['normal', 'wide'], d.reading.letterSpacing),
