@@ -236,20 +236,43 @@ export function removeLibraryBook(id: string): LibraryBook[] {
   return books
 }
 
+const STORES = [FILE_STORE, TEXT_STORE, LIST_STORE]
+
+function createStores(db: IDBDatabase) {
+  for (const name of STORES) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name)
+}
+
+/**
+ * Opens the library database at whatever version it is already at, and upgrades only when a store is missing.
+ * That way a newer or older copy of the app (another tab, a cached page) never trips over a version number.
+ */
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('This browser does not support local book storage.'))
       return
     }
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(FILE_STORE)) request.result.createObjectStore(FILE_STORE)
-      if (!request.result.objectStoreNames.contains(TEXT_STORE)) request.result.createObjectStore(TEXT_STORE)
-      if (!request.result.objectStoreNames.contains(LIST_STORE)) request.result.createObjectStore(LIST_STORE)
+    const release = (db: IDBDatabase) => {
+      // Let another tab upgrade the database instead of blocking it.
+      db.onversionchange = () => db.close()
+      return db
     }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('Could not open local book storage.'))
+    const first = indexedDB.open(DB_NAME)
+    first.onupgradeneeded = () => createStores(first.result)
+    first.onerror = () => reject(first.error ?? new Error('Could not open local book storage.'))
+    first.onsuccess = () => {
+      const db = first.result
+      if (STORES.every((name) => db.objectStoreNames.contains(name))) {
+        resolve(release(db))
+        return
+      }
+      const version = Math.max(db.version + 1, DB_VERSION)
+      db.close()
+      const upgrade = indexedDB.open(DB_NAME, version)
+      upgrade.onupgradeneeded = () => createStores(upgrade.result)
+      upgrade.onsuccess = () => resolve(release(upgrade.result))
+      upgrade.onerror = () => reject(upgrade.error ?? new Error('Could not open local book storage.'))
+    }
   })
 }
 

@@ -1,12 +1,4 @@
-import {
-  loadEpubFile,
-  readLibraryBooks,
-  saveBookText,
-  saveEpubFile,
-  writeLibraryBooks,
-  type LibraryBook,
-} from './library'
-import { parseEpub } from './epub'
+import { loadEpubFile, readLibraryBooks, writeLibraryBooks, type LibraryBook } from './library'
 import type { BrainNote } from './knowledge'
 import { mergeById } from './merge'
 import {
@@ -74,36 +66,42 @@ async function readManifest(connection: CloudConnection): Promise<CloudManifest 
   }
 }
 
-async function restoreRemoteBooks(connection: CloudConnection, books: LibraryBook[]): Promise<void> {
-  for (const book of books.filter((item) => item.format === 'epub' || item.format === 'pdf')) {
-    const extension = book.format === 'pdf' ? 'pdf' : 'epub'
-    const bytes = await readCloudFile(connection, `books/${book.id}.${extension}`)
-    if (bytes) {
-      await saveEpubFile(book.id, bytes)
-      if (book.format === 'epub') {
-        try {
-          const parsed = await parseEpub(bytes, book.fileName || `${book.title}.epub`)
-          if (parsed.text) await saveBookText(book.id, parsed.text)
-        } catch {
-          // The EPUB itself remains readable even if text indexing fails.
-        }
-      }
-    }
+const extensionFor = (book: LibraryBook) => (book.format === 'pdf' ? 'pdf' : 'epub')
+const uploadedKey = (connection: CloudConnection) => `noesis:cloud-uploaded:${connection.provider}`
+
+function readUploaded(connection: CloudConnection): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(uploadedKey(connection)) ?? '[]') as string[])
+  } catch {
+    return new Set()
   }
 }
 
+/** The book's file from a connected cloud's Noesis folder, or null when it is not there. */
+export async function downloadCloudBook(connection: CloudConnection, book: LibraryBook): Promise<ArrayBuffer | null> {
+  if (book.format !== 'epub' && book.format !== 'pdf') return null
+  return readCloudFile(connection, `books/${book.id}.${extensionFor(book)}`)
+}
+
+// Books travel to the cloud's Noesis folder once; files come back only when a book is opened (bookFiles.ts).
 async function uploadLocalBooks(connection: CloudConnection, books: LibraryBook[]): Promise<void> {
+  const uploaded = readUploaded(connection)
   for (const book of books.filter((item) => item.format === 'epub' || item.format === 'pdf')) {
+    if (uploaded.has(book.id)) continue
     const bytes = await loadEpubFile(book.id).catch(() => null)
-    if (bytes) {
-      const extension = book.format === 'pdf' ? 'pdf' : 'epub'
-      const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
-      await writeCloudFile(
-        connection,
-        `books/${book.id}.${extension}`,
-        new Blob([bytes], { type: contentType }),
-        contentType,
-      )
+    if (!bytes) continue
+    const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
+    await writeCloudFile(
+      connection,
+      `books/${book.id}.${extensionFor(book)}`,
+      new Blob([bytes], { type: contentType }),
+      contentType,
+    )
+    uploaded.add(book.id)
+    try {
+      localStorage.setItem(uploadedKey(connection), JSON.stringify([...uploaded]))
+    } catch {
+      // Without the note, the book is simply sent again next time.
     }
   }
 }
@@ -133,7 +131,6 @@ export async function syncCloudState(connection: CloudConnection, local: CloudSy
   const manifest: CloudManifest = { version: 2, updatedAt: new Date().toISOString(), ...merged, tombstones }
   await writeCloudFile(connection, 'manifest.json', jsonBlob(manifest), 'application/json')
   await uploadLocalBooks(connection, merged.books)
-  await restoreRemoteBooks(connection, merged.books)
   writeLibraryBooks(merged.books)
   return merged
 }

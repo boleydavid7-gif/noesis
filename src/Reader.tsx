@@ -45,7 +45,8 @@ import { locateRange } from './lib/wordRange'
 import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
 import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteLocation, type HighlightColor } from './lib/knowledge'
 import { firstReadingIndex, openEpub, spineSections } from './lib/epub'
-import { loadEpubFile, type LibraryBook } from './lib/library'
+import { openBookFile } from './lib/bookFiles'
+import { type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { cleanChapterLabel } from './lib/chapterLabel'
 import { PdfReader } from './PdfReader'
@@ -731,8 +732,7 @@ export function Reader({
           setLoading(false)
           return
         }
-        const data = await loadEpubFile(currentBook.id)
-        if (!data) throw new Error('This EPUB is no longer stored on this device. Import it again to continue reading.')
+        const data = await openBookFile(currentBook)
         if (currentBook.format === 'pdf') {
           if (!cancelled) {
             setPdfData(data)

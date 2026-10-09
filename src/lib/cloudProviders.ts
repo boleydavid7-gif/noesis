@@ -311,11 +311,45 @@ async function googleFileId(connection: CloudConnection, path: string): Promise<
   return body.files?.[0]?.id ?? null
 }
 
+const googleFolders = new Map<string, string>()
+
+/** The visible "Noesis" folder in the person's Drive, created on first use. */
+async function googleFolderId(connection: CloudConnection): Promise<string> {
+  const known = googleFolders.get(connection.accessToken)
+  if (known) return known
+  const query = encodeURIComponent(
+    `name = 'Noesis' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and 'root' in parents`,
+  )
+  const found = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive&fields=files(id)&pageSize=1`,
+    { headers: { authorization: `Bearer ${connection.accessToken}` } },
+  )
+  if (found.ok) {
+    const id = ((await found.json()) as { files?: Array<{ id?: string }> }).files?.[0]?.id
+    if (id) {
+      googleFolders.set(connection.accessToken, id)
+      return id
+    }
+  }
+  const created = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${connection.accessToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Noesis', mimeType: 'application/vnd.google-apps.folder' }),
+  })
+  if (!created.ok) throw new Error(`Google Drive could not create the Noesis folder (${created.status}).`)
+  const id = ((await created.json()) as { id?: string }).id
+  if (!id) throw new Error('Google Drive could not create the Noesis folder.')
+  googleFolders.set(connection.accessToken, id)
+  return id
+}
+
 async function googleWrite(connection: CloudConnection, path: string, data: Blob, contentType: string): Promise<void> {
-  const metadata = JSON.stringify({ name: cloudFileName(path), mimeType: contentType })
+  const folder = await googleFolderId(connection)
+  const metadata = JSON.stringify({ name: cloudFileName(path), mimeType: contentType, parents: [folder] })
   const existing = await googleFileId(connection, path)
   let response: Response
   if (existing) {
+    // A file saved by an older version is updated where it is; new files go in the Noesis folder.
     response = await fetch(
       `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existing)}?uploadType=media`,
       {

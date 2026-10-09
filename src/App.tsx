@@ -63,7 +63,6 @@ import {
   INTENTS,
   WANT_SHELF,
   isStarted,
-  loadEpubFile,
   readLibraryBooks,
   removeLibraryBook,
   saveBookText,
@@ -135,11 +134,19 @@ import { readEvents, toggleDone, writeEvents, type CalendarEvent } from './lib/c
 import { applyFocusSync, focusToSync, sameItems, type SyncBundle } from './lib/syncData'
 import { readWeatherSettings, writeWeatherSettings, type WeatherSettings } from './lib/weather'
 import { timeAgo } from './lib/time'
-import { readSettings, rootAppearance, SURFACE_VARS, writeSettings, type Settings as AppSettings } from './lib/settings'
+import {
+  readSettings,
+  rootAppearance,
+  settingsStamp,
+  SURFACE_VARS,
+  writeSettings,
+  type Settings as AppSettings,
+} from './lib/settings'
 import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
 import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
-import { syncAccountBundle, syncAccountLibrary } from './lib/accountLibrary'
+import { syncAccountBundle, syncAccountLibrary, syncAccountSettings } from './lib/accountLibrary'
+import { openBookFile } from './lib/bookFiles'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import {
   bindCloudConnectionsToUser,
@@ -559,6 +566,25 @@ function App() {
     // focusState is read through focusSignature so timer ticks do not trigger a sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUserId, events, paths, focusSignature, dataVersion, settings.backup.autoSync, applyBundle])
+  // Colours, look and reading preferences follow the account: the newer copy wins on every device.
+  useEffect(() => {
+    if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      try {
+        const incoming = await syncAccountSettings(settings, settingsStamp())
+        if (cancelled || !incoming) return
+        writeSettings(incoming.settings, incoming.stamp)
+        setSettings(incoming.settings)
+      } catch {
+        // Settings sync is quiet; it tries again on the next change or sign-in.
+      }
+    }, 2000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [authUserId, settings])
   // Review cards live in local storage; recount whenever the page changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav, dataVersion, reviewRemount])
@@ -1019,7 +1045,7 @@ function App() {
     let readText: string | undefined
     if (book.format === 'epub') {
       try {
-        const data = await loadEpubFile(book.id)
+        const data = await openBookFile(book).catch(() => null)
         if (data) {
           const epub = await openEpub(data)
           readText = await recapText(epub, {
