@@ -51,6 +51,15 @@ type Draft = {
 }
 
 const NEW = 'new'
+function inTab(note: BrainNote, tab: TabId): boolean {
+  if (tab === 'all' || tab === 'diary') return true
+  const word = (note.tags ?? []).includes('word')
+  if (tab === 'elsewhere') return !note.bookId && !word && !isBookmark(note)
+  if (tab === 'words') return word
+  if (tab === 'bookmarks') return isBookmark(note)
+  if (tab === 'thoughts') return note.kind !== 'highlight' && !word && !isBookmark(note)
+  return note.kind === tab
+}
 const stamp = (note: BrainNote) => note.updated ?? note.createdAt
 const emptyDraft = (): Draft => ({ title: '', body: '', source: '', kind: 'note', tags: '', notebook: '', revisit: '' })
 const draftOf = (note: BrainNote): Draft => ({
@@ -149,19 +158,7 @@ export function SecondBrainPage({
       .filter((note) => !colorFilter || note.color === colorFilter)
       .filter((note) => !notebook || note.notebook === notebook)
       .filter((note) => !tagFilter || (note.tags ?? []).includes(tagFilter))
-      .filter((note) =>
-        tab === 'all' || tab === 'diary'
-          ? true
-          : tab === 'elsewhere'
-            ? !note.bookId && !(note.tags ?? []).includes('word') && !isBookmark(note)
-            : tab === 'words'
-              ? (note.tags ?? []).includes('word')
-              : tab === 'bookmarks'
-                ? isBookmark(note)
-                : tab === 'thoughts'
-                  ? note.kind !== 'highlight' && !(note.tags ?? []).includes('word') && !isBookmark(note)
-                  : note.kind === tab,
-      )
+      .filter((note) => inTab(note, tab))
       .filter(
         (note) =>
           !q ||
@@ -248,7 +245,10 @@ export function SecondBrainPage({
     <div className="brain-page">
       <div className="brain-page-bar">
         <div className="brain-page-tabs" role="tablist" aria-label="Note types">
-          {TABS.map((item) => (
+          {TABS.filter(
+            (item) =>
+              item.id === 'all' || item.id === 'diary' || item.id === tab || notes.some((note) => inTab(note, item.id)),
+          ).map((item) => (
             <button
               key={item.id}
               role="tab"

@@ -3,7 +3,7 @@ import { Search } from 'lucide-react'
 import { Group, Row, Segmented, Toggle } from './settings/controls'
 import { clearCustomFont, customFontName, saveCustomFont } from './lib/customFont'
 import { canEmbedOnDevice } from './lib/embeddings'
-import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings/sections'
+import { SETTINGS_SECTIONS, normalizeSection, type SettingsSectionId } from './settings/sections'
 import {
   ACCENTS,
   FONT_STACKS,
@@ -43,7 +43,8 @@ type Props = {
 }
 
 export function SettingsPage(props: Props) {
-  const { section, onSection, settings, onChange, onNotice } = props
+  const { onSection, settings, onChange, onNotice } = props
+  const section = normalizeSection(props.section)
   const [query, setQuery] = useState('')
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -96,21 +97,26 @@ export function SettingsPage(props: Props) {
               <p>{active.subtitle}</p>
             </div>
           </header>
-          {section === 'account' ? props.account : null}
-          {section === 'backup' ? props.backup : null}
+          {section === 'account' ? (
+            <>
+              {props.account}
+              <h4 className="settings-subhead">Backup and sync</h4>
+              {props.backup}
+              <h4 className="settings-subhead">Privacy</h4>
+              <PrivacySection email={props.signedInEmail} onExport={props.onExport} onClearLocal={props.onClearLocal} />
+              <h4 className="settings-subhead">About</h4>
+              <AboutSection />
+            </>
+          ) : null}
           {section === 'reading' ? <ReadingSection settings={settings} set={set} /> : null}
           {section === 'appearance' ? <AppearanceSection settings={settings} set={set} /> : null}
           {section === 'library' ? (
-            <LibrarySection settings={settings} set={set} books={props.books} onNotice={onNotice} />
+            <>
+              <LibrarySection settings={settings} set={set} books={props.books} onNotice={onNotice} />
+              <NotificationsSection settings={settings} set={set} dueCount={props.dueCount} onNotice={onNotice} />
+            </>
           ) : null}
           {section === 'ai' ? <AiSection settings={settings} set={set} /> : null}
-          {section === 'notifications' ? (
-            <NotificationsSection settings={settings} set={set} dueCount={props.dueCount} onNotice={onNotice} />
-          ) : null}
-          {section === 'privacy' ? (
-            <PrivacySection email={props.signedInEmail} onExport={props.onExport} onClearLocal={props.onClearLocal} />
-          ) : null}
-          {section === 'about' ? <AboutSection /> : null}
         </div>
       </div>
     </div>
@@ -222,75 +228,6 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             ]}
           />
         </Row>
-        <Row title="Letter spacing" detail="Wider spacing can make words easier to tell apart.">
-          <Segmented
-            label="Letter spacing"
-            value={reading.letterSpacing}
-            onChange={(value) => set('reading', 'letterSpacing', value)}
-            options={[
-              { value: 'normal', label: 'Normal' },
-              { value: 'wide', label: 'Wide' },
-            ]}
-          />
-        </Row>
-        <Row
-          title="Pause at the end of a chapter"
-          detail="A quiet card offers to keep a thought or recap. It never quizzes you."
-        >
-          <Toggle
-            checked={reading.chapterEnd}
-            onChange={(value) => set('reading', 'chapterEnd', value)}
-            label="Pause at the end of a chapter"
-          />
-        </Row>
-        <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
-          <Toggle
-            checked={reading.tapZones}
-            onChange={(value) => set('reading', 'tapZones', value)}
-            label="Tap to turn pages"
-          />
-        </Row>
-        <Row title="Open books expanded" detail="Shows the reading tools beside the page.">
-          <Toggle
-            checked={reading.startWide}
-            onChange={(value) => set('reading', 'startWide', value)}
-            label="Open books expanded"
-          />
-        </Row>
-        <Row title="Page width" detail="A narrower column is easier to follow in a novel.">
-          <Segmented
-            label="Page width"
-            value={reading.lineWidth}
-            onChange={(value) => set('reading', 'lineWidth', value)}
-            options={[
-              { value: 'full', label: 'Full' },
-              { value: 'comfortable', label: 'Medium' },
-              { value: 'narrow', label: 'Narrow' },
-            ]}
-          />
-        </Row>
-        <Row title="Paragraphs" detail="Indented, spaced, or as the book has them.">
-          <Segmented
-            label="Paragraphs"
-            value={reading.paragraphs}
-            onChange={(value) => set('reading', 'paragraphs', value)}
-            options={[
-              { value: 'book', label: 'Book’s own' },
-              { value: 'indent', label: 'Indented' },
-              { value: 'space', label: 'Spaced' },
-            ]}
-          />
-        </Row>
-        <Row title="Justified text">
-          <Toggle
-            checked={reading.justify}
-            onChange={(value) => set('reading', 'justify', value)}
-            label="Justified text"
-          />
-        </Row>
-        <Row title="Drop caps" detail="A large first letter at the start of a chapter.">
-          <Toggle checked={reading.dropCap} onChange={(value) => set('reading', 'dropCap', value)} label="Drop caps" />
-        </Row>
         <Row title="Listening speed" detail="For read-aloud in the reader.">
           <Segmented
             label="Listening speed"
@@ -303,6 +240,82 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             ]}
           />
         </Row>
+        <details className="settings-more">
+          <summary>More page options</summary>
+          <Row title="Letter spacing" detail="Wider spacing can make words easier to tell apart.">
+            <Segmented
+              label="Letter spacing"
+              value={reading.letterSpacing}
+              onChange={(value) => set('reading', 'letterSpacing', value)}
+              options={[
+                { value: 'normal', label: 'Normal' },
+                { value: 'wide', label: 'Wide' },
+              ]}
+            />
+          </Row>
+          <Row
+            title="Pause at the end of a chapter"
+            detail="A quiet card offers to keep a thought or recap. It never quizzes you."
+          >
+            <Toggle
+              checked={reading.chapterEnd}
+              onChange={(value) => set('reading', 'chapterEnd', value)}
+              label="Pause at the end of a chapter"
+            />
+          </Row>
+          <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
+            <Toggle
+              checked={reading.tapZones}
+              onChange={(value) => set('reading', 'tapZones', value)}
+              label="Tap to turn pages"
+            />
+          </Row>
+          <Row title="Open books expanded" detail="Shows the reading tools beside the page.">
+            <Toggle
+              checked={reading.startWide}
+              onChange={(value) => set('reading', 'startWide', value)}
+              label="Open books expanded"
+            />
+          </Row>
+          <Row title="Page width" detail="A narrower column is easier to follow in a novel.">
+            <Segmented
+              label="Page width"
+              value={reading.lineWidth}
+              onChange={(value) => set('reading', 'lineWidth', value)}
+              options={[
+                { value: 'full', label: 'Full' },
+                { value: 'comfortable', label: 'Medium' },
+                { value: 'narrow', label: 'Narrow' },
+              ]}
+            />
+          </Row>
+          <Row title="Paragraphs" detail="Indented, spaced, or as the book has them.">
+            <Segmented
+              label="Paragraphs"
+              value={reading.paragraphs}
+              onChange={(value) => set('reading', 'paragraphs', value)}
+              options={[
+                { value: 'book', label: 'Book’s own' },
+                { value: 'indent', label: 'Indented' },
+                { value: 'space', label: 'Spaced' },
+              ]}
+            />
+          </Row>
+          <Row title="Justified text">
+            <Toggle
+              checked={reading.justify}
+              onChange={(value) => set('reading', 'justify', value)}
+              label="Justified text"
+            />
+          </Row>
+          <Row title="Drop caps" detail="A large first letter at the start of a chapter.">
+            <Toggle
+              checked={reading.dropCap}
+              onChange={(value) => set('reading', 'dropCap', value)}
+              label="Drop caps"
+            />
+          </Row>
+        </details>
         <div
           className="reading-preview"
           style={{
@@ -360,27 +373,30 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
       </Row>
       <ImagePicker slot="banner" title="Home banner" />
       <ImagePicker slot="sidebar" title="Sidebar picture" />
-      <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds.">
-        <Toggle
-          checked={appearance.scenery}
-          onChange={(value) => set('appearance', 'scenery', value)}
-          label="Scenery backgrounds"
-        />
-      </Row>
-      <Row title="Reduce motion" detail="Stops animations and transitions.">
-        <Toggle
-          checked={appearance.reduceMotion}
-          onChange={(value) => set('appearance', 'reduceMotion', value)}
-          label="Reduce motion"
-        />
-      </Row>
-      <Row title="Compact layout" detail="Tighter spacing so more fits on screen.">
-        <Toggle
-          checked={appearance.compact}
-          onChange={(value) => set('appearance', 'compact', value)}
-          label="Compact layout"
-        />
-      </Row>
+      <details className="settings-more">
+        <summary>More</summary>
+        <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds.">
+          <Toggle
+            checked={appearance.scenery}
+            onChange={(value) => set('appearance', 'scenery', value)}
+            label="Scenery backgrounds"
+          />
+        </Row>
+        <Row title="Reduce motion" detail="Stops animations and transitions.">
+          <Toggle
+            checked={appearance.reduceMotion}
+            onChange={(value) => set('appearance', 'reduceMotion', value)}
+            label="Reduce motion"
+          />
+        </Row>
+        <Row title="Compact layout" detail="Tighter spacing so more fits on screen.">
+          <Toggle
+            checked={appearance.compact}
+            onChange={(value) => set('appearance', 'compact', value)}
+            label="Compact layout"
+          />
+        </Row>
+      </details>
     </Group>
   )
 }

@@ -542,6 +542,11 @@ function App() {
   // Review cards live in local storage; recount whenever the page changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav, dataVersion, reviewRemount])
+  // The Review page appears once there is something to review.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const hasCards = useMemo(() => readReviewCards().length > 0, [activeNav, dataVersion, reviewRemount])
+  // Someone with nothing yet sees only the first steps.
+  const fresh = books.length + paths.length + notes.length === 0
   useEffect(() => {
     const root = document.documentElement
     const { classes, vars } = rootAppearance(settings)
@@ -2130,35 +2135,39 @@ function App() {
             </div>
           </section>
         ) : null}
-        <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
-        <FreeCopyContext.Provider value={addResource}>
-          <PathSection
-            paths={paths}
-            books={books}
-            onOpen={() => selectNav('Learning Paths')}
-            onUpdate={(updated) => {
-              const next = paths.map((path) => (path.id === updated.id ? updated : path))
-              setPaths(next)
-              writePaths(next)
-            }}
-            onAsk={(prompt) => {
-              openNoemaPanel(prompt)
-              void askNoema(prompt)
-            }}
-            onNote={openTopicNote}
-            onOpenBook={(id) => {
-              const found = books.find((book) => book.id === id)
-              if (found) openSavedBook(found)
-            }}
-          />
-        </FreeCopyContext.Provider>
-        <NotesSection
-          notes={notes}
-          onOpen={() => setOverlay('brain')}
-          onViewAll={() => selectNav('Notes')}
-          onOpenNote={openNoteLocation}
-        />
-        <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
+        {fresh ? null : (
+          <>
+            <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
+            <FreeCopyContext.Provider value={addResource}>
+              <PathSection
+                paths={paths}
+                books={books}
+                onOpen={() => selectNav('Learning Paths')}
+                onUpdate={(updated) => {
+                  const next = paths.map((path) => (path.id === updated.id ? updated : path))
+                  setPaths(next)
+                  writePaths(next)
+                }}
+                onAsk={(prompt) => {
+                  openNoemaPanel(prompt)
+                  void askNoema(prompt)
+                }}
+                onNote={openTopicNote}
+                onOpenBook={(id) => {
+                  const found = books.find((book) => book.id === id)
+                  if (found) openSavedBook(found)
+                }}
+              />
+            </FreeCopyContext.Provider>
+            <NotesSection
+              notes={notes}
+              onOpen={() => setOverlay('brain')}
+              onViewAll={() => selectNav('Notes')}
+              onOpenNote={openNoteLocation}
+            />
+            <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
+          </>
+        )}
       </div>
     )
   }
@@ -3006,18 +3015,20 @@ function App() {
             </button>
           </div>
           <nav className="main-nav" aria-label="Main navigation">
-            {navItems.map(({ label, text, icon: Icon }) => (
-              <button
-                key={label}
-                className={`nav-item ${activeNav === label || (label === 'My Library' && activeNav === 'Read') ? 'nav-item-active' : ''}`}
-                onClick={() => selectNav(label)}
-                title={text}
-              >
-                <Icon size={17} />
-                <span>{text}</span>
-                {label === 'Review' && dueCount > 0 ? <b className="nav-badge">{dueCount}</b> : null}
-              </button>
-            ))}
+            {navItems
+              .filter(({ label }) => label !== 'Review' || hasCards || activeNav === 'Review')
+              .map(({ label, text, icon: Icon }) => (
+                <button
+                  key={label}
+                  className={`nav-item ${activeNav === label || (label === 'My Library' && activeNav === 'Read') ? 'nav-item-active' : ''}`}
+                  onClick={() => selectNav(label)}
+                  title={text}
+                >
+                  <Icon size={17} />
+                  <span>{text}</span>
+                  {label === 'Review' && dueCount > 0 ? <b className="nav-badge">{dueCount}</b> : null}
+                </button>
+              ))}
           </nav>
           <div className="sidebar-bottom">
             <div className="sidebar-search">
@@ -3487,7 +3498,7 @@ function App() {
           </div>
         ) : null}
       </main>
-      {activeNav !== 'Settings' ? (
+      {activeNav !== 'Settings' && activeNav !== 'Read' && !fresh ? (
         <ContextSidebar
           now={now}
           focus={focusState}
