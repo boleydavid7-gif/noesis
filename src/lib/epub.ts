@@ -1,4 +1,5 @@
 import type { Book, NavItem } from 'epubjs'
+import { shrinkCover } from './cover'
 import type { LibraryBook } from './library'
 
 function asText(value: unknown, fallback: string): string {
@@ -121,7 +122,7 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
   let coverDataUrl: string | undefined
   try {
     const coverUrl = await book.coverUrl()
-    coverDataUrl = coverUrl ? await blobToDataUrl(coverUrl) : undefined
+    coverDataUrl = coverUrl ? await shrinkCover(await blobToDataUrl(coverUrl)) : undefined
   } catch {
     // A missing or malformed cover should not prevent importing the book.
   }
