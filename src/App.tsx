@@ -145,7 +145,13 @@ import {
 import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
 import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
-import { syncAccountBundle, syncAccountLibrary, syncAccountSettings } from './lib/accountLibrary'
+import {
+  syncAccountBundle,
+  syncAccountLibrary,
+  syncAccountPreferences,
+  syncAccountSettings,
+} from './lib/accountLibrary'
+import { backUpAssets } from './lib/assetFiles'
 import { openBookFile } from './lib/bookFiles'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import {
@@ -585,6 +591,35 @@ function App() {
       window.clearTimeout(timer)
     }
   }, [authUserId, settings])
+  // The small things kept on the device (name, pictures, saved searches, reading diary) and the font follow the account too.
+  useEffect(() => {
+    if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
+    let cancelled = false
+    const run = async () => {
+      try {
+        const taken = await syncAccountPreferences()
+        await backUpAssets()
+        if (cancelled || taken.length === 0) return
+        // Just opened: refresh straight away. Otherwise let the reader choose the moment.
+        if (performance.now() < 20000) window.location.reload()
+        else showNotice('Your account has newer preferences. Reload to use them.')
+      } catch {
+        // Quiet: it tries again later.
+      }
+    }
+    const first = window.setTimeout(() => void run(), 4000)
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void run()
+    }
+    document.addEventListener('visibilitychange', onHide)
+    const every = window.setInterval(() => void run(), 300_000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(first)
+      window.clearInterval(every)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [authUserId, settings.backup.autoSync])
   // Review cards live in local storage; recount whenever the page changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const dueCount = useMemo(() => dueCards(readReviewCards()).length, [activeNav, dataVersion, reviewRemount])

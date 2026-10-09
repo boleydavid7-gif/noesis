@@ -64,3 +64,19 @@ export function diaryDays(entries: DiaryEntry[], notes: BrainNote[]): DiaryDay[]
   }
   return [...days.values()].sort((a, b) => b.day.localeCompare(a.day))
 }
+
+/** Two copies of the reading diary combined: one line per day and book, keeping the fuller one. */
+export function mergeDiary(a: DiaryEntry[], b: DiaryEntry[]): DiaryEntry[] {
+  const merged = new Map<string, DiaryEntry>()
+  for (const entry of [...a, ...b]) {
+    const key = `${entry.day}|${entry.bookId}`
+    const current = merged.get(key)
+    if (!current || entry.minutes > current.minutes) {
+      merged.set(
+        key,
+        current ? { ...entry, from: Math.min(entry.from, current.from), to: Math.max(entry.to, current.to) } : entry,
+      )
+    }
+  }
+  return [...merged.values()].sort((x, y) => x.day.localeCompare(y.day))
+}
