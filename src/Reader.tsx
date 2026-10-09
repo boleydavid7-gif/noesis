@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   Bookmark,
   BookA,
   CloudRain,
@@ -46,7 +45,6 @@ import { canListen, startListening, type ListenBlock, type ListenController } fr
 import {
   HIGHLIGHT_COLORS,
   type BrainNote,
-  type BrainNoteKind,
   type BrainNoteLocation,
   type HighlightColor,
 } from './lib/knowledge'
@@ -55,6 +53,8 @@ import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { PdfReader } from './PdfReader'
 import { StudyPanel, type StudyInfo } from './StudyPanel'
+import { BookNotesBrowser } from './BookNotesBrowser'
+import { isBookmark, sameSpot } from './lib/bookmarks'
 import { customFontCss } from './lib/customFont'
 import { autoScrollPixelsPerSecond, pageScroll, tapZone } from './lib/readerControls'
 import { parsePdfLocation } from './lib/pdfMarks'
@@ -209,6 +209,8 @@ export function Reader({
   onSaveWord,
   initialSearch,
   onBookmark,
+  onRemoveNote,
+  onCopied,
   reading,
   onReadingChange,
   initialLocation: jumpLocation,
@@ -236,7 +238,9 @@ export function Reader({
 
   onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
   initialSearch?: string
-  onBookmark: () => void
+  onBookmark: (location: BrainNoteLocation, excerpt: string, existing?: Note) => void
+  onRemoveNote: (note: Note) => void
+  onCopied: (message: string) => void
   reading: Settings['reading']
   onReadingChange: (patch: Partial<Settings['reading']>) => void
   initialLocation?: BrainNoteLocation | null
@@ -1106,23 +1110,10 @@ export function Reader({
     if (index >= 0) goToChapterRef.current(index)
   }
   const chapterLabel = chapterCount > 0 ? `${chapterIndex + 1} of ${chapterCount}` : 'Opening'
-  const bookNotes = notes
-    .filter((note) => note.bookId === book.id || note.source.toLowerCase().includes(book.title.toLowerCase()))
-    .slice(0, 5)
-  const noteIcon = (kind: BrainNoteKind) =>
-    kind === 'highlight' ? (
-      <Highlighter size={13} />
-    ) : kind === 'question' ? (
-      <MessageCircleQuestion size={13} />
-    ) : kind === 'idea' ? (
-      <Lightbulb size={13} />
-    ) : kind === 'connection' ? (
-      <Link2 size={13} />
-    ) : (
-      <FileText size={13} />
-    )
-  const noteLocationLabel = (note: Note) =>
-    [note.chapter, note.page ? `p. ${note.page}` : ''].filter(Boolean).join(' · ')
+  const bookNotes = notes.filter(
+    (note) => note.bookId === book.id || note.source.toLowerCase().includes(book.title.toLowerCase()),
+  )
+  const hereMark = bookNotes.find((note) => isBookmark(note) && sameSpot(note, locationRef.current))
   return (
     <section
       className={
@@ -1222,12 +1213,16 @@ export function Reader({
               </select>
             ) : null}
             <button
-              className={'icon-button' + (book.bookmarked ? ' reader-bookmarked' : '')}
-              onClick={onBookmark}
-              aria-label={book.bookmarked ? 'Remove bookmark' : 'Bookmark this location'}
-              aria-pressed={Boolean(book.bookmarked)}
+              className={'icon-button' + (hereMark ? ' reader-bookmarked' : '')}
+              onClick={() => {
+                const text = book.format === 'epub' ? extractVisibleReaderText(frame.current).slice(0, 160) : ''
+                onBookmark(currentNoteLocation(), text, hereMark)
+              }}
+              aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}
+              aria-pressed={Boolean(hereMark)}
+              title={hereMark ? 'Remove the bookmark here' : 'Bookmark this spot'}
             >
-              <Bookmark size={16} fill={book.bookmarked ? 'currentColor' : 'none'} />
+              <Bookmark size={16} fill={hereMark ? 'currentColor' : 'none'} />
             </button>
             {book.format === 'epub' ? (
               <button
@@ -1757,29 +1752,16 @@ export function Reader({
               </button>
             </div>
             <div className="reader-notes-heading">
-              <span>From this book</span>
+              <span>Saved from this book</span>
               <small>{bookNotes.length}</small>
             </div>
-            {bookNotes.length > 0 ? (
-              <div className="reader-note-list">
-                {bookNotes.map((note) => (
-                  <article key={note.id}>
-                    <div className="reader-note-kind">
-                      {noteIcon(note.kind)}
-                      <span>{note.title}</span>
-                    </div>
-                    {note.quote ? <blockquote className="reader-note-quote">{note.quote}</blockquote> : null}
-                    <p>{note.body}</p>
-                    <small>{noteLocationLabel(note) || note.source}</small>
-                    <button className="reader-note-open" onClick={() => onOpenNote(note)}>
-                      <BookOpen size={11} /> Open in book
-                    </button>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="reader-rail-empty">Your highlights and reflections will stay here with this book.</p>
-            )}
+            <BookNotesBrowser
+              notes={bookNotes}
+              book={book}
+              onOpen={onOpenNote}
+              onRemove={onRemoveNote}
+              onCopied={onCopied}
+            />
             <button
               className="reader-ask-button"
               onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
@@ -1804,6 +1786,9 @@ export function Reader({
             cfi: book.cfi,
           }}
           onNote={onNote}
+          onOpenNote={onOpenNote}
+          onRemoveNote={onRemoveNote}
+          onCopied={onCopied}
           study={study}
           onTick={onTick}
           onTopicNote={onTopicNote ? (topic) => onTopicNote(topic, currentNoteLocation()) : undefined}
@@ -1882,12 +1867,18 @@ function ReaderWideSidebar({
   notes,
   location,
   onNote,
+  onOpenNote,
+  onRemoveNote,
+  onCopied,
   study,
   onTick,
   onTopicNote,
   onAsk,
   onClose,
 }: {
+  onOpenNote: (note: Note) => void
+  onRemoveNote: (note: Note) => void
+  onCopied: (message: string) => void
   study?: StudyInfo | null
   onTick?: (topicId: string) => void
   onTopicNote?: (topic: string) => void
@@ -1929,20 +1920,7 @@ function ReaderWideSidebar({
           <span>From this book</span>
           <small>{notes.length}</small>
         </div>
-        {notes.length ? (
-          notes.slice(0, 4).map((note) => (
-            <article className="reader-wide-note" key={note.id}>
-              <strong>{note.title}</strong>
-              <p>{note.body}</p>
-              <small>
-                {note.chapter || book.chapter || 'Current location'}
-                {note.page ? ` · p. ${note.page}` : ''}
-              </small>
-            </article>
-          ))
-        ) : (
-          <p className="reader-wide-empty">Your captured thoughts will stay connected to this chapter.</p>
-        )}
+        <BookNotesBrowser notes={notes} book={book} onOpen={onOpenNote} onRemove={onRemoveNote} onCopied={onCopied} />
       </div>
       <div className="reader-wide-tutor">
         <div>

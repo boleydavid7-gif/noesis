@@ -7,13 +7,15 @@ import type { LibraryBook } from './lib/library'
 import { relatedNotes } from './lib/related'
 import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
+import { isBookmark } from './lib/bookmarks'
 import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteKind, type HighlightColor } from './lib/knowledge'
 
-type TabId = 'all' | 'highlight' | 'thoughts' | 'elsewhere' | 'words' | 'diary'
+type TabId = 'all' | 'highlight' | 'thoughts' | 'bookmarks' | 'elsewhere' | 'words' | 'diary'
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'all', label: 'Everything' },
   { id: 'highlight', label: 'Highlights' },
   { id: 'thoughts', label: 'My thoughts' },
+  { id: 'bookmarks', label: 'Bookmarks' },
   { id: 'words', label: 'Words' },
   { id: 'elsewhere', label: 'From elsewhere' },
   { id: 'diary', label: 'Diary' },
@@ -110,12 +112,14 @@ export function SecondBrainPage({
         tab === 'all' || tab === 'diary'
           ? true
           : tab === 'elsewhere'
-            ? !note.bookId && !(note.tags ?? []).includes('word')
+            ? !note.bookId && !(note.tags ?? []).includes('word') && !isBookmark(note)
             : tab === 'words'
               ? (note.tags ?? []).includes('word')
-              : tab === 'thoughts'
-                ? note.kind !== 'highlight' && !(note.tags ?? []).includes('word')
-                : note.kind === tab,
+              : tab === 'bookmarks'
+                ? isBookmark(note)
+                : tab === 'thoughts'
+                  ? note.kind !== 'highlight' && !(note.tags ?? []).includes('word') && !isBookmark(note)
+                  : note.kind === tab,
       )
       .filter(
         (note) =>

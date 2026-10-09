@@ -80,6 +80,7 @@ import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
+import { BOOKMARK_TAG, isBookmark } from './lib/bookmarks'
 import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
 import { applyImages } from './lib/images'
 import { notesToZip } from './lib/exportNotes'
@@ -1280,15 +1281,23 @@ function App() {
     }
     setBooks(upsertLibraryBook(changed))
   }
-  function toggleBookmark(id: string) {
-    setBooks((current) => {
-      const next = current.map((book) =>
-        book.id === id ? { ...book, bookmarked: !book.bookmarked, updated: new Date().toISOString() } : book,
-      )
-      const changed = next.find((book) => book.id === id)
-      if (changed) upsertLibraryBook(changed)
-      return next
+  // A bookmark is a saved place with the words found there. Pressing again at the same place takes it off.
+  function toggleBookmark(location: BrainNoteLocation, excerpt: string, existing?: Note) {
+    if (existing) {
+      removeNote(existing)
+      return
+    }
+    const label = location.chapter || 'Bookmark'
+    void addNote({
+      title: label,
+      body: excerpt || label,
+      source: `${location.bookTitle ?? 'Noesis'}${location.chapter ? ` · ${location.chapter}` : ''}${location.page ? ` · p. ${location.page}` : ''}`,
+      kind: 'note',
+      tags: [BOOKMARK_TAG],
+      location,
+      quiet: true,
     })
+    showNotice('Bookmarked.')
   }
   async function saveNote(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1407,6 +1416,7 @@ function App() {
     }
     const contextText = settings.ai.useNotes
       ? notes
+          .filter((note) => !isBookmark(note))
           .slice(0, 30)
           .map((note) => `${note.title} (${note.source}): ${note.body}`)
           .join('\n\n')
@@ -2855,7 +2865,9 @@ function App() {
         onHighlight={saveHighlight}
         onHighlightEdit={changeHighlight}
         initialSearch={readerSearch}
-        onBookmark={() => toggleBookmark(selectedBook.id)}
+        onBookmark={toggleBookmark}
+        onRemoveNote={removeNote}
+        onCopied={showNotice}
         reading={settings.reading}
         onReadingChange={(patch) => updateSettings({ ...settings, reading: { ...settings.reading, ...patch } })}
         initialLocation={readerJump}
@@ -3906,7 +3918,7 @@ function ResurfaceCard({
   onNotice: (message: string) => void
 }) {
   const [day] = useState(() => Math.floor(Date.now() / 86_400_000))
-  const pool = notes.filter((note) => note.body.trim().length >= 40)
+  const pool = notes.filter((note) => note.body.trim().length >= 40 && !isBookmark(note))
   if (pool.length === 0) return null
   // One note per day, and "Another" moves along the list.
   const note = pool[(day + shuffle) % pool.length]
