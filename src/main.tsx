@@ -3,14 +3,18 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { installNativeApi } from './lib/nativeApi'
+import { startLibrary } from './lib/library'
 
 installNativeApi()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// The library is read into memory first, so the app opens with every book in place.
+void startLibrary().finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+})
 
 // Keeps the app available offline once it has been opened.
 if (
