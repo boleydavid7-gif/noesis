@@ -77,7 +77,7 @@ import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
 import { resumeLine } from './lib/resume'
-import { discoverQuery, interestTerms, libraryPicks, onboardingSteps } from './lib/readNext'
+import { discoverQuery, interestTerms, libraryPicks } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
@@ -332,13 +332,6 @@ function App() {
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
-  const [hideChecklist, setHideChecklist] = useState(() => {
-    try {
-      return localStorage.getItem('noesis:onboarding:done') === '1'
-    } catch {
-      return false
-    }
-  })
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -2090,28 +2083,6 @@ function App() {
               <GoalCard books={books} goal={settings.library.goal} onEdit={() => openSettings('library')} />
             ) : null}
           </div>
-        ) : null}
-        {learner && books.length + paths.length + notes.length > 0 ? (
-          <HomeChecklist
-            steps={onboardingSteps({ books, noteCount: notes.length, pathCount: paths.length }).filter(
-              (step) => learner || step.id !== 'plan',
-            )}
-            hidden={hideChecklist}
-            onHide={() => {
-              setHideChecklist(true)
-              try {
-                localStorage.setItem('noesis:onboarding:done', '1')
-              } catch {
-                // The checklist simply returns next time.
-              }
-            }}
-            onStep={(id) => {
-              if (id === 'add') fileInput.current?.click()
-              else if (id === 'read') selectNav('Library')
-              else if (id === 'note') selectNav('Notes')
-              else selectNav('Learning Paths')
-            }}
-          />
         ) : null}
         {learner ? (
           <ReadNextCard
@@ -4013,48 +3984,6 @@ function PathsGuide() {
           <b>Tick a topic when you could explain it.</b> Read next always tells you what to pick up.
         </li>
       </ol>
-    </section>
-  )
-}
-
-function HomeChecklist({
-  steps,
-  hidden,
-  onHide,
-  onStep,
-}: {
-  steps: ReturnType<typeof onboardingSteps>
-  hidden: boolean
-  onHide: () => void
-  onStep: (id: string) => void
-}) {
-  const done = steps.filter((step) => step.done).length
-  if (hidden || done === steps.length) return null
-  return (
-    <section className="checklist-card panel-card" aria-label="Getting started">
-      <div className="checklist-head">
-        <strong>
-          Getting started · {done} of {steps.length}
-        </strong>
-        <button className="text-button" onClick={onHide}>
-          Hide
-        </button>
-      </div>
-      <ul>
-        {steps.map((step) => (
-          <li key={step.id} className={step.done ? 'checklist-done' : ''}>
-            {step.done ? (
-              <span>
-                <Check size={14} /> {step.label}
-              </span>
-            ) : (
-              <button className="text-button" onClick={() => onStep(step.id)}>
-                {step.label}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
     </section>
   )
 }
