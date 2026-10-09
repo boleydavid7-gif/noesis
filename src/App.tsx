@@ -3956,32 +3956,29 @@ function PathsGuide() {
   return (
     <section className="paths-guide panel-card" aria-label="How paths work">
       <div className="paths-guide-head">
-        <strong>How to get the most from a path</strong>
+        <strong>How paths work</strong>
         <button className="text-button" onClick={close}>
           Got it
         </button>
       </div>
       <ol>
         <li>
-          <b>Say what you want to learn.</b> Pick one focus from the choices, so the books stay on what you want.
+          <b>Name what you want to learn.</b>
         </li>
         <li>
-          <b>Work one stage at a time.</b> Each stage has a few topics and a book or link to read.
+          <b>Take one stage at a time.</b>
         </li>
         <li>
-          <b>Read the book, not the app.</b> Highlight what matters. While you read, the stage and its topics sit beside
-          the page.
+          <b>Read the book, not the app.</b>
         </li>
         <li>
-          <b>Write in your own words.</b> Use the note button next to a topic. Putting an idea in your words is what
-          makes it stick.
+          <b>Write it in your own words.</b>
         </li>
         <li>
-          <b>Ask Noema when you are stuck.</b> Select a passage and ask. Nothing is graded, and you can ask to be
-          quizzed whenever you like.
+          <b>Ask Noema when stuck.</b>
         </li>
         <li>
-          <b>Tick a topic when you could explain it.</b> Read next always tells you what to pick up.
+          <b>Tick a topic when you can explain it.</b>
         </li>
       </ol>
     </section>
