@@ -9691,3 +9691,41 @@ input[type='radio'] {
 .reader-wide-topbar {
   background: var(--surface-deep, #07121c);
 }
+
+/* The side gutter must shrink the page, not push the layout wider. */
+.reader-page-wide .reader-workspace-grid {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Remaining blue bits in the expanded reader. */
+.reader-wide-location {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.08);
+}
+.reader-wide-chapter-select,
+.reader-wide-capture,
+.reader-wide-capture select,
+.reader-wide-actions .icon-button,
+.reader-wide-sidebar .noema-panel button,
+.reader-wide-sidebar .noema-reader-context {
+  background-color: var(--surface-pop, #0a1626);
+  background-image: none;
+}
+.reader-wide-sidebar .noema-reader-context,
+.reader-wide-sidebar-section h3,
+.reader-wide-sidebar-section h2 {
+  background: transparent;
+}
+.reader-wide-actions .icon-button.reader-listening {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+}
+.reader-wide-tutor h3,
+.reader-wide-tutor strong {
+  background: transparent;
+}
+.reader-wide-tutor .secondary-button {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+}
+.reader-wide-tutor > div { background: transparent; }
