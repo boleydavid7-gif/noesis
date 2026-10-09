@@ -47,6 +47,51 @@ function normalizeEpubData(file: ArrayBuffer): ArrayBuffer {
   return copy
 }
 
+export class EpubProtectedError extends Error {
+  constructor() {
+    super(
+      'This EPUB is copy-protected (DRM), so its pages are scrambled and Noesis cannot read it. ' +
+        'Books with no copy protection work, such as Standard Ebooks or Project Gutenberg.',
+    )
+  }
+}
+
+// Font obfuscation is not copy protection; the text stays readable.
+const FONT_ONLY = ['http://www.idpf.org/2008/embedding', 'http://ns.adobe.com/pdf/enc#RC']
+const FONT_FILE = /\.(otf|ttf|woff2?|eot)$/i
+
+/** Throws EpubProtectedError when the book's pages are encrypted rather than plain. */
+export async function assertNotProtected(file: ArrayBuffer): Promise<void> {
+  let xml: string | undefined
+  try {
+    const { default: JSZip } = await import('jszip')
+    const zip = await JSZip.loadAsync(file.slice(0))
+    xml = await zip.file('META-INF/encryption.xml')?.async('string')
+  } catch {
+    return
+  }
+  if (!xml) return
+  for (const block of xml.match(/<(?:\w+:)?EncryptedData[\s\S]*?<\/(?:\w+:)?EncryptedData>/gi) ?? []) {
+    const algorithm = /Algorithm=["']([^"']+)["']/i.exec(block)?.[1] ?? ''
+    const uri = /<(?:\w+:)?CipherReference[^>]*URI=["']([^"']+)["']/i.exec(block)?.[1] ?? ''
+    if (FONT_ONLY.includes(algorithm) || FONT_FILE.test(uri)) continue
+    throw new EpubProtectedError()
+  }
+}
+
+/** True when text is mostly binary noise (replacement marks and control characters), as in scrambled pages. */
+export function looksScrambled(text: string): boolean {
+  const sample = text.slice(0, 4000)
+  if (sample.length < 40) return false
+  let noise = 0
+  for (const char of sample) {
+    const code = char.charCodeAt(0)
+    if (code === 0xfffd || (code < 32 && code !== 10 && code !== 13 && code !== 9) || (code >= 0x7f && code < 0xa0))
+      noise += 1
+  }
+  return noise / sample.length > 0.03
+}
+
 export function spineSections(book: Book): Array<{ index: number; href?: string }> {
   const sections = (book.spine as unknown as { spineItems?: Array<{ index: number; href?: string }> }).spineItems
   return Array.isArray(sections) ? sections : []
@@ -63,6 +108,7 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
   const { default: ePub } = await import('epubjs')
   const book = ePub()
   const input = normalizeEpubData(file)
+  await assertNotProtected(input)
   await book.open(input, 'binary')
   const metadata = await book.loaded.metadata
   let navigation: NavItem[] = []
@@ -100,6 +146,7 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
   } catch {
     // Text indexing is an enhancement; the EPUB can still be read normally.
   }
+  if (looksScrambled(textParts.join(' '))) throw new EpubProtectedError()
   const fallbackTitle =
     filename
       .replace(/\.epub$/i, '')
@@ -119,7 +166,9 @@ export async function parseEpub(file: ArrayBuffer, filename: string): Promise<Pa
 export async function openEpub(file: ArrayBuffer): Promise<Book> {
   const { default: ePub } = await import('epubjs')
   const book = ePub()
-  await book.open(normalizeEpubData(file), 'binary')
+  const input = normalizeEpubData(file)
+  await assertNotProtected(input)
+  await book.open(input, 'binary')
   return book
 }
 
