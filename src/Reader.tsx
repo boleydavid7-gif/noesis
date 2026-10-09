@@ -1341,6 +1341,16 @@ export function Reader({
             >
               <PanelRight size={16} />
             </button>
+            {book.format === 'epub' ? (
+              <button
+                className="icon-button"
+                onClick={() => setWideLayout(true)}
+                aria-label="Expand"
+                title="Expand to fill the screen"
+              >
+                <Maximize2 size={16} />
+              </button>
+            ) : null}
             <button
               className={'icon-button' + (moreOpen ? ' reader-listening' : '')}
               onClick={() => setMoreOpen((value) => !value)}
@@ -1434,9 +1444,6 @@ export function Reader({
                                 <option value="contrast">High contrast</option>
                               </select>
                             </label>
-                            <button className="secondary-button" onClick={() => setWideLayout(true)}>
-                              <Maximize2 size={14} /> Expand
-                            </button>
                           </div>
                         ) : null}
                         {book.format === 'epub' && onOwnLook ? (
@@ -1613,9 +1620,6 @@ export function Reader({
             <option value="night">Night</option>
             <option value="contrast">High contrast</option>
           </select>
-          <button className="secondary-button" onClick={() => setWideLayout(true)}>
-            <Maximize2 size={14} /> Expand
-          </button>
         </div>
       ) : null}
       {!wideLayout && book.format === 'epub' ? (
