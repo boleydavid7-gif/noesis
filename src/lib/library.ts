@@ -41,29 +41,136 @@ export type LibraryBook = {
 
 const BOOKS_KEY = 'noesis:library:v2'
 const DB_NAME = 'noesis-library'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const FILE_STORE = 'epub-files'
 const TEXT_STORE = 'book-text'
+const LIST_STORE = 'library-list'
+const LIST_KEY = 'books'
 
 function storage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage
 }
 
+function validBooks(value: unknown): LibraryBook[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is LibraryBook => {
+    if (!item || typeof item !== 'object') return false
+    const book = item as Record<string, unknown>
+    return typeof book.id === 'string' && typeof book.title === 'string' && typeof book.author === 'string'
+  })
+}
+
+// Once started, the list lives in memory and is saved to IndexedDB, which holds far more than the
+// few megabytes browser storage allows. Before that (and where IndexedDB is missing) the old storage is used.
+let cache: LibraryBook[] | null = null
+let saving: Promise<void> = Promise.resolve()
+const listeners = new Set<() => void>()
+let channel: BroadcastChannel | null = null
+
+/** Runs when another tab changes the library, after this tab has caught up. Returns a way to stop. */
+export function onLibraryChanged(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 export function readLibraryBooks(): LibraryBook[] {
+  if (cache) return cache
   try {
-    const value = JSON.parse(storage()?.getItem(BOOKS_KEY) ?? '[]') as unknown
-    if (!Array.isArray(value)) return []
-    return value.filter((item): item is LibraryBook => {
-      if (!item || typeof item !== 'object') return false
-      const book = item as Record<string, unknown>
-      return typeof book.id === 'string' && typeof book.title === 'string' && typeof book.author === 'string'
-    })
+    return validBooks(JSON.parse(storage()?.getItem(BOOKS_KEY) ?? '[]'))
   } catch {
     return []
   }
 }
 
+async function readSavedList(): Promise<unknown> {
+  const db = await openDatabase()
+  try {
+    return await new Promise<unknown>((resolve, reject) => {
+      const request = db.transaction(LIST_STORE, 'readonly').objectStore(LIST_STORE).get(LIST_KEY)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error ?? new Error('Could not read the library.'))
+    })
+  } finally {
+    db.close()
+  }
+}
+
+async function saveList(books: LibraryBook[]): Promise<void> {
+  const db = await openDatabase()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(LIST_STORE, 'readwrite')
+      transaction.objectStore(LIST_STORE).put(books, LIST_KEY)
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error ?? new Error('Could not save the library.'))
+      transaction.onabort = () => reject(transaction.error ?? new Error('Could not save the library.'))
+    })
+  } finally {
+    db.close()
+  }
+}
+
+function listenForOtherTabs() {
+  if (channel || typeof BroadcastChannel === 'undefined') return
+  channel = new BroadcastChannel('noesis-library')
+  channel.onmessage = () => {
+    void saving
+      .then(readSavedList)
+      .then((saved) => {
+        if (saved === undefined) return
+        cache = validBooks(saved)
+        for (const listener of listeners) listener()
+      })
+      .catch(() => undefined)
+  }
+}
+
+/**
+ * Loads the library into memory. Call once before the app starts. The first time, the list kept by
+ * older versions in browser storage is moved over, and removed only after it is safely saved.
+ */
+export async function startLibrary(): Promise<void> {
+  if (cache) return
+  try {
+    listenForOtherTabs()
+    const saved = await readSavedList()
+    if (saved !== undefined) {
+      cache = validBooks(saved)
+      return
+    }
+    const old = readLibraryBooks()
+    await saveList(old)
+    cache = old
+    try {
+      storage()?.removeItem(BOOKS_KEY)
+    } catch {
+      // The copy in browser storage is harmless; it is no longer read.
+    }
+    void navigator.storage?.persist?.().catch(() => undefined)
+  } catch {
+    // No IndexedDB (a private window, an old browser): keep using browser storage as before.
+    cache = null
+  }
+}
+
 export function writeLibraryBooks(books: LibraryBook[]): void {
+  if (cache) {
+    cache = books
+    saving = saving
+      .then(() => saveList(books))
+      .then(() => channel?.postMessage('changed'))
+      .catch(() => undefined)
+    return
+  }
+  writeToBrowserStorage(books)
+}
+
+/** Resolves when everything written so far has reached IndexedDB. */
+export function libraryIdle(): Promise<void> {
+  return saving
+}
+
+function writeToBrowserStorage(books: LibraryBook[]): void {
   const target = storage()
   if (!target) return
   try {
@@ -139,6 +246,7 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(FILE_STORE)) request.result.createObjectStore(FILE_STORE)
       if (!request.result.objectStoreNames.contains(TEXT_STORE)) request.result.createObjectStore(TEXT_STORE)
+      if (!request.result.objectStoreNames.contains(LIST_STORE)) request.result.createObjectStore(LIST_STORE)
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('Could not open local book storage.'))

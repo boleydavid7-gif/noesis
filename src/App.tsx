@@ -68,6 +68,7 @@ import {
   removeLibraryBook,
   saveBookText,
   saveEpubFile,
+  onLibraryChanged,
   shrinkStoredCovers,
   upsertLibraryBook,
   writeLibraryBooks,
@@ -522,6 +523,8 @@ function App() {
     }
   }, [])
   const focusSignature = JSON.stringify(focusToSync(focusState))
+  // Another tab changed the library: show it here too.
+  useEffect(() => onLibraryChanged(() => setBooks(readLibraryBooks())), [])
   // Older versions saved covers at full size; reduce them once so many books fit in browser storage.
   useEffect(() => {
     void shrinkStoredCovers()
