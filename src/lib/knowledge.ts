@@ -3,7 +3,8 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 
 export type BrainNoteKind = 'highlight' | 'idea' | 'question' | 'note' | 'connection'
 
-export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | 'purple' | 'teal'
+export type HighlightColor =
+  'yellow' | 'green' | 'blue' | 'pink' | 'orange' | 'purple' | 'teal' | 'red' | 'lime' | 'sky' | 'brown' | 'gray'
 export const HIGHLIGHT_COLORS: Array<{ id: HighlightColor; label: string; css: string }> = [
   { id: 'yellow', label: 'Yellow', css: '#f2d46b' },
   { id: 'green', label: 'Green', css: '#86d19a' },
@@ -12,6 +13,11 @@ export const HIGHLIGHT_COLORS: Array<{ id: HighlightColor; label: string; css: s
   { id: 'orange', label: 'Orange', css: '#f0a868' },
   { id: 'purple', label: 'Purple', css: '#b79cef' },
   { id: 'teal', label: 'Teal', css: '#6fd3c9' },
+  { id: 'red', label: 'Red', css: '#f07a76' },
+  { id: 'lime', label: 'Lime', css: '#bfe063' },
+  { id: 'sky', label: 'Sky', css: '#7fd4f4' },
+  { id: 'brown', label: 'Brown', css: '#c9a078' },
+  { id: 'gray', label: 'Gray', css: '#c3c8d0' },
 ]
 
 export type BrainNoteLocation = {

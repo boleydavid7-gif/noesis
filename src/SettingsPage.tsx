@@ -9,6 +9,7 @@ import {
   FONT_STACKS,
   READER_COLORS,
   SURFACES,
+  SURFACE_SWATCH,
   updateSetting,
   type AccentName,
   type Settings,
@@ -382,7 +383,7 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
               aria-label={SURFACES[name].label}
               title={SURFACES[name].label}
               className={appearance.surface === name ? 'swatch swatch-on' : 'swatch'}
-              style={{ background: SURFACES[name].vars['--surface-main-b'] ?? '#071d34' }}
+              style={{ background: SURFACE_SWATCH[name] }}
               onClick={() => set('appearance', 'surface', name)}
             />
           ))}
@@ -441,7 +442,7 @@ function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
           >
             Original
           </button>
-          {SCENES.filter((scene) => slot === 'sidebar' || scene.banner).map((scene) => (
+          {SCENES.filter((scene) => (slot === 'sidebar' ? !scene.banner : Boolean(scene.banner))).map((scene) => (
             <button
               key={scene.id}
               type="button"
