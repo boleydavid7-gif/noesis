@@ -449,7 +449,14 @@ function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
               aria-label={scene.label}
               title={scene.label}
               className={current === scene.id ? 'image-option image-option-on' : 'image-option'}
-              style={{ background: `center / cover url("${scene.banner ?? scene.sidebar}")`, minWidth: 64 }}
+              style={{
+                background:
+                  slot === 'sidebar'
+                    ? `center bottom / cover url("${scene.sidebar}")`
+                    : `center / cover url("${scene.banner ?? scene.sidebar}")`,
+                minWidth: 64,
+                height: slot === 'sidebar' ? 56 : undefined,
+              }}
               onClick={() => choose(scene.id)}
             />
           ))}
