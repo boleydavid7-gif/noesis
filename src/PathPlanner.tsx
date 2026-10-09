@@ -17,6 +17,7 @@ import {
 import {
   EXAMPLE_GOALS,
   addMaterials,
+  isRecent,
   stageHours,
   withSchedule,
   milestoneDone,
@@ -940,7 +941,7 @@ export function PathPlanner({
           <div className="planner-paths">
             {paths.map((path) => {
               const expanded = open === path.id
-              const own = booksByPath[path.id] ?? []
+              const own = (booksByPath[path.id] ?? []).filter((book) => !path.fastChanging || isRecent(book.year))
               return (
                 <article className="planner-path panel-card" key={path.id}>
                   <h4>{path.title}</h4>

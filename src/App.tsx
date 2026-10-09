@@ -106,8 +106,16 @@ import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
-import { addPicks, advanceTopic, currentTopic, matchScore, planProgress, type LearningPath } from './lib/pathPlan'
-import { requestTopicBooks } from './lib/pathClient'
+import {
+  addPicks,
+  advanceTopic,
+  currentTopic,
+  isRecent,
+  matchScore,
+  planProgress,
+  type LearningPath,
+} from './lib/pathPlan'
+import { requestTopicBooks, resolveBooks } from './lib/pathClient'
 import { currentStage, libraryBooksForStage, readNextOnPath, studyFor } from './lib/pathLink'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
@@ -1146,9 +1154,18 @@ function App() {
         stage: here.milestone.title,
         topic: here.topic.label,
         level: plan.level,
+        recent: plan.fastChanging,
         exclude: [...(here.topic.picks ?? []).map((pick) => pick.title), ...(here.milestone.bookTitles ?? [])],
       })
-      const updated = { ...path, plan: addPicks(plan, here.topic.id, found), updated: new Date().toISOString() }
+      // The catalogue knows the real year, so it overrides the AI's guess; books it cannot find are dropped.
+      const checked = await resolveBooks(found)
+      const withYears = found
+        .map((candidate) => {
+          const real = checked.find((book) => matchScore(book, candidate.title, candidate.author) > 0)
+          return real || checked.length === 0 ? { ...candidate, year: real?.year ?? candidate.year } : null
+        })
+        .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+      const updated = { ...path, plan: addPicks(plan, here.topic.id, withYears), updated: new Date().toISOString() }
       setPaths((current) => {
         const next = current.map((item) => (item.id === updated.id ? updated : item))
         writePaths(next)
@@ -4342,6 +4359,7 @@ function RecommendedShelf({
   onMore: (path: LearningPath) => void
   working: boolean
 }) {
+  const [older, setOlder] = useState(false)
   const active = paths.flatMap((path) => {
     const here = path.plan ? currentTopic(path.plan) : null
     return here ? [{ path, here }] : []
@@ -4351,14 +4369,29 @@ function RecommendedShelf({
   const ownedFor = (title: string) =>
     books.find((book) => matchScore({ title: book.title, authors: [book.author] }, title, '') > 0)
   const mine = libraryBooksForStage(here.milestone, books).filter((book) => !book.finished && book.progress < 98)
-  const picks = here.topic.picks ?? []
+  const allPicks = here.topic.picks ?? []
+  const limited = Boolean(path.plan?.fastChanging)
+  const picks = limited && !older ? allPicks.filter((pick) => isRecent(pick.year)) : allPicks
+  const hidden = allPicks.length - picks.length
   const rows = [
-    ...mine.map((book) => ({ key: book.id, title: book.title, author: book.author, book })),
+    ...mine.map((book) => ({
+      key: book.id,
+      title: book.title,
+      author: book.author,
+      year: undefined as number | undefined,
+      book,
+    })),
     ...picks
       .filter(
         (pick) => !mine.some((book) => matchScore({ title: book.title, authors: [book.author] }, pick.title, '') > 0),
       )
-      .map((pick) => ({ key: pick.title, title: pick.title, author: pick.author, book: ownedFor(pick.title) })),
+      .map((pick) => ({
+        key: pick.title,
+        title: pick.title,
+        author: pick.author,
+        year: pick.year,
+        book: ownedFor(pick.title),
+      })),
   ]
   return (
     <section className="section-block recommended-shelf" aria-label="Recommended next">
@@ -4391,12 +4424,19 @@ function RecommendedShelf({
               </div>
               <strong>{row.title}</strong>
               {row.author ? <span>{row.author}</span> : null}
+              {row.year ? <small>{row.year}</small> : null}
               <small>{row.book ? (row.book.progress > 0 ? 'Carry on' : 'Start') : 'Find a copy'}</small>
             </button>
           ))}
         </div>
       )}
       <div className="recommended-actions">
+        {limited && (hidden > 0 || older) ? (
+          <label className="recommended-older">
+            <input type="checkbox" checked={older} onChange={(event) => setOlder(event.target.checked)} />
+            Include older books{hidden > 0 && !older ? ` (${hidden} hidden)` : ''}
+          </label>
+        ) : null}
         <button className="secondary-button" disabled={working} onClick={() => onMore(path)}>
           <Search size={14} /> {working ? 'Finding…' : `More on ${here.topic.label}`}
         </button>

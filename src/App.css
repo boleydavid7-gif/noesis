@@ -9542,3 +9542,17 @@ input[type='radio'] {
   background: var(--gold-warm, #c7a36a);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+.recommended-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.recommended-older {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.85;
+}
