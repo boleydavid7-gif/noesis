@@ -200,6 +200,7 @@ export function Reader({
   onNote,
   onOpenNote,
   onAsk,
+  learner,
   study,
   onTick,
   onTopicNote,
@@ -232,6 +233,7 @@ export function Reader({
   onNote: ReaderNoteHandler
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
+  learner?: boolean
   study?: StudyInfo | null
   onTick?: (topicId: string) => void
   onTopicNote?: (topic: string, location: BrainNoteLocation) => void
@@ -461,7 +463,7 @@ export function Reader({
   )
   // At the bottom of a long chapter a quiet card offers a pause. It appears once per chapter and never blocks reading.
   useEffect(() => {
-    if (book.format !== 'epub' || loading || !reading.chapterEnd) return
+    if (book.format !== 'epub' || loading || !reading.chapterEnd || !learner) return
     const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container')
     if (!container) return
     const check = () => {
@@ -473,7 +475,7 @@ export function Reader({
     }
     container.addEventListener('scroll', check, { passive: true })
     return () => container.removeEventListener('scroll', check)
-  }, [book.format, book.id, loading, reading.chapterEnd, chapterIndexRef])
+  }, [book.format, book.id, loading, reading.chapterEnd, learner, chapterIndexRef])
   const closeChapterEnd = () => {
     if (chapterEnd !== null) dismissedEnds.current.add(`${book.id}:${chapterEnd}`)
     setChapterEnd(null)
