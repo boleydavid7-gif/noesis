@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { libraryBooksForStage, readNextOnPath, studyFor } from './pathLink'
+import { currentStage, libraryBooksForStage, readNextOnPath, studyFor } from './pathLink'
 import type { LearningPath } from './pathPlan'
 
 const path = (bookIds: string[] = []): LearningPath => ({
@@ -58,10 +58,9 @@ describe('readNextOnPath', () => {
   it('starts one that is in the library but unopened', () => {
     expect(readNextOnPath(p, [{ id: '1', title: 'Letters from a Stoic', progress: 0 }])?.kind).toBe('start')
   })
-  it('says so when the stage books are all finished', () => {
-    expect(readNextOnPath(p, [{ id: '1', title: 'Letters from a Stoic', progress: 100, finished: 'x' }])?.kind).toBe(
-      'finished-all',
-    )
+  it('finishes the path when the last stage books are finished', () => {
+    const next = readNextOnPath(p, [{ id: '1', title: 'Letters from a Stoic', progress: 100, finished: 'x' }])
+    expect(next).toBeNull()
   })
   it('suggests getting a named book that is not in the library', () => {
     expect(readNextOnPath(p, [])).toMatchObject({ kind: 'get', title: 'Letters from a Stoic' })
@@ -75,5 +74,14 @@ describe('readNextOnPath', () => {
     const complete = path()
     for (const milestone of complete.plan!.milestones) for (const topic of milestone.topics) topic.done = true
     expect(readNextOnPath(complete, [])).toBeNull()
+  })
+})
+
+describe('moving on', () => {
+  it('skips a stage the reader moved past', () => {
+    const moved = path()
+    moved.plan!.milestones[1].moved = true
+    expect(readNextOnPath(moved, [])).toBeNull()
+    expect(currentStage(path(), [])?.milestone.id).toBe('m2')
   })
 })

@@ -105,8 +105,9 @@ import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
-import { planProgress, toggleTopic, type LearningPath } from './lib/pathPlan'
-import { readNextOnPath, studyFor } from './lib/pathLink'
+import { addMaterials, moveOn, planProgress, type LearningPath } from './lib/pathPlan'
+import { requestMaterials, resolveBooks } from './lib/pathClient'
+import { currentStage, libraryBooksForStage, readNextOnPath, studyFor } from './lib/pathLink'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
 import { WeatherPanel } from './WeatherPanel'
@@ -332,6 +333,7 @@ function App() {
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
+  const [findingStage, setFindingStage] = useState<string | null>(null)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -1112,16 +1114,37 @@ function App() {
         : `Brought in ${created.length}. ${clips.length - created.length} were already here.`,
     )
   }
-  function tickStudyTopic(topicId: string) {
-    if (!studyLink?.path.plan) return
-    const updated = {
-      ...studyLink.path,
-      plan: toggleTopic(studyLink.path.plan, topicId),
-      updated: new Date().toISOString(),
+  // Looks for books and free links for one stage of a path, and keeps what is found on the path.
+  async function findStageMaterials(path: LearningPath, stageId: string) {
+    const plan = path.plan
+    const stage = plan?.milestones.find((item) => item.id === stageId)
+    if (!plan || !stage) return
+    setFindingStage(stageId)
+    try {
+      const found = await requestMaterials({
+        goal: plan.goal,
+        stage: stage.title,
+        topics: stage.topics.map((topic) => topic.label),
+        level: plan.level,
+      })
+      const resolved = await resolveBooks(found.books)
+      if (resolved.length === 0 && found.resources.length === 0) {
+        showNotice('Nothing turned up for this stage. Try again in a moment.')
+        return
+      }
+      const updated = {
+        ...path,
+        plan: addMaterials(plan, stageId, resolved, found.resources),
+        updated: new Date().toISOString(),
+      }
+      const next = paths.map((item) => (item.id === updated.id ? updated : item))
+      setPaths(next)
+      writePaths(next)
+    } catch (reason) {
+      showNotice(reason instanceof Error ? reason.message : 'Could not find materials right now.')
+    } finally {
+      setFindingStage(null)
     }
-    const next = paths.map((path) => (path.id === updated.id ? updated : path))
-    setPaths(next)
-    writePaths(next)
   }
   function openTopicNote(title: string, source: string) {
     setNoteDraft({ title, body: '', source, kind: 'note' })
@@ -2126,6 +2149,23 @@ function App() {
         ) : null}
         {fresh ? null : (
           <>
+            {learner ? (
+              <RecommendedShelf
+                paths={paths}
+                books={books}
+                onOpenBook={openSavedBook}
+                onOpenPath={() => selectNav('Learning Paths')}
+                onFind={(path, stageId) => void findStageMaterials(path, stageId)}
+                finding={findingStage}
+                onMoveOn={(path, stageId) => {
+                  if (!path.plan) return
+                  const updated = { ...path, plan: moveOn(path.plan, stageId), updated: new Date().toISOString() }
+                  const next = paths.map((item) => (item.id === updated.id ? updated : item))
+                  setPaths(next)
+                  writePaths(next)
+                }}
+              />
+            ) : null}
             <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
             {learner ? (
               <FreeCopyContext.Provider value={addResource}>
@@ -2896,7 +2936,6 @@ function App() {
         onOpenNote={openNoteLocation}
         learner={learner}
         study={studyInfo}
-        onTick={tickStudyTopic}
         onTopicNote={(topic, location) => {
           const source = [studyLink?.path.title, studyLink?.milestone.title].filter(Boolean).join(' · ')
           setNoteDraft({
@@ -4208,6 +4247,112 @@ function ShelfMenu({ mode, onChange }: { mode: ShelfMode; onChange: (mode: Shelf
 const SHELF_KEY = 'noesis:home-shelf:v1'
 type ShelfMode = 'reading' | 'added'
 
+// Under the hero: books for the stage of the path you are on. The reader decides when to move on.
+function RecommendedShelf({
+  paths,
+  books,
+  onOpenBook,
+  onOpenPath,
+  onFind,
+  onMoveOn,
+  finding,
+}: {
+  paths: LearningPath[]
+  books: LibraryBook[]
+  onOpenBook: (book: LibraryBook) => void
+  onOpenPath: () => void
+  onFind: (path: LearningPath, stageId: string) => void
+  onMoveOn: (path: LearningPath, stageId: string) => void
+  finding: string | null
+}) {
+  const active = paths.flatMap((path) => {
+    const stage = currentStage(path, books)
+    return stage ? [{ path, stage }] : []
+  })[0]
+  if (!active) return null
+  const { path, stage } = active
+  const plan = path.plan
+  if (!plan) return null
+  const owned = libraryBooksForStage(stage.milestone, books).filter((book) => !book.finished && book.progress < 98)
+  const named = (stage.milestone.bookTitles ?? []).filter(
+    (title) => !libraryBooksForStage({ ...stage.milestone, bookTitles: [title] }, books).length,
+  )
+  const topic = stage.milestone.topics.find((item) => !item.done)
+  const free = plan.resources.filter((resource) =>
+    (stage.milestone.resourceTitles ?? []).some(
+      (title) => title.trim().toLowerCase() === resource.title.trim().toLowerCase(),
+    ),
+  )
+  const empty = owned.length + named.length + free.length === 0
+  return (
+    <section className="section-block recommended-shelf" aria-label="Recommended next">
+      <div className="section-heading">
+        <div>
+          <h2>Recommended next</h2>
+          <p className="recommended-sub">
+            {path.title} · {stage.milestone.title}
+            {topic ? ` · ${topic.label}` : ''}
+          </p>
+        </div>
+        <button className="text-button" onClick={onOpenPath}>
+          Open path <ArrowRight size={14} />
+        </button>
+      </div>
+      {empty ? (
+        <div className="empty-state">
+          Nothing chosen for this stage yet.
+          <button
+            className="primary-button"
+            disabled={finding !== null}
+            onClick={() => onFind(path, stage.milestone.id)}
+          >
+            <Search size={14} /> {finding === stage.milestone.id ? 'Finding…' : 'Find materials'}
+          </button>
+        </div>
+      ) : (
+        <div className="bookshelf-row">
+          {owned.map((book) => (
+            <button className="shelf-book" key={book.id} onClick={() => onOpenBook(book)}>
+              <div className="shelf-cover">
+                <BookCover book={book} compact />
+                {book.progress > 0 ? (
+                  <span className="shelf-progress" style={{ width: `${Math.max(4, book.progress)}%` }} />
+                ) : null}
+              </div>
+              <strong>{book.title}</strong>
+              <span>{book.author}</span>
+              <small>{book.progress > 0 ? 'Carry on' : 'Start'}</small>
+            </button>
+          ))}
+          {named.map((title) => (
+            <button className="shelf-book" key={title} onClick={onOpenPath}>
+              <div className="shelf-cover shelf-add-cover">
+                <BookOpen size={22} />
+              </div>
+              <strong>{title}</strong>
+              <small>Get this</small>
+            </button>
+          ))}
+          {free.map((resource) => (
+            <a className="shelf-book" key={resource.url} href={resource.url} target="_blank" rel="noreferrer noopener">
+              <div className="shelf-cover shelf-add-cover">
+                <ExternalLink size={22} />
+              </div>
+              <strong>{resource.title}</strong>
+              <small>Free to read</small>
+            </a>
+          ))}
+        </div>
+      )}
+      <div className="recommended-actions">
+        <button className="text-button" onClick={() => onMoveOn(path, stage.milestone.id)}>
+          Move on to the next stage
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function ReadingShelfSection({
   books,
   onOpen,
@@ -4351,7 +4496,7 @@ function PathSection({
       ) : (
         <div className="path-tiles">
           {paths.map((path) => {
-            const { pathBooks, plan, percent } = progressOf(path)
+            const { pathBooks, percent } = progressOf(path)
             const Icon = pathIcon(path.title)
             const seed = hashOf(path.id)
             return (
@@ -4375,8 +4520,11 @@ function PathSection({
                   </span>
                   <strong>{path.title}</strong>
                   <small>
-                    {plan
-                      ? `${plan.done} / ${plan.total} topics`
+                    {path.plan
+                      ? (() => {
+                          const stage = currentStage(path, books)
+                          return stage ? `Stage ${stage.index + 1} of ${path.plan.milestones.length}` : 'Finished'
+                        })()
                       : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
                   </small>
                   {(() => {

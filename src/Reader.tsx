@@ -202,7 +202,6 @@ export function Reader({
   onAsk,
   learner,
   study,
-  onTick,
   onTopicNote,
   onRecap,
   onHighlight,
@@ -235,7 +234,6 @@ export function Reader({
   onAsk: TutorHandler
   learner?: boolean
   study?: StudyInfo | null
-  onTick?: (topicId: string) => void
   onTopicNote?: (topic: string, location: BrainNoteLocation) => void
   onRecap: () => void
   onHighlight: (text: string, color: HighlightColor, location: BrainNoteLocation) => void
@@ -1854,8 +1852,8 @@ export function Reader({
         </div>
         {!wideLayout ? (
           <aside className="reader-context-rail" aria-label="Reading context">
-            {study && onTick && onTopicNote ? (
-              <StudyPanel study={study} onTick={onTick} onNote={(topic) => onTopicNote(topic, currentNoteLocation())} />
+            {study && onTopicNote ? (
+              <StudyPanel study={study} onNote={(topic) => onTopicNote(topic, currentNoteLocation())} />
             ) : null}
             <div className="reader-context-head">
               <span>Second Brain</span>
@@ -1921,7 +1919,6 @@ export function Reader({
           onRemoveNote={onRemoveNote}
           onCopied={onCopied}
           study={study}
-          onTick={onTick}
           onTopicNote={onTopicNote ? (topic) => onTopicNote(topic, currentNoteLocation()) : undefined}
           onAsk={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
           onClose={() => setToolsOpen(false)}
@@ -2002,7 +1999,6 @@ function ReaderWideSidebar({
   onRemoveNote,
   onCopied,
   study,
-  onTick,
   onTopicNote,
   onAsk,
   onClose,
@@ -2011,7 +2007,6 @@ function ReaderWideSidebar({
   onRemoveNote: (note: Note) => void
   onCopied: (message: string) => void
   study?: StudyInfo | null
-  onTick?: (topicId: string) => void
   onTopicNote?: (topic: string) => void
   book: LibraryBook
   notes: Note[]
@@ -2031,7 +2026,7 @@ function ReaderWideSidebar({
         </button>
       </div>
 
-      {study && onTick && onTopicNote ? <StudyPanel study={study} onTick={onTick} onNote={onTopicNote} /> : null}
+      {study && onTopicNote ? <StudyPanel study={study} onNote={onTopicNote} /> : null}
       <div className="reader-wide-sidebar-actions">
         <button onClick={() => onNote('', 'highlight', location)}>
           <Highlighter size={14} /> Highlight
