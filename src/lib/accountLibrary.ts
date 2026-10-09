@@ -95,15 +95,17 @@ async function writeRemoteManifest(userId: string, books: LibraryBook[], tombsto
   if (result.error) throw new Error(`Supabase could not save your book library: ${result.error.message}`)
 }
 
-async function uploadLocalBook(userId: string, book: LibraryBook): Promise<void> {
-  if (book.format !== 'epub' && book.format !== 'pdf') return
+// Returns true when the book's file is now in the cloud.
+async function uploadLocalBook(userId: string, book: LibraryBook): Promise<boolean> {
+  if (book.format !== 'epub' && book.format !== 'pdf') return true
   const bytes = await loadEpubFile(book.id).catch(() => null)
-  if (!bytes) return
+  if (!bytes) return false
   const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
   const result = await getAuthClient()
     .storage.from(BUCKET)
     .upload(bookPath(userId, book), new Blob([bytes], { type: contentType }), { upsert: true, contentType })
   if (result.error) throw new Error(`Supabase could not save ${book.title}: ${result.error.message}`)
+  return true
 }
 
 async function restoreRemoteBook(userId: string, book: LibraryBook): Promise<void> {
@@ -143,10 +145,16 @@ export async function syncAccountLibrary(localBooks: LibraryBook[]): Promise<Lib
   )
   writeTombstones(tombstones)
   await writeRemoteManifest(user.id, books, tombstones)
-  for (const book of books) await uploadLocalBook(user.id, book)
+  const inCloud = new Set<string>()
+  for (const book of books) if (await uploadLocalBook(user.id, book)) inCloud.add(book.id)
   for (const book of books) await restoreRemoteBook(user.id, book)
-  writeLibraryBooks(books)
-  return books
+  const stamp = new Date().toISOString()
+  // A book counts as synced once its file is in the cloud, or for links, once its entry is.
+  const marked = books.map((book) =>
+    inCloud.has(book.id) ? { ...book, cloudAt: stamp } : { ...book, cloudAt: undefined },
+  )
+  writeLibraryBooks(marked)
+  return marked
 }
 
 type AccountDataFile = { version: 1; updatedAt: string; bundle: SyncBundle; tombstones?: Tombstones }

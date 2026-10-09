@@ -34,6 +34,7 @@ export type LibraryBook = {
   bookmarked?: boolean
   look?: { fontSize?: number; theme?: 'paper' | 'sepia' | 'night' | 'contrast'; font?: string; lineHeight?: number } // this book's own page look
   favorite?: boolean
+  cloudAt?: string // when this book was last confirmed in the account's cloud
   intent?: string // why the reader chose this book, in their own choice of words
   toc?: Array<{ label: string; href: string }>
 }
