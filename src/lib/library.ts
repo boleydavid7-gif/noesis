@@ -32,6 +32,8 @@ export type LibraryBook = {
   chapterIndex?: number
   chapterProgress?: number
   bookmarked?: boolean
+  look?: { fontSize?: number; theme?: 'paper' | 'sepia' | 'night' | 'contrast'; font?: string; lineHeight?: number } // this book's own page look
+  intent?: string // why the reader chose this book, in their own choice of words
   toc?: Array<{ label: string; href: string }>
 }
 
@@ -169,3 +171,14 @@ export async function loadBookText(id: string): Promise<string | null> {
 // A book counts as started once it has been opened and moved on, even if the percentage still rounds to zero.
 export const isStarted = (book: Pick<LibraryBook, 'progress' | 'chapterIndex' | 'cfi' | 'currentHref'>): boolean =>
   book.progress > 0 || (book.chapterIndex ?? 0) > 0 || Boolean(book.cfi) || Boolean(book.currentHref)
+
+// "Want to read" is an ordinary shelf with a fixed name, so it works with everything shelves already do.
+export const WANT_SHELF = 'Want to read'
+
+export const INTENTS = [
+  'Understand the core argument',
+  'Prepare for a class',
+  'Apply the ideas at work',
+  'Explore a personal interest',
+  'Read for enjoyment',
+]

@@ -9201,3 +9201,66 @@ input[type='radio'] {
   border-radius: 6px;
   background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
 }
+
+.book-detail-intent {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.book-detail-intent select {
+  padding: 6px 8px;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.book-detail-intent option {
+  color: #111;
+}
+
+.reader-source-note {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  width: min(560px, calc(100% - 24px));
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.35);
+  border-radius: 10px;
+  background: var(--surface-pop, #0a1626);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.reader-footnote {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 36;
+  display: grid;
+  width: min(520px, calc(100% - 24px));
+  gap: 6px;
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
+  border-radius: 12px;
+  background: var(--surface-pop, #0a1626);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+.reader-footnote p {
+  max-height: 30vh;
+  margin: 0;
+  overflow-y: auto;
+}
+.reader-footnote div {
+  display: flex;
+  gap: 14px;
+}

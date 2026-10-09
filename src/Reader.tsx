@@ -42,15 +42,11 @@ import { addReading, countWords, formatDuration, readPace, timeLeft, writePace, 
 import { logReading, readDiary, writeDiary } from './lib/diary'
 import { locateRange } from './lib/wordRange'
 import { canListen, startListening, type ListenBlock, type ListenController } from './lib/listen'
-import {
-  HIGHLIGHT_COLORS,
-  type BrainNote,
-  type BrainNoteLocation,
-  type HighlightColor,
-} from './lib/knowledge'
+import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteLocation, type HighlightColor } from './lib/knowledge'
 import { firstReadingIndex, openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
+import { cleanChapterLabel } from './lib/chapterLabel'
 import { PdfReader } from './PdfReader'
 import { StudyPanel, type StudyInfo } from './StudyPanel'
 import { BookNotesBrowser } from './BookNotesBrowser'
@@ -126,12 +122,16 @@ function asArray(value: unknown): unknown[] {
 }
 
 function chapterEntries(value: unknown): ReaderChapter[] {
-  return asArray(value).flatMap((entry) => {
+  const seen = new Map<string, number>()
+  return asArray(value).flatMap((entry, index) => {
     if (!entry || typeof entry !== 'object') return []
     const record = entry as { label?: unknown; href?: unknown }
     const href = typeof record.href === 'string' ? record.href.trim() : ''
     if (!href) return []
-    const label = typeof record.label === 'string' && record.label.trim() ? record.label.trim() : 'Untitled chapter'
+    let label = cleanChapterLabel(typeof record.label === 'string' ? record.label : '', index)
+    const times = (seen.get(label) ?? 0) + 1
+    seen.set(label, times)
+    if (times > 1) label = `${label} (${times})`
     return [{ label, href }]
   })
 }
@@ -213,6 +213,8 @@ export function Reader({
   onCopied,
   reading,
   onReadingChange,
+  ownLook,
+  onOwnLook,
   initialLocation: jumpLocation,
 }: {
   book: LibraryBook
@@ -243,6 +245,8 @@ export function Reader({
   onCopied: (message: string) => void
   reading: Settings['reading']
   onReadingChange: (patch: Partial<Settings['reading']>) => void
+  ownLook?: boolean
+  onOwnLook?: (on: boolean) => void
   initialLocation?: BrainNoteLocation | null
 }) {
   const frame = useRef<HTMLDivElement>(null)
@@ -339,6 +343,8 @@ export function Reader({
   const [controlsOpen, setControlsOpen] = useState(false)
   const [autoScroll, setAutoScroll] = useState(false)
   const [chapterEnd, setChapterEnd] = useState<number | null>(null)
+  const [limitSeen, setLimitSeen] = useState(false)
+  const [footnote, setFootnote] = useState<{ text: string; href: string } | null>(null)
   const dismissedEnds = useRef(new Set<string>())
   const bodyRef = useRef<HTMLDivElement>(null)
   // On a phone the app's own header and tab bar step aside while a book is open.
@@ -924,6 +930,44 @@ export function Reader({
           const contentDocument = view?.contents?.document
           if (!contentDocument) return
           attachScroll(contentDocument)
+          // A footnote or endnote marker shows its note where you are, instead of taking you away to the back of the book.
+          contentDocument.addEventListener('click', (event) => {
+            const link = (event.target as Element | null)?.closest?.('a[href*="#"]') as HTMLAnchorElement | null
+            if (!link) return
+            const kind = `${link.getAttribute('epub:type') ?? ''} ${link.getAttribute('role') ?? ''}`
+            if (!/noteref/i.test(kind) && !link.closest('sup') && !/note|fn/i.test(link.className)) return
+            const raw = link.getAttribute('href') ?? ''
+            const [file, id] = raw.split('#')
+            if (!id) return
+            event.preventDefault()
+            event.stopPropagation()
+            void (async () => {
+              try {
+                let element: Element | null = file ? null : contentDocument.getElementById(id)
+                if (!element && file) {
+                  const section = epub.spine.get(file) as unknown as {
+                    load: (loader: unknown) => Promise<Element>
+                    unload: () => void
+                  } | null
+                  const root = section ? await section.load(epub.load.bind(epub)) : null
+                  element = root?.ownerDocument?.getElementById(id) ?? root?.querySelector(`[id="${id}"]`) ?? null
+                  const text =
+                    element?.textContent
+                      ?.replace(/\s+/g, ' ')
+                      .trim()
+                      .replace(/^[\d*†‡]+[.)\s]*/, '') ?? ''
+                  section?.unload()
+                  if (text) return setFootnote({ text: text.slice(0, 900), href: raw })
+                } else if (element) {
+                  const text = element.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+                  if (text) return setFootnote({ text: text.slice(0, 900), href: raw })
+                }
+                void instance.display(raw)
+              } catch {
+                void instance.display(raw)
+              }
+            })()
+          })
           // Touching the page, or pressing a key, hands control back from auto-scroll.
           for (const name of ['wheel', 'touchstart', 'keydown'] as const)
             contentDocument.addEventListener(name, () => setAutoScroll(false), { passive: true })
@@ -1320,6 +1364,16 @@ export function Reader({
                         </button>
                       </div>
                     ) : null}
+                    {book.format === 'epub' && onOwnLook ? (
+                      <label className="reader-controls-check">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(ownLook)}
+                          onChange={(event) => onOwnLook(event.target.checked)}
+                        />
+                        Keep this page look (size, colour) for this book only
+                      </label>
+                    ) : null}
                     {book.format === 'epub' ? (
                       <label className="reader-controls-check">
                         <input
@@ -1584,6 +1638,37 @@ export function Reader({
               style={{ background: `rgba(0, 0, 0, ${reading.dim / 100})` }}
               aria-hidden="true"
             />
+          ) : null}
+          {footnote ? (
+            <div className="reader-footnote" role="dialog" aria-label="Note">
+              <p>{footnote.text}</p>
+              <div>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    void rendition.current?.display(footnote.href)
+                    setFootnote(null)
+                  }}
+                >
+                  Go to the note
+                </button>
+                <button className="text-button" onClick={() => setFootnote(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {(external || book.format === 'pdf') && !limitSeen ? (
+            <div className="reader-source-note" role="note">
+              <span>
+                {external
+                  ? `Shown from ${book.sourceName || 'another site'}. Noesis can open it but cannot see its text, page or highlights, so progress is not tracked and Noema can use only what you select or paste.`
+                  : 'Select a passage and ask Noema, and it will use that passage. Noema does not read the rest of a PDF.'}
+              </span>
+              <button className="icon-button tiny" onClick={() => setLimitSeen(true)} aria-label="Dismiss">
+                <X size={12} />
+              </button>
+            </div>
           ) : null}
           <div className={'reader-frame-wrap ' + (book.format === 'epub' ? 'reader-frame-epub' : '')}>
             {book.format === 'pdf' ? (
