@@ -9653,3 +9653,17 @@ input[type='radio'] {
   background: rgba(var(--accent-rgb, 220, 194, 142), 0.7);
   background-clip: padding-box;
 }
+
+/* The round add button's icon sits dead centre. */
+.context-section-heading .context-plus {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 0;
+}
+.context-plus svg {
+  display: block;
+}
