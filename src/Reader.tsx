@@ -1063,6 +1063,31 @@ export function Reader({
             // Try the next way in.
           }
         }
+        // Pages can finish laying out after they are shown (late images or fonts), leaving the frame empty
+        // until the reader turns a chapter. Measure again, and open the page once more if it is still blank.
+        const settle = async () => {
+          for (const wait of [350, 1100, 2500]) {
+            await new Promise((resolve) => window.setTimeout(resolve, wait))
+            if (cancelled) return
+            try {
+              ;(instance as unknown as { resize: () => void }).resize()
+              const frameDoc = frame.current?.querySelector('iframe')
+              const doc = frameDoc?.contentDocument
+              const hasPicture = Boolean(doc?.querySelector('img, svg, image'))
+              const blank = !shownContent() && !hasPicture
+              const collapsed = (frameDoc?.clientHeight ?? 0) < 60
+              if (blank || collapsed) {
+                const again = await Promise.resolve(
+                  instance.currentLocation() as { start?: { cfi?: string; href?: string } },
+                )
+                await instance.display(again?.start?.cfi || again?.start?.href || firstChapter || undefined)
+              } else return
+            } catch {
+              // Try again at the next pause.
+            }
+          }
+        }
+        void settle()
         // A chapter that is only pictures still counts as open.
         if (!opened && !displayedOnce) throw new Error('This EPUB has no readable opening chapter.')
         const iframe = frame.current?.querySelector('iframe')
