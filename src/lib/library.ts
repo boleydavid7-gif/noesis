@@ -64,7 +64,51 @@ export function readLibraryBooks(): LibraryBook[] {
 }
 
 export function writeLibraryBooks(books: LibraryBook[]): void {
-  storage()?.setItem(BOOKS_KEY, JSON.stringify(books))
+  const target = storage()
+  if (!target) return
+  try {
+    target.setItem(BOOKS_KEY, JSON.stringify(books))
+    return
+  } catch (error) {
+    // Browser storage is small. Rather than lose a book, let go of the biggest covers first (they can be regenerated).
+    const withCovers = books
+      .map((book, index) => ({ index, size: book.coverDataUrl?.length ?? 0 }))
+      .filter((entry) => entry.size > 0)
+      .sort((a, b) => b.size - a.size)
+    const trimmed = books.map((book) => ({ ...book }))
+    for (const entry of withCovers) {
+      delete trimmed[entry.index].coverDataUrl
+      try {
+        target.setItem(BOOKS_KEY, JSON.stringify(trimmed))
+        return
+      } catch {
+        // Keep trimming.
+      }
+    }
+    throw error
+  }
+}
+
+/** Reduces covers saved at full size by older versions, so the library keeps fitting in browser storage. */
+export async function shrinkStoredCovers(): Promise<LibraryBook[] | null> {
+  const books = readLibraryBooks()
+  if (!books.some((book) => (book.coverDataUrl?.length ?? 0) > 40_000)) return null
+  const { shrinkCover } = await import('./cover')
+  const next: LibraryBook[] = []
+  for (const book of books) next.push({ ...book, coverDataUrl: await shrinkCover(book.coverDataUrl) })
+  // Re-read so a book added while this ran is not lost.
+  const latest = new Map(readLibraryBooks().map((book) => [book.id, book]))
+  const merged: LibraryBook[] = next.map((book) => {
+    const { coverDataUrl, ...rest } = latest.get(book.id) ?? book
+    return book.coverDataUrl
+      ? { ...rest, coverDataUrl: book.coverDataUrl }
+      : coverDataUrl
+        ? { ...rest, coverDataUrl }
+        : rest
+  })
+  for (const book of latest.values()) if (!merged.some((item) => item.id === book.id)) merged.unshift(book)
+  writeLibraryBooks(merged)
+  return merged
 }
 
 export function upsertLibraryBook(book: LibraryBook): LibraryBook[] {

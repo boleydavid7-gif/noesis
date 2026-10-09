@@ -68,6 +68,7 @@ import {
   removeLibraryBook,
   saveBookText,
   saveEpubFile,
+  shrinkStoredCovers,
   upsertLibraryBook,
   writeLibraryBooks,
   type LibraryBook,
@@ -521,6 +522,14 @@ function App() {
     }
   }, [])
   const focusSignature = JSON.stringify(focusToSync(focusState))
+  // Older versions saved covers at full size; reduce them once so many books fit in browser storage.
+  useEffect(() => {
+    void shrinkStoredCovers()
+      .then((next) => {
+        if (next) setBooks(next)
+      })
+      .catch(() => undefined)
+  }, [])
   useEffect(() => {
     if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
     let cancelled = false
@@ -1225,6 +1234,7 @@ function App() {
     const added: LibraryBook[] = []
     let already = 0
     let failed = 0
+    const problems: string[] = []
     for (const [index, file] of usable.entries()) {
       if (usable.length > 1) showNotice(`Adding ${index + 1} of ${usable.length}…`)
       try {
@@ -1233,7 +1243,9 @@ function App() {
         else if (result) added.push(result)
       } catch (reason) {
         failed += 1
-        if (usable.length === 1) showNotice(friendlyBookError(reason, 'Could not read that file.'))
+        const why = friendlyBookError(reason, 'Could not read that file.')
+        if (usable.length === 1) showNotice(why)
+        else problems.push(`${file.name.replace(/\.[^.]+$/, '')}: ${why}`)
       }
     }
     const nextBooks = readLibraryBooks()
@@ -1259,7 +1271,7 @@ function App() {
       [
         `Added ${added.length} ${added.length === 1 ? 'book' : 'books'}.`,
         already ? `${already} already in your library.` : '',
-        failed ? `${failed} could not be read.` : '',
+        failed ? `${failed} could not be read. ${problems.slice(0, 2).join(' ')}` : '',
       ]
         .filter(Boolean)
         .join(' '),
