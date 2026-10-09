@@ -82,6 +82,7 @@ import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary } from './lib/diary'
+import { dueNotes, revisitDate } from './lib/noteLinks'
 import { BOOKMARK_TAG, isBookmark } from './lib/bookmarks'
 import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
 import { applyImages } from './lib/images'
@@ -465,6 +466,7 @@ function App() {
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, notes, paths, focusState.running])
+  const revisitDue = useMemo(() => dueNotes(notes), [notes])
   const hasFinished = books.some((book) => book.finished)
   const hasReading = books.some((book) => isStarted(book) && !book.finished && book.progress < 98)
   const dupes = useMemo(() => duplicateGroups(books), [books])
@@ -1327,6 +1329,8 @@ function App() {
     location?: BrainNoteLocation
     quote?: string
     color?: HighlightColor
+    notebook?: string
+    revisit?: string
     quiet?: boolean
   }): Promise<Note> {
     const note: Note = {
@@ -1339,6 +1343,8 @@ function App() {
       tags: fields.tags.length ? fields.tags : undefined,
       quote: fields.quote,
       color: fields.color,
+      notebook: fields.notebook,
+      revisit: fields.revisit,
 
       ...fields.location,
     }
@@ -2043,6 +2049,18 @@ function App() {
             <ArrowRight size={15} />
           </button>
         ) : null}
+        {revisitDue.length > 0 ? (
+          <RevisitCard
+            notes={revisitDue}
+            onOpen={(note) => (note.bookId ? openNoteLocation(note) : selectNav('Notes'))}
+            onDone={(note) =>
+              void editNote({ ...note, revisit: undefined, updated: new Date().toISOString(), synced: undefined })
+            }
+            onLater={(note) =>
+              void editNote({ ...note, revisit: revisitDate(7), updated: new Date().toISOString(), synced: undefined })
+            }
+          />
+        ) : null}
         {settings.library.goal.enabled || (settings.library.resurface && notes.length > 0) ? (
           <div className="home-extras">
             {settings.library.resurface && notes.length > 0 ? (
@@ -2376,6 +2394,10 @@ function App() {
           onSave={(note) => void editNote(note)}
           onCreate={(fields) => void addNote(fields)}
           onDelete={removeNote}
+          onMerge={(keep, remove) => {
+            void editNote(keep)
+            removeNote(remove)
+          }}
           onOpenNote={openNoteLocation}
         />
       </Page>
@@ -3958,6 +3980,45 @@ function ReadNextCard({
       <button className="text-button" onClick={() => onFind(query)}>
         Find free books about {query}
       </button>
+    </section>
+  )
+}
+
+function RevisitCard({
+  notes,
+  onOpen,
+  onDone,
+  onLater,
+}: {
+  notes: Note[]
+  onOpen: (note: Note) => void
+  onDone: (note: Note) => void
+  onLater: (note: Note) => void
+}) {
+  return (
+    <section className="revisit-card panel-card" aria-label="Notes you asked to see again">
+      <strong>You asked to see these again</strong>
+      <ul>
+        {notes.slice(0, 3).map((note) => (
+          <li key={note.id}>
+            <span>
+              <b>{note.title}</b>
+              <small>{note.body.length > 110 ? `${note.body.slice(0, 110)}…` : note.body}</small>
+            </span>
+            <span className="revisit-actions">
+              <button className="text-button" onClick={() => onOpen(note)}>
+                Open
+              </button>
+              <button className="text-button" onClick={() => onLater(note)}>
+                In a week
+              </button>
+              <button className="text-button" onClick={() => onDone(note)}>
+                Done
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

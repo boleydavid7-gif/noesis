@@ -8,6 +8,18 @@ import { relatedNotes } from './lib/related'
 import { semanticRelated, type Embed } from './lib/semantic'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import { isBookmark } from './lib/bookmarks'
+import {
+  REVISIT_CHOICES,
+  backlinks as findBacklinks,
+  linkTitles,
+  mergeNotes,
+  notebookCounts,
+  readSavedSearches,
+  resolveLink,
+  revisitDate,
+  tagCounts,
+  writeSavedSearches,
+} from './lib/noteLinks'
 import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteKind, type HighlightColor } from './lib/knowledge'
 
 type TabId = 'all' | 'highlight' | 'thoughts' | 'bookmarks' | 'elsewhere' | 'words' | 'diary'
@@ -28,17 +40,27 @@ const KIND_LABEL: Record<BrainNoteKind, string> = {
   connection: 'Connection',
 }
 type Sort = 'modified' | 'created' | 'title'
-type Draft = { title: string; body: string; source: string; kind: BrainNoteKind; tags: string }
+type Draft = {
+  title: string
+  body: string
+  source: string
+  kind: BrainNoteKind
+  tags: string
+  notebook: string
+  revisit: string
+}
 
 const NEW = 'new'
 const stamp = (note: BrainNote) => note.updated ?? note.createdAt
-const emptyDraft = (): Draft => ({ title: '', body: '', source: '', kind: 'note', tags: '' })
+const emptyDraft = (): Draft => ({ title: '', body: '', source: '', kind: 'note', tags: '', notebook: '', revisit: '' })
 const draftOf = (note: BrainNote): Draft => ({
   title: note.title,
   body: note.body,
   source: note.source,
   kind: note.kind,
   tags: (note.tags ?? []).join(', '),
+  notebook: note.notebook ?? '',
+  revisit: note.revisit ?? '',
 })
 const parseTags = (value: string) =>
   [
@@ -68,6 +90,7 @@ export function SecondBrainPage({
   onCreate,
   onDelete,
   onOpenNote,
+  onMerge,
   diary,
   bookmarklet,
   onExport,
@@ -85,9 +108,18 @@ export function SecondBrainPage({
   onImportClippings: (file: File) => void
   notes: BrainNote[]
   onSave: (note: BrainNote) => void
-  onCreate: (draft: { title: string; body: string; source: string; kind: BrainNoteKind; tags: string[] }) => void
+  onCreate: (draft: {
+    title: string
+    body: string
+    source: string
+    kind: BrainNoteKind
+    tags: string[]
+    notebook?: string
+    revisit?: string
+  }) => void
   onDelete: (note: BrainNote) => void
   onOpenNote: (note: BrainNote) => void
+  onMerge?: (keep: BrainNote, remove: BrainNote) => void
 }) {
   const [tab, setTab] = useState<TabId>('all')
   const [colorFilter, setColorFilter] = useState<HighlightColor | ''>('')
@@ -103,11 +135,20 @@ export function SecondBrainPage({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [notebook, setNotebook] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [saved, setSaved] = useState<string[]>(readSavedSearches)
+  const [mergeId, setMergeId] = useState('')
+  const [today] = useState(() => new Date())
+  const notebooks = useMemo(() => notebookCounts(notes), [notes])
+  const tags = useMemo(() => tagCounts(notes).slice(0, 14), [notes])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return notes
       .filter((note) => !colorFilter || note.color === colorFilter)
+      .filter((note) => !notebook || note.notebook === notebook)
+      .filter((note) => !tagFilter || (note.tags ?? []).includes(tagFilter))
       .filter((note) =>
         tab === 'all' || tab === 'diary'
           ? true
@@ -133,7 +174,7 @@ export function SecondBrainPage({
             ? b.createdAt.localeCompare(a.createdAt)
             : stamp(b).localeCompare(stamp(a)),
       )
-  }, [notes, tab, query, sort, colorFilter])
+  }, [notes, tab, query, sort, colorFilter, notebook, tagFilter])
 
   const selected = selectedId && selectedId !== NEW ? (notes.find((note) => note.id === selectedId) ?? null) : null
   const keywordRelated = useMemo(() => (selected ? relatedNotes(selected, notes) : []), [selected, notes])
@@ -174,6 +215,7 @@ export function SecondBrainPage({
     const body = draft.body.trim()
     if (body.length < 2) return
     const tags = parseTags(draft.tags)
+    const notebookName = draft.notebook.trim().slice(0, 40) || undefined
     if (selected) {
       onSave({
         ...selected,
@@ -182,11 +224,21 @@ export function SecondBrainPage({
         body,
         source: selected.bookId ? selected.source : draft.source.trim() || 'Noesis',
         tags: tags.length ? tags : undefined,
+        notebook: notebookName,
+        revisit: draft.revisit || undefined,
         updated: new Date().toISOString(),
         synced: undefined,
       })
     } else {
-      onCreate({ title: draft.title.trim(), body, source: draft.source.trim(), kind: draft.kind, tags })
+      onCreate({
+        title: draft.title.trim(),
+        body,
+        source: draft.source.trim(),
+        kind: draft.kind,
+        tags,
+        notebook: notebookName,
+        revisit: draft.revisit || undefined,
+      })
       setSelectedId(null)
       setDraft(emptyDraft())
     }
@@ -352,6 +404,64 @@ export function SecondBrainPage({
                 <option value="title">Title</option>
               </select>
             </div>
+            {notebooks.length > 0 || tags.length > 0 || saved.length > 0 || query.trim() ? (
+              <div className="brain-organise">
+                {notebooks.length > 0 ? (
+                  <select value={notebook} onChange={(event) => setNotebook(event.target.value)} aria-label="Notebook">
+                    <option value="">All notebooks</option>
+                    {notebooks.map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.name} ({item.count})
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {tags.length > 0 ? (
+                  <div className="brain-tag-chips" aria-label="Tags">
+                    {tags.map((item) => (
+                      <button
+                        key={item.name}
+                        className={tagFilter === item.name ? 'brain-tag-on' : ''}
+                        onClick={() => setTagFilter(tagFilter === item.name ? '' : item.name)}
+                      >
+                        #{item.name} <small>{item.count}</small>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {saved.length > 0 || query.trim() ? (
+                  <div className="brain-tag-chips" aria-label="Saved searches">
+                    {saved.map((item) => (
+                      <button
+                        key={item}
+                        className={query === item ? 'brain-tag-on' : ''}
+                        onClick={() => setQuery(query === item ? '' : item)}
+                        onContextMenu={(event) => {
+                          event.preventDefault()
+                          const next = saved.filter((value) => value !== item)
+                          setSaved(next)
+                          writeSavedSearches(next)
+                        }}
+                        title="Right-click to forget this search"
+                      >
+                        “{item}”
+                      </button>
+                    ))}
+                    {query.trim() && !saved.includes(query.trim()) ? (
+                      <button
+                        onClick={() => {
+                          const next = [query.trim(), ...saved].slice(0, 12)
+                          setSaved(next)
+                          writeSavedSearches(next)
+                        }}
+                      >
+                        + Save this search
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <small className="brain-page-count">
               {shown.length} {shown.length === 1 ? 'note' : 'notes'}
             </small>
@@ -461,6 +571,41 @@ export function SecondBrainPage({
                     placeholder="Write an idea, question, or highlighted passage…"
                   />
                 </label>
+                <div className="brain-page-row">
+                  <label>
+                    Notebook
+                    <input
+                      list="brain-notebooks"
+                      value={draft.notebook}
+                      onChange={(event) => setDraft({ ...draft, notebook: event.target.value })}
+                      placeholder="Optional, e.g. Work"
+                      maxLength={40}
+                    />
+                    <datalist id="brain-notebooks">
+                      {notebooks.map((item) => (
+                        <option key={item.name} value={item.name} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label>
+                    See this again
+                    <select
+                      value={draft.revisit}
+                      onChange={(event) => setDraft({ ...draft, revisit: event.target.value })}
+                    >
+                      <option value="">No reminder</option>
+                      {draft.revisit &&
+                      !REVISIT_CHOICES.some((item) => revisitDate(item.days, today) === draft.revisit) ? (
+                        <option value={draft.revisit}>On {draft.revisit}</option>
+                      ) : null}
+                      {REVISIT_CHOICES.map((item) => (
+                        <option key={item.id} value={revisitDate(item.days, today)}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <label>
                   Tags
                   <input
@@ -477,6 +622,51 @@ export function SecondBrainPage({
                       </a>
                     ) : null}
                     {selected.quote ? <blockquote className="reader-note-quote">{selected.quote}</blockquote> : null}
+                    {(() => {
+                      const outgoing = linkTitles(selected.body).map((title) => ({
+                        title,
+                        note: resolveLink(title, notes),
+                      }))
+                      const incoming = findBacklinks(selected, notes)
+                      if (outgoing.length === 0 && incoming.length === 0) return null
+                      return (
+                        <div className="brain-related">
+                          {outgoing.length > 0 ? (
+                            <>
+                              <strong>Links to</strong>
+                              <ul>
+                                {outgoing.map(({ title, note }) => (
+                                  <li key={title}>
+                                    {note ? (
+                                      <button className="text-button" onClick={() => pick(note)}>
+                                        {note.title}
+                                      </button>
+                                    ) : (
+                                      <span>{title}</span>
+                                    )}
+                                    {!note ? <small> · no note with this title yet</small> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : null}
+                          {incoming.length > 0 ? (
+                            <>
+                              <strong>Linked from</strong>
+                              <ul>
+                                {incoming.map((note) => (
+                                  <li key={note.id}>
+                                    <button className="text-button" onClick={() => pick(note)}>
+                                      {note.title}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </>
+                          ) : null}
+                        </div>
+                      )
+                    })()}
                     {related.length > 0 ? (
                       <div className="brain-related">
                         <strong>Related</strong>
@@ -487,12 +677,58 @@ export function SecondBrainPage({
                                 {note.title}
                               </button>
                               <small> · {shared.join(', ')}</small>
+                              <button
+                                className="text-button"
+                                title="Add a link to this note in the text"
+                                onClick={() =>
+                                  setDraft((current) => ({
+                                    ...current,
+                                    body: `${current.body.trimEnd()}${current.body.trim() ? '\n\n' : ''}Connects to [[${note.title}]]`,
+                                  }))
+                                }
+                              >
+                                Link
+                              </button>
                             </li>
                           ))}
                         </ul>
                       </div>
                     ) : null}
                   </>
+                ) : null}
+                {selected && onMerge ? (
+                  <div className="brain-merge">
+                    <select
+                      value={mergeId}
+                      onChange={(event) => setMergeId(event.target.value)}
+                      aria-label="Merge with another note"
+                    >
+                      <option value="">Merge with another note…</option>
+                      {notes
+                        .filter((note) => note.id !== selected.id && !isBookmark(note))
+                        .slice(0, 80)
+                        .map((note) => (
+                          <option key={note.id} value={note.id}>
+                            {note.title}
+                          </option>
+                        ))}
+                    </select>
+                    {mergeId ? (
+                      <button
+                        className="secondary-button"
+                        onClick={() => {
+                          const other = notes.find((note) => note.id === mergeId)
+                          if (!other) return
+                          const merged = mergeNotes(selected, other)
+                          onMerge(merged, other)
+                          setDraft(draftOf(merged))
+                          setMergeId('')
+                        }}
+                      >
+                        Merge into this note
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
                 <div className="brain-page-actions">
                   {selected ? (
