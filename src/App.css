@@ -9045,3 +9045,31 @@ input[type='radio'] {
   border-radius: 0 8px 8px 0;
   opacity: 0.9;
 }
+
+@media (max-width: 900px) {
+  .reader-ambient {
+    position: static;
+  }
+  .reader-ambient-pop {
+    right: 12px;
+    left: 12px;
+    top: auto;
+    margin-top: 6px;
+    max-width: calc(100vw - 24px);
+  }
+  .reader-controls-pop {
+    min-width: 0;
+  }
+}
+.reader-controls-pop select,
+.reader-controls-pop .secondary-button {
+  width: 100%;
+  min-height: 36px;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.reader-controls-pop option {
+  color: #111;
+}

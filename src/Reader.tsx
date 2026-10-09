@@ -50,7 +50,7 @@ import {
   type BrainNoteLocation,
   type HighlightColor,
 } from './lib/knowledge'
-import { openEpub, spineSections } from './lib/epub'
+import { firstReadingIndex, openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { PdfReader } from './PdfReader'
@@ -785,7 +785,11 @@ export function Reader({
             chapters.length - 1,
             targetLocation?.chapterIndex ??
               currentBook.chapterIndex ??
-              (initialIndexByHref >= 0 ? initialIndexByHref : 0),
+              (initialIndexByHref >= 0
+                ? initialIndexByHref
+                : currentBook.progress > 0
+                  ? 0
+                  : firstReadingIndex(chapters, currentBook.title)),
           ),
         )
         const initialChapterProgress = clampFraction(
@@ -1187,7 +1191,7 @@ export function Reader({
                   ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source'
                   : currentChapter.label}
               {left
-                ? ` · ${formatDuration(left.chapter)} left in chapter · about ${formatDuration(left.book)} to finish`
+                ? ` · ${formatDuration(left.chapter)} left in chapter${chapterWordsRef.current.size >= 3 ? ` · about ${formatDuration(left.book)} to finish` : ''}`
                 : ''}
             </span>
           </div>

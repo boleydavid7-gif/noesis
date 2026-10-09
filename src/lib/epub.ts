@@ -216,3 +216,24 @@ export async function recapText(
     return ''
   }
 }
+
+const FRONT =
+  /^(cover|title( page)?|half title|contents|table of contents|copyright|colophon|dedication|epigraph|front matter|project gutenberg|licen[cs]e|illustrations?|list of illustrations|imprint|by the same author|also by)\b/i
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+
+// Where a book is opened the first time: past the cover, title page and licence text, at the first real section.
+export function firstReadingIndex(toc: Array<{ label: string }>, title: string): number {
+  const own = normalize(title)
+  let index = 0
+  while (index < toc.length - 1) {
+    const label = toc[index].label.trim()
+    const skip = !label || FRONT.test(label) || /^\d+$/.test(label) || normalize(label) === own
+    if (!skip) break
+    index += 1
+  }
+  return index
+}
