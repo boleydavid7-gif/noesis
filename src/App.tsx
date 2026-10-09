@@ -158,7 +158,9 @@ import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backu
 import {
   bindCloudConnectionsToUser,
   cloudConnectionForUser,
+  cloudConnectionUsable,
   connectCloudProvider,
+  freshCloudConnection,
   consumeCloudOAuthRedirect,
   disconnectCloudProvider,
   listCloudProviders,
@@ -2771,9 +2773,9 @@ function App() {
         bundle: { ...bundle, paths: undefined },
       }
       for (const connection of cloudConnections.filter(
-        (item) => item.ownerUserId === authUserId && item.expiresAt > Date.now() + 30_000,
+        (item) => item.ownerUserId === authUserId && cloudConnectionUsable(item),
       )) {
-        state = await syncCloudState(connection, state)
+        state = await syncCloudState(await freshCloudConnection(connection), state)
       }
       setBooks(state.books)
       setNotes(state.notes)
@@ -2843,7 +2845,7 @@ function App() {
                   authUser?.id,
                 )
               : undefined
-            const expired = Boolean(connection && connection.expiresAt <= Date.now() + 30_000)
+            const expired = Boolean(connection && !cloudConnectionUsable(connection))
             return (
               <article className="cloud-provider-card panel-card" key={provider.id}>
                 <div className="cloud-provider-head">
