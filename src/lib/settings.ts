@@ -3,9 +3,10 @@
 
 export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
 export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy' | 'custom'
-export type SurfaceName = 'midnight' | 'charcoal' | 'forest' | 'plum' | 'espresso'
+export type SurfaceName =
+  'midnight' | 'charcoal' | 'forest' | 'plum' | 'espresso' | 'ocean' | 'wine' | 'indigo' | 'slate' | 'olive'
 export type LetterSpacing = 'normal' | 'wide'
-export type AccentName = 'gold' | 'blue' | 'green' | 'rose'
+export type AccentName = 'gold' | 'blue' | 'green' | 'rose' | 'violet' | 'orange' | 'teal' | 'red'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
 export type ParagraphStyle = 'book' | 'indent' | 'space'
 export type LineWidth = 'full' | 'comfortable' | 'narrow'
@@ -127,6 +128,46 @@ export const ACCENTS: Record<
     hover: '#c87080',
     rgb: '235, 170, 182',
   },
+  violet: {
+    label: 'Violet',
+    main: '#a98bf0',
+    soft: '#dccffc',
+    light: '#bba2f5',
+    fill: '#7d5fcf',
+    border: '#b399f2',
+    hover: '#9374e0',
+    rgb: '190, 165, 245',
+  },
+  orange: {
+    label: 'Orange',
+    main: '#ec9a4e',
+    soft: '#f9d6b0',
+    light: '#f2ae6d',
+    fill: '#c97a2e',
+    border: '#f0a45e',
+    hover: '#dc8a3d',
+    rgb: '240, 175, 110',
+  },
+  teal: {
+    label: 'Teal',
+    main: '#4fc9bd',
+    soft: '#bdeee9',
+    light: '#6fd6cc',
+    fill: '#2f9f95',
+    border: '#5fd0c5',
+    hover: '#41b8ac',
+    rgb: '130, 220, 210',
+  },
+  red: {
+    label: 'Red',
+    main: '#e8675f',
+    soft: '#f7c4c0',
+    light: '#ee8079',
+    fill: '#c04540',
+    border: '#ec7770',
+    hover: '#d6544e',
+    rgb: '240, 150, 145',
+  },
 }
 
 export const FONT_STACKS: Record<ReaderFont, string | null> = {
@@ -194,8 +235,16 @@ export function sanitizeSettings(input: unknown): Settings {
       letterSpacing: pick(reading.letterSpacing, ['normal', 'wide'], d.reading.letterSpacing),
     },
     appearance: {
-      accent: pick(appearance.accent, ['gold', 'blue', 'green', 'rose'], d.appearance.accent),
-      surface: pick(appearance.surface, ['midnight', 'charcoal', 'forest', 'plum', 'espresso'], d.appearance.surface),
+      accent: pick(
+        appearance.accent,
+        ['gold', 'blue', 'green', 'rose', 'violet', 'orange', 'teal', 'red'],
+        d.appearance.accent,
+      ),
+      surface: pick(
+        appearance.surface,
+        ['midnight', 'charcoal', 'forest', 'plum', 'espresso', 'ocean', 'wine', 'indigo', 'slate', 'olive'],
+        d.appearance.surface,
+      ),
       scenery: bool(appearance.scenery, d.appearance.scenery),
       reduceMotion: bool(appearance.reduceMotion, d.appearance.reduceMotion),
       compact: bool(appearance.compact, d.appearance.compact),
@@ -242,6 +291,48 @@ export function writeSettings(settings: Settings): void {
 }
 
 // The dark colours behind the whole app. Midnight is the stylesheet's own default.
+// A dark set of colours built around one hue, so every theme keeps the same depth.
+function surfaceFrom(hue: number, saturation = 1): Record<string, string> {
+  const hex = (h: number, s: number, l: number) => {
+    const a = (s / 100) * Math.min(l / 100, 1 - l / 100)
+    const channel = (n: number) => {
+      const k = (n + h / 30) % 12
+      const value = l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+      return Math.round(255 * value)
+        .toString(16)
+        .padStart(2, '0')
+    }
+    return `#${channel(0)}${channel(8)}${channel(4)}`
+  }
+  const sat = (value: number) => Math.round(value * saturation)
+  return {
+    '--surface-shell': hex(hue, sat(50), 7),
+    '--surface-main-a': hex(hue, sat(45), 8),
+    '--surface-main-b': hex(hue, sat(42), 11),
+    '--surface-ctx-a': hex(hue, sat(50), 6),
+    '--surface-ctx-b': hex(hue, sat(42), 9),
+    '--surface-card-a': hex(hue, sat(36), 15),
+    '--surface-card-b': hex(hue, sat(45), 8),
+    '--surface-pop': hex(hue, sat(40), 10),
+    '--surface-deep': hex(hue, sat(55), 5),
+    '--surface-panel': `${hex(hue, sat(38), 11)}e6`,
+  }
+}
+
+// The circle shown in Settings is a bright stand-in for each dark theme, so it can be seen on a dark page.
+export const SURFACE_SWATCH: Record<SurfaceName, string> = {
+  midnight: '#4aa3ff',
+  charcoal: '#a3acb7',
+  forest: '#3ecf7a',
+  plum: '#c26bff',
+  espresso: '#d9915a',
+  ocean: '#25c7d9',
+  wine: '#ff5c7c',
+  indigo: '#7a7dff',
+  slate: '#8fb0cc',
+  olive: '#b3cf45',
+}
+
 export const SURFACES: Record<SurfaceName, { label: string; vars: Record<string, string> }> = {
   midnight: { label: 'Midnight', vars: {} },
   charcoal: {
@@ -304,6 +395,11 @@ export const SURFACES: Record<SurfaceName, { label: string; vars: Record<string,
       '--surface-deep': '#100a07',
     },
   },
+  ocean: { label: 'Ocean', vars: surfaceFrom(190) },
+  wine: { label: 'Wine', vars: surfaceFrom(345) },
+  indigo: { label: 'Indigo', vars: surfaceFrom(245) },
+  slate: { label: 'Slate', vars: surfaceFrom(212, 0.5) },
+  olive: { label: 'Olive', vars: surfaceFrom(75, 0.8) },
 }
 export const SURFACE_VARS = [...new Set(Object.values(SURFACES).flatMap((item) => Object.keys(item.vars)))]
 
