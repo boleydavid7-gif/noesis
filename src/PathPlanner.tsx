@@ -1,6 +1,17 @@
 import { libraryBooksForStage, readNextOnPath } from './lib/pathLink'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  Check,
+  Clock,
+  ExternalLink,
+  Lightbulb,
+  Search,
+  Sparkles,
+  Star,
+  StickyNote,
+} from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import {
@@ -26,6 +37,7 @@ import {
   planProgress,
   rankBooks,
   toggleTopic,
+  moveOn,
   topicCount,
   type LearningPath,
   type PathPlan,
@@ -375,6 +387,8 @@ export function PathPlanDetail({
     (library ?? []).map((book) => ({ ...book, progress: book.progress ?? 0 })),
   )
   const { done } = planProgress(plan)
+  const moveOnFrom = (milestoneId: string) =>
+    onChange({ ...path, plan: moveOn(plan, milestoneId), updated: new Date().toISOString() })
   const tick = (topicId: string) =>
     onChange({ ...path, plan: toggleTopic(plan, topicId), updated: new Date().toISOString() })
   // Asks Noema for books and free resources for one stage, checks them, and
@@ -412,7 +426,7 @@ export function PathPlanDetail({
       <section className="plan-next" aria-label={done === 0 ? 'Where to start' : 'What to do next'}>
         {next ? (
           <>
-            <p className="plan-next-label">{done === 0 ? 'Start here' : 'Up next'}</p>
+            <p className="plan-next-label">Suggested next</p>
             <h4>{next.topic.label}</h4>
             <p className="plan-next-where">
               Stage {next.milestoneIndex + 1} of {plan.milestones.length}: {next.milestone.title}
@@ -426,11 +440,11 @@ export function PathPlanDetail({
                     ? 'Start with one of the materials below.'
                     : 'Use Find materials to get books and links for this stage.'}
                 </li>
-                <li>Work through the topics in order. Tick one when you could explain it yourself.</li>
+                <li>Work through the topics in order.</li>
                 <li>
                   {next.milestone.outcome
                     ? `You’re ready for the next stage when you can: ${next.milestone.outcome.replace(/^./, (c) => c.toLowerCase())}`
-                    : 'Move to the next stage once every topic here is ticked.'}
+                    : 'Move on when you feel ready.'}
                 </li>
               </ol>
             ) : null}
@@ -486,8 +500,8 @@ export function PathPlanDetail({
               onPassed={() => tick(next.topic.id)}
             />
             <div className="plan-next-actions">
-              <button className="primary-button" onClick={() => tick(next.topic.id)}>
-                <Check size={14} /> Mark done
+              <button className="primary-button" onClick={() => moveOnFrom(next.milestone.id)}>
+                <ArrowRight size={14} /> Move on to the next stage
               </button>
               <button
                 className="secondary-button"
@@ -509,7 +523,6 @@ export function PathPlanDetail({
       {plan.milestones.map((milestone, index) => {
         const finished = milestoneDone(milestone)
         const current = next?.milestoneIndex === index
-        const ticked = milestone.topics.filter((topic) => topic.done).length
         return (
           <details
             key={milestone.id}
@@ -522,9 +535,7 @@ export function PathPlanDetail({
                 {milestone.title}
                 {milestone.timeframe ? <small>{milestone.timeframe}</small> : null}
               </span>
-              <span className="plan-status">
-                {finished ? 'Done' : current ? 'Current' : 'Upcoming'} · {ticked}/{milestone.topics.length}
-              </span>
+              <span className="plan-status">{finished ? 'Done' : current ? 'Current' : 'Upcoming'}</span>
             </summary>
             {milestone.outcome ? (
               <p className="plan-outcome">
@@ -534,10 +545,7 @@ export function PathPlanDetail({
             <ul>
               {milestone.topics.map((topic) => (
                 <li key={topic.id}>
-                  <label>
-                    <input type="checkbox" checked={topic.done} onChange={() => tick(topic.id)} />
-                    <span>{topic.label}</span>
-                  </label>
+                  <span className="plan-topic">{topic.label}</span>
                   {onAsk ? (
                     <button
                       className="plan-ask"

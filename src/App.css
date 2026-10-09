@@ -9482,3 +9482,28 @@ input[type='radio'] {
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
+
+.recommended-shelf {
+  margin-bottom: 8px;
+}
+.recommended-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+.recommended-actions {
+  margin-top: 6px;
+}
+.recommended-shelf .empty-state {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+.recommended-shelf a.shelf-book {
+  color: inherit;
+  text-decoration: none;
+}
+.plan-topic,
+.study-topic {
+  flex: 1;
+}

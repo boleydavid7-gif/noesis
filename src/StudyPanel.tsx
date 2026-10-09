@@ -10,15 +10,7 @@ export type StudyInfo = {
 }
 
 // What this book is for, shown beside the page: the stage, its topics, and a way to tick or write about each.
-export function StudyPanel({
-  study,
-  onTick,
-  onNote,
-}: {
-  study: StudyInfo
-  onTick: (topicId: string) => void
-  onNote: (topic: string) => void
-}) {
+export function StudyPanel({ study, onNote }: { study: StudyInfo; onNote: (topic: string) => void }) {
   return (
     <section className="study-panel" aria-label="What you are studying">
       <div className="study-head">
@@ -34,10 +26,7 @@ export function StudyPanel({
       <ul>
         {study.topics.map((topic) => (
           <li key={topic.id} className={topic.done ? 'study-done' : ''}>
-            <label>
-              <input type="checkbox" checked={topic.done} onChange={() => onTick(topic.id)} />
-              <span>{topic.label}</span>
-            </label>
+            <span className="study-topic">{topic.label}</span>
             <button
               className="plan-ask"
               onClick={() => onNote(topic.label)}
@@ -50,7 +39,6 @@ export function StudyPanel({
           </li>
         ))}
       </ul>
-      <small>Tick a topic when you could explain it yourself.</small>
     </section>
   )
 }

@@ -12,6 +12,7 @@ export type PlanMilestone = {
   resourceTitles?: string[] // titles from the plan's resource list to study with
   bookTitles?: string[] // titles from the plan's book list to study with
   hours?: number // estimated study hours for the whole stage
+  moved?: boolean // the reader chose to move past this stage
 }
 
 export type PlanResource = { title: string; publisher: string; url: string; kind: string; note?: string }
@@ -253,7 +254,17 @@ export function planProgress(plan: Pick<PathPlan, 'milestones'>): { done: number
 }
 
 export function milestoneDone(milestone: PlanMilestone): boolean {
-  return milestone.topics.length > 0 && milestone.topics.every((topic) => topic.done)
+  return Boolean(milestone.moved) || (milestone.topics.length > 0 && milestone.topics.every((topic) => topic.done))
+}
+
+// The reader decides when a stage is behind them.
+export function moveOn(plan: PathPlan, milestoneId: string): PathPlan {
+  return {
+    ...plan,
+    milestones: plan.milestones.map((milestone) =>
+      milestone.id === milestoneId ? { ...milestone, moved: true } : milestone,
+    ),
+  }
 }
 
 // The first topic that is not done yet, in path order, with where it sits.
@@ -261,6 +272,7 @@ export function nextTopic(
   plan: Pick<PathPlan, 'milestones'>,
 ): { milestoneIndex: number; milestone: PlanMilestone; topic: PlanTopic } | null {
   for (const [milestoneIndex, milestone] of plan.milestones.entries()) {
+    if (milestone.moved) continue
     const topic = milestone.topics.find((item) => !item.done)
     if (topic) return { milestoneIndex, milestone, topic }
   }
