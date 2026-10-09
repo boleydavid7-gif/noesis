@@ -35,6 +35,7 @@ type Props = {
   account: ReactNode
   backup: ReactNode
   books: LibraryBook[]
+  learner: boolean
   dueCount: number
   signedInEmail?: string
   onExport: () => void
@@ -108,7 +109,7 @@ export function SettingsPage(props: Props) {
               <AboutSection />
             </>
           ) : null}
-          {section === 'reading' ? <ReadingSection settings={settings} set={set} /> : null}
+          {section === 'reading' ? <ReadingSection settings={settings} set={set} learner={props.learner} /> : null}
           {section === 'appearance' ? <AppearanceSection settings={settings} set={set} /> : null}
           {section === 'library' ? (
             <>
@@ -125,7 +126,7 @@ export function SettingsPage(props: Props) {
 
 type SetFn = <S extends keyof Settings, K extends keyof Settings[S]>(section: S, key: K, value: Settings[S][K]) => void
 
-function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
+function ReadingSection({ settings, set, learner }: { settings: Settings; set: SetFn; learner: boolean }) {
   const reading = settings.reading
   const [fontName, setFontName] = useState(() => customFontName())
   const [fontNote, setFontNote] = useState('')
@@ -139,7 +140,7 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
         >
           <Segmented
             label="Mode"
-            value={settings.ui.mode}
+            value={learner ? 'learner' : 'reader'}
             onChange={(value) => set('ui', 'mode', value)}
             options={[
               { value: 'reader', label: 'Reading' },
