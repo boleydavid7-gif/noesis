@@ -59,6 +59,8 @@ import {
 import { epubBookFromParsed, openEpub, parseEpub, pdfBookFromSource, recapText } from './lib/epub'
 import {
   loadBookText,
+  INTENTS,
+  WANT_SHELF,
   isStarted,
   loadEpubFile,
   readLibraryBooks,
@@ -393,7 +395,9 @@ function App() {
         ? books.filter((book) => book.series === shelfFilter.slice(7))
         : shelfFilter === 'finished'
           ? books.filter((book) => book.finished)
-          : books
+          : shelfFilter === 'reading'
+            ? books.filter((book) => isStarted(book) && !book.finished && book.progress < 98)
+            : books
     const matches = q
       ? inShelf.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q))
       : [...inShelf]
@@ -462,9 +466,13 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, notes, paths, focusState.running])
   const hasFinished = books.some((book) => book.finished)
+  const hasReading = books.some((book) => isStarted(book) && !book.finished && book.progress < 98)
   const dupes = useMemo(() => duplicateGroups(books), [books])
   const allShelves = useMemo(
-    () => [...new Set(books.flatMap((book) => book.shelves ?? []))].sort((a, b) => a.localeCompare(b)),
+    () =>
+      [...new Set([WANT_SHELF, ...books.flatMap((book) => book.shelves ?? [])])].sort((a, b) =>
+        a === WANT_SHELF ? -1 : b === WANT_SHELF ? 1 : a.localeCompare(b),
+      ),
     [books],
   )
   const overallProgress = books.length
@@ -1451,6 +1459,7 @@ function App() {
               ? `Spoiler rule: the reader is ${Math.round(activeBook.progress)}% through the book. Use only the text supplied, and never reveal or hint at anything that comes later.`
               : '',
             `Author: ${activeBook.author}`,
+            activeBook.intent ? `Why the reader chose this book: ${activeBook.intent}` : '',
             `Current location: ${activeContext?.chapter ?? activeBook.chapter}`,
             `Format: ${activeBook.format}`,
             activeContext?.bookTitle ? `Reader source: ${activeContext.bookTitle}` : '',
@@ -2228,11 +2237,14 @@ function App() {
             onAsk={askAboutHits}
             byMeaning={settings.ai.onDevice}
           />
-          {allShelves.length + allSeries.length > 0 || hasFinished ? (
+          {books.length > 1 ? (
             <div className="shelf-chips" role="tablist" aria-label="Shelves">
               {[
                 { key: '', label: 'All books' },
-                ...allShelves.map((name) => ({ key: `shelf:${name}`, label: name })),
+                ...(hasReading ? [{ key: 'reading', label: 'Reading' }] : []),
+                ...allShelves
+                  .filter((name) => name !== WANT_SHELF || books.some((book) => book.shelves?.includes(WANT_SHELF)))
+                  .map((name) => ({ key: `shelf:${name}`, label: name })),
                 ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
                 ...(hasFinished ? [{ key: 'finished', label: 'Finished' }] : []),
               ].map((chip) => (
@@ -2275,6 +2287,9 @@ function App() {
               setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
             }
             detailPane
+            onIntent={(book, intent) =>
+              setBooks(upsertLibraryBook({ ...book, intent: intent || undefined, updated: new Date().toISOString() }))
+            }
           />
         </div>
       </Page>
@@ -2868,8 +2883,40 @@ function App() {
         onBookmark={toggleBookmark}
         onRemoveNote={removeNote}
         onCopied={showNotice}
-        reading={settings.reading}
-        onReadingChange={(patch) => updateSettings({ ...settings, reading: { ...settings.reading, ...patch } })}
+        reading={{ ...settings.reading, ...(selectedBook.look as Partial<AppSettings['reading']> | undefined) }}
+        ownLook={Boolean(selectedBook.look)}
+        onOwnLook={(on) =>
+          setBooks(
+            upsertLibraryBook({
+              ...selectedBook,
+              look: on
+                ? {
+                    fontSize: settings.reading.fontSize,
+                    theme: settings.reading.theme,
+                    font: settings.reading.font,
+                    lineHeight: settings.reading.lineHeight,
+                  }
+                : undefined,
+              updated: new Date().toISOString(),
+            }),
+          )
+        }
+        onReadingChange={(patch) => {
+          // A book with its own look keeps page-look changes to itself; everything else changes the defaults.
+          const own: Record<string, unknown> = {}
+          const rest: Record<string, unknown> = {}
+          for (const [key, value] of Object.entries(patch))
+            (selectedBook.look && ['fontSize', 'theme', 'font', 'lineHeight'].includes(key) ? own : rest)[key] = value
+          if (Object.keys(own).length)
+            setBooks(
+              upsertLibraryBook({
+                ...selectedBook,
+                look: { ...selectedBook.look, ...own },
+                updated: new Date().toISOString(),
+              }),
+            )
+          if (Object.keys(rest).length) updateSettings({ ...settings, reading: { ...settings.reading, ...rest } })
+        }}
         initialLocation={readerJump}
       />
     ) : activeNav === 'Home' ? (
@@ -3688,8 +3735,10 @@ function BookSection({
   onSeries,
   onEdit,
   detailPane,
+  onIntent,
 }: {
   detailPane?: boolean
+  onIntent?: (book: LibraryBook, intent: string) => void
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
   onImport?: () => void
@@ -3781,6 +3830,19 @@ function BookSection({
                 </small>
               ) : null}
               {preview.shelves?.length ? <small>On: {preview.shelves.join(', ')}</small> : null}
+              {onIntent ? (
+                <label className="book-detail-intent">
+                  Why this book?
+                  <select value={preview.intent ?? ''} onChange={(event) => onIntent(preview, event.target.value)}>
+                    <option value="">No reason set</option>
+                    {INTENTS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {preview.description ? <p className="book-detail-about">{preview.description.slice(0, 420)}</p> : null}
               <div className="book-detail-actions">
                 <button className="primary-button" onClick={() => onOpen(preview)}>
