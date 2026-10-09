@@ -548,7 +548,7 @@ function App() {
   // Someone with nothing yet sees only the first steps.
   const fresh = books.length + paths.length + notes.length === 0
   // Casual readers see reading only. Planning a path switches on the learning side.
-  const learner = settings.ui.mode === 'learner' || paths.length > 0
+  const learner = settings.ui.mode === 'learner' || (settings.ui.mode === 'auto' && paths.length > 0)
   useEffect(() => {
     const root = document.documentElement
     const { classes, vars } = rootAppearance(settings)
@@ -2129,7 +2129,13 @@ function App() {
           <section className="start-card panel-card">
             <h2>What would you like to do?</h2>
             <div className="start-choices">
-              <button className="start-choice" onClick={() => fileInput.current?.click()}>
+              <button
+                className="start-choice"
+                onClick={() => {
+                  updateSettings({ ...settings, ui: { mode: 'reader' } })
+                  fileInput.current?.click()
+                }}
+              >
                 <BookOpen size={20} />
                 <strong>Just read</strong>
                 <span>Add a book and start. Nothing else to set up.</span>
@@ -2483,7 +2489,7 @@ function App() {
           <input
             value={resourceQuery}
             onChange={(event) => setResourceQuery(event.target.value)}
-            placeholder="What do you want to learn?"
+            placeholder="Search books, articles and papers"
           />
           <button className="primary-button" type="submit" disabled={searching}>
             {searching ? 'Searching…' : 'Search'}
@@ -2547,8 +2553,11 @@ function App() {
             </div>
           )}
         </section>
-        <OpdsBrowser onImport={(file) => importFiles([file])} />
-        <WebdavBrowser onImport={(file) => importFiles([file])} />
+        <details className="settings-more explore-own">
+          <summary>Connect your own book server or cloud folder</summary>
+          <OpdsBrowser onImport={(file) => importFiles([file])} />
+          <WebdavBrowser onImport={(file) => importFiles([file])} />
+        </details>
         <section className="resource-section drm-sources" aria-label="More places for DRM-free books">
           <div className="section-heading">
             <div>
@@ -3014,6 +3023,7 @@ function App() {
         account={accountSection()}
         backup={backupSection()}
         books={books}
+        learner={learner}
         dueCount={dueCount}
         signedInEmail={authUser && !isAnonymousUser(authUser) ? (authUser.email ?? undefined) : undefined}
         onExport={() => void downloadBackupFile(books, notes, paths)}
