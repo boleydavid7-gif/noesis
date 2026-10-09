@@ -33,6 +33,7 @@ export type LibraryBook = {
   chapterProgress?: number
   bookmarked?: boolean
   look?: { fontSize?: number; theme?: 'paper' | 'sepia' | 'night' | 'contrast'; font?: string; lineHeight?: number } // this book's own page look
+  favorite?: boolean
   intent?: string // why the reader chose this book, in their own choice of words
   toc?: Array<{ label: string; href: string }>
 }

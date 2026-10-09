@@ -1654,7 +1654,8 @@
 }
 .book-delete {
   position: absolute;
-  top: -4px;
+  top: auto;
+  bottom: 4px;
   right: -4px;
   z-index: 2;
   display: grid;
@@ -9506,4 +9507,38 @@ input[type='radio'] {
 .plan-topic,
 .study-topic {
   flex: 1;
+}
+
+.book-fav {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #fff;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(6, 14, 24, 0.6);
+  opacity: 0.75;
+}
+.book-fav-on {
+  color: #ff7a8a;
+  opacity: 1;
+}
+.book-read-mark {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 3;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: #0b1018;
+  border-radius: 50%;
+  background: var(--gold-warm, #c7a36a);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }

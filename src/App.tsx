@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock,
   ExternalLink,
+  Heart,
   ListFilter,
   BookOpen,
   Brain,
@@ -392,9 +393,11 @@ function App() {
         ? books.filter((book) => book.series === shelfFilter.slice(7))
         : shelfFilter === 'finished'
           ? books.filter((book) => book.finished)
-          : shelfFilter === 'reading'
-            ? books.filter((book) => isStarted(book) && !book.finished && book.progress < 98)
-            : books
+          : shelfFilter === 'favorites'
+            ? books.filter((book) => book.favorite)
+            : shelfFilter === 'reading'
+              ? books.filter((book) => isStarted(book) && !book.finished && book.progress < 98)
+              : books
     const matches = q
       ? inShelf.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(q))
       : [...inShelf]
@@ -464,6 +467,7 @@ function App() {
   }, [books, notes, paths, focusState.running])
   const revisitDue = useMemo(() => dueNotes(notes), [notes])
   const hasFinished = books.some((book) => book.finished)
+  const hasFavorites = books.some((book) => book.favorite)
   const hasReading = books.some((book) => isStarted(book) && !book.finished && book.progress < 98)
   const dupes = useMemo(() => duplicateGroups(books), [books])
   const allShelves = useMemo(
@@ -1314,6 +1318,22 @@ function App() {
         ...book,
         series: name || undefined,
         seriesIndex: name && index && index > 0 ? Math.round(index) : undefined,
+        updated: new Date().toISOString(),
+      }),
+    )
+  }
+  function toggleFavorite(book: LibraryBook) {
+    setBooks(
+      upsertLibraryBook({ ...book, favorite: book.favorite ? undefined : true, updated: new Date().toISOString() }),
+    )
+  }
+  // Read is the reader's own mark; finishing a book sets it too.
+  function setBookRead(book: LibraryBook, read: boolean) {
+    setBooks(
+      upsertLibraryBook({
+        ...book,
+        finished: read ? (book.finished ?? new Date().toISOString()) : undefined,
+        reviewAsked: read ? true : book.reviewAsked,
         updated: new Date().toISOString(),
       }),
     )
@@ -2318,15 +2338,16 @@ function App() {
             />
           ) : null}
           {books.length > 1 ? (
-            <div className="shelf-chips" role="tablist" aria-label="Shelves">
+            <div className="shelf-chips" role="tablist" aria-label="Collections">
               {[
                 { key: '', label: 'All books' },
+                ...(hasFavorites ? [{ key: 'favorites', label: 'Favorites' }] : []),
                 ...(hasReading ? [{ key: 'reading', label: 'Reading' }] : []),
                 ...allShelves
                   .filter((name) => name !== WANT_SHELF || books.some((book) => book.shelves?.includes(WANT_SHELF)))
                   .map((name) => ({ key: `shelf:${name}`, label: name })),
                 ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
-                ...(hasFinished ? [{ key: 'finished', label: 'Finished' }] : []),
+                ...(hasFinished ? [{ key: 'finished', label: 'Read' }] : []),
               ].map((chip) => (
                 <button
                   key={chip.key || 'all'}
@@ -2367,6 +2388,8 @@ function App() {
               setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
             }
             detailPane
+            onFavorite={toggleFavorite}
+            onRead={setBookRead}
             onIntent={
               learner
                 ? (book, intent) =>
@@ -3725,7 +3748,9 @@ function ShelfPicker({
   onChange,
   onSeries,
   onEdit,
+  onRead,
 }: {
+  onRead?: (book: LibraryBook, read: boolean) => void
   onEdit?: (book: LibraryBook) => void
   book: LibraryBook
   all: string[]
@@ -3753,13 +3778,18 @@ function ShelfPicker({
       <button
         className="book-shelf-button"
         onClick={() => setOpen((value) => !value)}
-        aria-label={`Shelves for ${book.title}`}
+        aria-label={`Collections for ${book.title}`}
         aria-expanded={open}
       >
         <Tag size={13} />
       </button>
       {open ? (
         <div className="shelf-picker-pop">
+          {onRead ? (
+            <button className="text-button shelf-edit" onClick={() => onRead(book, !book.finished)}>
+              {book.finished ? 'Mark as not read' : 'Mark as read'}
+            </button>
+          ) : null}
           {onEdit ? (
             <button
               className="text-button shelf-edit"
@@ -3787,9 +3817,9 @@ function ShelfPicker({
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="New shelf"
+              placeholder="New collection"
               maxLength={30}
-              aria-label="New shelf name"
+              aria-label="New collection name"
             />
           </form>
           {onSeries ? (
@@ -3837,8 +3867,12 @@ function BookSection({
   onEdit,
   detailPane,
   onIntent,
+  onFavorite,
+  onRead,
 }: {
   detailPane?: boolean
+  onFavorite?: (book: LibraryBook) => void
+  onRead?: (book: LibraryBook, read: boolean) => void
   onIntent?: (book: LibraryBook, intent: string) => void
   books: LibraryBook[]
   onOpen: (book: LibraryBook) => void
@@ -3877,6 +3911,11 @@ function BookSection({
                   <div className="book-card-cover">
                     <BookCover book={book} compact />
                     <ProgressRing value={book.progress} />
+                    {book.finished ? (
+                      <span className="book-read-mark" title="Read" aria-label="Read">
+                        <Check size={13} />
+                      </span>
+                    ) : null}
                     {book.accessType === 'borrow' ? (
                       <span className="book-card-badge">Borrowed</span>
                     ) : book.format === 'resource' ? (
@@ -3893,6 +3932,18 @@ function BookSection({
                     </div>
                   ) : null}
                 </button>
+                {onFavorite ? (
+                  <button
+                    className={'book-fav' + (book.favorite ? ' book-fav-on' : '')}
+                    onClick={() => onFavorite(book)}
+                    aria-label={
+                      book.favorite ? `Remove ${book.title} from favorites` : `Add ${book.title} to favorites`
+                    }
+                    aria-pressed={Boolean(book.favorite)}
+                  >
+                    <Heart size={14} fill={book.favorite ? 'currentColor' : 'none'} />
+                  </button>
+                ) : null}
                 {onShelves ? (
                   <ShelfPicker
                     book={book}
@@ -3900,6 +3951,7 @@ function BookSection({
                     onChange={onShelves}
                     onSeries={onSeries}
                     onEdit={onEdit}
+                    onRead={onRead}
                   />
                 ) : null}
                 {onDelete ? (
@@ -3946,6 +3998,17 @@ function BookSection({
               ) : null}
               {preview.description ? <p className="book-detail-about">{preview.description.slice(0, 420)}</p> : null}
               <div className="book-detail-actions">
+                {onFavorite ? (
+                  <button className="secondary-button" onClick={() => onFavorite(preview)}>
+                    <Heart size={14} fill={preview.favorite ? 'currentColor' : 'none'} />{' '}
+                    {preview.favorite ? 'Favorite' : 'Add to favorites'}
+                  </button>
+                ) : null}
+                {onRead ? (
+                  <button className="secondary-button" onClick={() => onRead(preview, !preview.finished)}>
+                    <Check size={14} /> {preview.finished ? 'Marked as read' : 'Mark as read'}
+                  </button>
+                ) : null}
                 <button className="primary-button" onClick={() => onOpen(preview)}>
                   {preview.progress > 0 ? 'Continue reading' : 'Start reading'}
                 </button>
@@ -4388,7 +4451,7 @@ function ReadingShelfSection({
         <div className="empty-state">No books started yet.</div>
       ) : (
         <div className="bookshelf-row">
-          {shelf.slice(0, 8).map((book) => (
+          {shelf.slice(0, 4).map((book) => (
             <button className="shelf-book" key={book.id} onClick={() => onOpen(book)}>
               <div className="shelf-cover">
                 <BookCover book={book} compact />
