@@ -1233,6 +1233,135 @@ async function proxyResource(request: Request): Promise<Response> {
   return new Response(response.body.pipeThrough(limiter), { status: 200, headers })
 }
 
+// ---- Cover search --------------------------------------------------------------------------------
+// Looks for cover pictures for a book in Open Library and Google Books, and hands the chosen picture
+// to the page from this same address (so it can be saved without the other sites' permission).
+
+const COVER_HOSTS = [
+  'covers.openlibrary.org',
+  'archive.org',
+  'books.google.com',
+  'books.googleusercontent.com',
+  'googleusercontent.com',
+]
+const MAX_COVER_BYTES = 3_000_000
+const MAX_COVER_REDIRECTS = 4
+
+export function isAllowedCover(url: URL): boolean {
+  return (
+    url.protocol === 'https:' && COVER_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))
+  )
+}
+
+type CoverChoice = { id: string; source: string; label: string; thumb: string; full: string }
+
+async function searchCovers(request: Request, env: Env): Promise<Response> {
+  if (rateLimited(request, 'covers', 30))
+    return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
+  const params = new URL(request.url).searchParams
+  const title = (params.get('title') ?? '').trim().slice(0, MAX_SEARCH_LENGTH)
+  const author = (params.get('author') ?? '').trim().slice(0, MAX_SEARCH_LENGTH)
+  if (!title) return json({ ok: false, error: 'A title is required.' }, 400)
+
+  const choices: CoverChoice[] = []
+  const seen = new Set<string>()
+  const add = (choice: CoverChoice) => {
+    if (seen.has(choice.full) || choices.length >= 24) return
+    seen.add(choice.full)
+    choices.push(choice)
+  }
+
+  const open = async () => {
+    const query = new URLSearchParams({ title, limit: '12', fields: 'cover_i,title,author_name,first_publish_year' })
+    if (author && author.toLowerCase() !== 'unknown author') query.set('author', author)
+    const response = await fetchWithTimeout(`https://openlibrary.org/search.json?${query}`, {}, 6_000)
+    if (!response.ok) return
+    const body = (await response.json()) as {
+      docs?: Array<{ cover_i?: number; title?: string; author_name?: string[]; first_publish_year?: number }>
+    }
+    for (const doc of body.docs ?? []) {
+      if (!doc.cover_i) continue
+      add({
+        id: `ol-${doc.cover_i}`,
+        source: 'Open Library',
+        label: [doc.title, doc.first_publish_year].filter(Boolean).join(' · '),
+        thumb: `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`,
+        full: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+      })
+    }
+  }
+
+  const google = async () => {
+    const key = env.GOOGLE_BOOKS_API_KEY?.trim()
+    const q = `intitle:${title}${author && author.toLowerCase() !== 'unknown author' ? `+inauthor:${author}` : ''}`
+    const fields = 'items(id,volumeInfo(title,publishedDate,imageLinks))'
+    const response = await fetchWithTimeout(
+      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=12&printType=books&fields=${encodeURIComponent(fields)}${key ? `&key=${encodeURIComponent(key)}` : ''}`,
+      {},
+      6_000,
+    )
+    if (!response.ok) return
+    const body = (await response.json()) as {
+      items?: Array<{
+        id?: string
+        volumeInfo?: { title?: string; publishedDate?: string; imageLinks?: Record<string, string | undefined> }
+      }>
+    }
+    for (const item of body.items ?? []) {
+      const links = item.volumeInfo?.imageLinks
+      const small = links?.thumbnail ?? links?.smallThumbnail
+      if (!small || !item.id) continue
+      const tidy = (value: string) => value.replace(/^http:/, 'https:').replace('&edge=curl', '')
+      const thumb = tidy(small)
+      const big = links?.extraLarge ?? links?.large ?? links?.medium
+      add({
+        id: `gb-${item.id}`,
+        source: 'Google Books',
+        label: [item.volumeInfo?.title, item.volumeInfo?.publishedDate?.slice(0, 4)].filter(Boolean).join(' · '),
+        thumb,
+        full: big ? tidy(big) : thumb.replace(/zoom=\d/, 'zoom=2'),
+      })
+    }
+  }
+
+  await Promise.allSettled([open(), google()])
+  return json({ ok: true, covers: choices })
+}
+
+async function proxyCover(request: Request): Promise<Response> {
+  if (rateLimited(request, 'cover', 120))
+    return json({ ok: false, error: 'Too many pictures. Try again in a minute.' }, 429)
+  const target = new URL(request.url).searchParams.get('url')
+  let url: URL
+  try {
+    url = new URL(target ?? '')
+  } catch {
+    return json({ ok: false, error: 'The picture address is invalid.' }, 400)
+  }
+  if (!isAllowedCover(url)) return json({ ok: false, error: 'That picture cannot be used.' }, 403)
+  let response: Response
+  try {
+    for (let hop = 0; ; hop += 1) {
+      response = await fetchWithTimeout(url, { headers: { accept: 'image/*' }, redirect: 'manual' }, 10_000)
+      const location = response.headers.get('location')
+      if (response.status < 300 || response.status >= 400 || !location) break
+      if (hop >= MAX_COVER_REDIRECTS) return json({ ok: false, error: 'The picture moved too many times.' }, 502)
+      url = new URL(location, url)
+      if (!isAllowedCover(url)) return json({ ok: false, error: 'That picture cannot be used.' }, 403)
+    }
+  } catch {
+    return json({ ok: false, error: 'The picture did not load in time.' }, 502)
+  }
+  const type = response.headers.get('content-type') ?? ''
+  if (!response.ok || !type.startsWith('image/')) return json({ ok: false, error: 'No picture there.' }, 502)
+  const bytes = await response.arrayBuffer()
+  if (bytes.byteLength > MAX_COVER_BYTES) return json({ ok: false, error: 'That picture is too large.' }, 413)
+  return new Response(bytes, {
+    status: 200,
+    headers: { 'content-type': type, 'cache-control': 'public, max-age=86400' },
+  })
+}
+
 // Fetches a public OPDS catalogue for the browser, which often cannot read other sites directly.
 // Only public https addresses, only catalogue-like answers, and a size limit.
 async function proxyCatalogue(request: Request): Promise<Response> {
@@ -1423,6 +1552,8 @@ const worker = {
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)
+    if (url.pathname === '/api/covers' && request.method === 'GET') return searchCovers(request, env)
+    if (url.pathname === '/api/cover' && request.method === 'GET') return proxyCover(request)
     return env.ASSETS.fetch(request)
   },
 }

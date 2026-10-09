@@ -806,3 +806,60 @@ describe('webdav proxy', () => {
     expect(((await response.json()) as { error: string }).error).toMatch(/username and password/)
   })
 })
+
+describe('cover search', () => {
+  it('collects covers from both catalogues without duplicates', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        const address = String(input)
+        if (address.includes('openlibrary.org/search.json'))
+          return new Response(
+            JSON.stringify({ docs: [{ cover_i: 7, title: 'Mistakes Were Made', first_publish_year: 2007 }, {}] }),
+          )
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'abc',
+                volumeInfo: {
+                  title: 'Mistakes Were Made',
+                  publishedDate: '2020-01-01',
+                  imageLinks: { thumbnail: 'http://books.google.com/books/content?id=abc&zoom=1&edge=curl' },
+                },
+              },
+            ],
+          }),
+        )
+      }),
+    )
+    const response = await call('/api/covers?title=Mistakes%20Were%20Made&author=Tavris')
+    const body = (await response.json()) as { covers: Array<{ id: string; thumb: string; full: string }> }
+    expect(body.covers.map((cover) => cover.id)).toEqual(['ol-7', 'gb-abc'])
+    expect(body.covers[1].thumb).toBe('https://books.google.com/books/content?id=abc&zoom=1')
+    expect(body.covers[1].full).toContain('zoom=2')
+  })
+
+  it('only hands back pictures from known cover sites', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const refused = await call(`/api/cover?url=${encodeURIComponent('https://evil.example/a.jpg')}`)
+    expect(refused.status).toBe(403)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a redirect that leaves the known sites, and non-pictures', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 302, headers: { location: 'https://evil.example/x.jpg' } })),
+    )
+    const moved = await call(`/api/cover?url=${encodeURIComponent('https://covers.openlibrary.org/b/id/1-L.jpg')}`)
+    expect(moved.status).toBe(403)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>', { headers: { 'content-type': 'text/html' } })),
+    )
+    const page = await call(`/api/cover?url=${encodeURIComponent('https://covers.openlibrary.org/b/id/2-L.jpg')}`)
+    expect(page.status).toBe(502)
+  })
+})

@@ -9729,3 +9729,61 @@ input[type='radio'] {
   border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.3);
 }
 .reader-wide-tutor > div { background: transparent; }
+
+/* Finding a cover online */
+.cover-finder-backdrop {
+  z-index: 260;
+}
+.cover-finder {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 48px));
+  overflow-y: auto;
+}
+.cover-finder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cover-finder-head h2 {
+  margin: 0;
+}
+.cover-finder-hint,
+.cover-finder-problem {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.cover-finder-problem {
+  color: var(--gold-soft, #ead4a2);
+  opacity: 1;
+}
+.cover-finder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+}
+.cover-finder-item {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.2);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.05);
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.cover-finder-item:hover:not(:disabled) {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.6);
+}
+.cover-finder-item img {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.cover-finder-item small {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}

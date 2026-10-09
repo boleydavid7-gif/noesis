@@ -205,13 +205,14 @@ export async function shrinkStoredCovers(): Promise<LibraryBook[] | null> {
   for (const book of books) next.push({ ...book, coverDataUrl: await shrinkCover(book.coverDataUrl) })
   // Re-read so a book added while this ran is not lost.
   const latest = new Map(readLibraryBooks().map((book) => [book.id, book]))
+  const original = new Map(books.map((book) => [book.id, book.coverDataUrl]))
   const merged: LibraryBook[] = next.map((book) => {
-    const { coverDataUrl, ...rest } = latest.get(book.id) ?? book
-    return book.coverDataUrl
-      ? { ...rest, coverDataUrl: book.coverDataUrl }
-      : coverDataUrl
-        ? { ...rest, coverDataUrl }
-        : rest
+    const current = latest.get(book.id) ?? book
+    // A cover changed while this ran (the person just picked one) is left exactly as they set it.
+    if (current.coverDataUrl !== original.get(book.id)) return current
+    const { coverDataUrl: unused, ...rest } = current
+    void unused
+    return book.coverDataUrl ? { ...rest, coverDataUrl: book.coverDataUrl } : rest
   })
   for (const book of latest.values()) if (!merged.some((item) => item.id === book.id)) merged.unshift(book)
   writeLibraryBooks(merged)
