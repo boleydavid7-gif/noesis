@@ -3963,22 +3963,22 @@ function PathsGuide() {
       </div>
       <ol>
         <li>
-          <b>Name what you want to learn.</b>
+          <b>Choose your subject.</b>
         </li>
         <li>
-          <b>Take one stage at a time.</b>
+          <b>Build understanding step by step.</b>
         </li>
         <li>
-          <b>Read the book, not the app.</b>
+          <b>Read. Think. Apply.</b>
         </li>
         <li>
-          <b>Write it in your own words.</b>
+          <b>Put it into your own words.</b>
         </li>
         <li>
-          <b>Ask Noema when stuck.</b>
+          <b>Use Noema when you get stuck.</b>
         </li>
         <li>
-          <b>Tick a topic when you can explain it.</b>
+          <b>Move forward when you can explain it.</b>
         </li>
       </ol>
     </section>
