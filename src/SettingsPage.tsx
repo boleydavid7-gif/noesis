@@ -132,6 +132,22 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
   const colors = READER_COLORS[reading.theme]
   return (
     <>
+      <Group title="How you use Noesis">
+        <Row
+          title="Mode"
+          detail="Reading keeps things plain. Reading and learning adds paths, a study side panel, and searching inside your books."
+        >
+          <Segmented
+            label="Mode"
+            value={settings.ui.mode}
+            onChange={(value) => set('ui', 'mode', value)}
+            options={[
+              { value: 'reader', label: 'Reading' },
+              { value: 'learner', label: 'Reading and learning' },
+            ]}
+          />
+        </Row>
+      </Group>
       <Group title="Text">
         <Row title="Text size" detail={`${reading.fontSize}%`}>
           <input

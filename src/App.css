@@ -9399,3 +9399,59 @@ input[type='radio'] {
   gap: 8px;
   padding-top: 6px;
 }
+
+.start-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 10px 0 14px;
+}
+.start-choice {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.start-choice:hover {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.12);
+}
+.start-choice svg {
+  color: var(--gold-warm, #c7a36a);
+}
+.start-choice strong {
+  font-size: 17px;
+}
+.start-choice span {
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.8;
+}
+
+.paths-guide {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+}
+.paths-guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.paths-guide ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.paths-guide-link {
+  justify-self: end;
+  margin-bottom: 6px;
+  font-size: 12px;
+}

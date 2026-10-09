@@ -547,6 +547,8 @@ function App() {
   const hasCards = useMemo(() => readReviewCards().length > 0, [activeNav, dataVersion, reviewRemount])
   // Someone with nothing yet sees only the first steps.
   const fresh = books.length + paths.length + notes.length === 0
+  // Casual readers see reading only. Planning a path switches on the learning side.
+  const learner = settings.ui.mode === 'learner' || paths.length > 0
   useEffect(() => {
     const root = document.documentElement
     const { classes, vars } = rootAppearance(settings)
@@ -939,6 +941,8 @@ function App() {
     }))
   }
   function selectNav(label: string) {
+    if (label === 'Learning Paths' && settings.ui.mode !== 'learner')
+      updateSettings({ ...settings, ui: { mode: 'learner' } })
     setMobileNavOpen(false)
     setUtilityOverlay(null)
     if (label === 'Second Brain' || label === 'Notes') {
@@ -2054,7 +2058,7 @@ function App() {
             <ArrowRight size={15} />
           </button>
         ) : null}
-        {revisitDue.length > 0 ? (
+        {learner && revisitDue.length > 0 ? (
           <RevisitCard
             notes={revisitDue}
             onOpen={(note) => (note.bookId ? openNoteLocation(note) : selectNav('Notes'))}
@@ -2066,9 +2070,9 @@ function App() {
             }
           />
         ) : null}
-        {settings.library.goal.enabled || (settings.library.resurface && notes.length > 0) ? (
+        {settings.library.goal.enabled || (learner && settings.library.resurface && notes.length > 0) ? (
           <div className="home-extras">
-            {settings.library.resurface && notes.length > 0 ? (
+            {learner && settings.library.resurface && notes.length > 0 ? (
               <ResurfaceCard
                 notes={notes}
                 shuffle={shuffle}
@@ -2087,9 +2091,11 @@ function App() {
             ) : null}
           </div>
         ) : null}
-        {books.length + paths.length + notes.length > 0 ? (
+        {learner && books.length + paths.length + notes.length > 0 ? (
           <HomeChecklist
-            steps={onboardingSteps({ books, noteCount: notes.length, pathCount: paths.length })}
+            steps={onboardingSteps({ books, noteCount: notes.length, pathCount: paths.length }).filter(
+              (step) => learner || step.id !== 'plan',
+            )}
             hidden={hideChecklist}
             onHide={() => {
               setHideChecklist(true)
@@ -2107,64 +2113,75 @@ function App() {
             }}
           />
         ) : null}
-        <ReadNextCard
-          books={books}
-          notes={notes}
-          onOpenBook={openSavedBook}
-          onFind={(query) => {
-            setResourceQuery(query)
-            selectNav('Explore')
-            void searchResources(undefined, query)
-          }}
-        />
+        {learner ? (
+          <ReadNextCard
+            books={books}
+            notes={notes}
+            onOpenBook={openSavedBook}
+            onFind={(query) => {
+              setResourceQuery(query)
+              selectNav('Explore')
+              void searchResources(undefined, query)
+            }}
+          />
+        ) : null}
         {books.length + paths.length + notes.length === 0 ? (
           <section className="start-card panel-card">
-            <h2>Start here</h2>
-            <div className="start-actions">
-              <button className="primary-button" onClick={() => selectNav('Learning Paths')}>
-                <Sparkles size={15} /> Plan what to learn
+            <h2>What would you like to do?</h2>
+            <div className="start-choices">
+              <button className="start-choice" onClick={() => fileInput.current?.click()}>
+                <BookOpen size={20} />
+                <strong>Just read</strong>
+                <span>Add a book and start. Nothing else to set up.</span>
               </button>
-              <button className="secondary-button" onClick={() => fileInput.current?.click()}>
-                <Plus size={15} /> Add a book
+              <button className="start-choice" onClick={() => selectNav('Learning Paths')}>
+                <Sparkles size={20} />
+                <strong>Learn something</strong>
+                <span>Tell us a subject. We plan the steps and the books, and keep your notes with them.</span>
               </button>
-              {authUser && !isAnonymousUser(authUser) ? null : (
-                <button className="secondary-button" onClick={() => goSignIn('sign-up')}>
-                  <UserRound size={15} /> Create an account
-                </button>
-              )}
             </div>
+            {authUser && !isAnonymousUser(authUser) ? null : (
+              <button className="text-button" onClick={() => goSignIn('sign-up')}>
+                Create an account to keep your books on every device
+              </button>
+            )}
           </section>
         ) : null}
         {fresh ? null : (
           <>
             <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
-            <FreeCopyContext.Provider value={addResource}>
-              <PathSection
-                paths={paths}
-                books={books}
-                onOpen={() => selectNav('Learning Paths')}
-                onUpdate={(updated) => {
-                  const next = paths.map((path) => (path.id === updated.id ? updated : path))
-                  setPaths(next)
-                  writePaths(next)
-                }}
-                onAsk={(prompt) => {
-                  openNoemaPanel(prompt)
-                  void askNoema(prompt)
-                }}
-                onNote={openTopicNote}
-                onOpenBook={(id) => {
-                  const found = books.find((book) => book.id === id)
-                  if (found) openSavedBook(found)
-                }}
+            {learner ? (
+              <FreeCopyContext.Provider value={addResource}>
+                <PathSection
+                  paths={paths}
+                  books={books}
+                  onOpen={() => selectNav('Learning Paths')}
+                  onUpdate={(updated) => {
+                    const next = paths.map((path) => (path.id === updated.id ? updated : path))
+                    setPaths(next)
+                    writePaths(next)
+                  }}
+                  onAsk={(prompt) => {
+                    openNoemaPanel(prompt)
+                    void askNoema(prompt)
+                  }}
+                  onNote={openTopicNote}
+                  onOpenBook={(id) => {
+                    const found = books.find((book) => book.id === id)
+                    if (found) openSavedBook(found)
+                  }}
+                />
+              </FreeCopyContext.Provider>
+            ) : null}
+            {notes.length > 0 ? (
+              <NotesSection
+                notes={notes}
+                onOpen={() => setOverlay('brain')}
+                onViewAll={() => selectNav('Notes')}
+                onOpenNote={openNoteLocation}
               />
-            </FreeCopyContext.Provider>
-            <NotesSection
-              notes={notes}
-              onOpen={() => setOverlay('brain')}
-              onViewAll={() => selectNav('Notes')}
-              onOpenNote={openNoteLocation}
-            />
+            ) : null}
+            {learner ? null : null}
             <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
           </>
         )}
@@ -2225,9 +2242,11 @@ function App() {
               <button className="primary-button" onClick={() => fileInput.current?.click()}>
                 <Upload size={15} /> Add books
               </button>
-              <button className="secondary-button" onClick={() => folderInput.current?.click()}>
-                <Folder size={15} /> Import a folder
-              </button>
+              {learner ? (
+                <button className="secondary-button" onClick={() => folderInput.current?.click()}>
+                  <Folder size={15} /> Import a folder
+                </button>
+              ) : null}
             </div>
           </div>
           {dupes.length > 0 ? (
@@ -2258,12 +2277,14 @@ function App() {
                 </div>
               ))
             : null}
-          <LibraryDeepSearch
-            books={books}
-            onOpen={openAtPassage}
-            onAsk={askAboutHits}
-            byMeaning={settings.ai.onDevice}
-          />
+          {learner ? (
+            <LibraryDeepSearch
+              books={books}
+              onOpen={openAtPassage}
+              onAsk={askAboutHits}
+              byMeaning={settings.ai.onDevice}
+            />
+          ) : null}
           {books.length > 1 ? (
             <div className="shelf-chips" role="tablist" aria-label="Shelves">
               {[
@@ -2314,8 +2335,13 @@ function App() {
               setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
             }
             detailPane
-            onIntent={(book, intent) =>
-              setBooks(upsertLibraryBook({ ...book, intent: intent || undefined, updated: new Date().toISOString() }))
+            onIntent={
+              learner
+                ? (book, intent) =>
+                    setBooks(
+                      upsertLibraryBook({ ...book, intent: intent || undefined, updated: new Date().toISOString() }),
+                    )
+                : undefined
             }
           />
         </div>
@@ -2325,6 +2351,7 @@ function App() {
   function pathsPage() {
     return (
       <Page title="Learning paths" subtitle="">
+        <PathsGuide />
         <FreeCopyContext.Provider value={addResource}>
           <PathPlanner
             onSave={savePlannedPath}
@@ -2887,6 +2914,7 @@ function App() {
         }
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
+        learner={learner}
         study={studyInfo}
         onTick={tickStudyTopic}
         onTopicNote={(topic, location) => {
@@ -3016,7 +3044,12 @@ function App() {
           </div>
           <nav className="main-nav" aria-label="Main navigation">
             {navItems
-              .filter(({ label }) => label !== 'Review' || hasCards || activeNav === 'Review')
+              .filter(({ label }) => {
+                if (label === 'Review') return hasCards || activeNav === 'Review'
+                if (label === 'Learning Paths') return learner || activeNav === 'Learning Paths'
+                if (label === 'Notes') return learner || notes.length > 0 || activeNav === 'Notes'
+                return true
+              })
               .map(({ label, text, icon: Icon }) => (
                 <button
                   key={label}
@@ -3498,7 +3531,7 @@ function App() {
           </div>
         ) : null}
       </main>
-      {activeNav !== 'Settings' && activeNav !== 'Read' && !fresh ? (
+      {activeNav !== 'Settings' && activeNav !== 'Read' && !fresh && learner ? (
         <ContextSidebar
           now={now}
           focus={focusState}
@@ -3914,6 +3947,66 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
+const GUIDE_KEY = 'noesis:paths-guide:v1'
+
+// A short guide for someone new to learning paths: what a path is and the best way to use one.
+function PathsGuide() {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(GUIDE_KEY) !== 'seen'
+    } catch {
+      return true
+    }
+  })
+  const close = () => {
+    setOpen(false)
+    try {
+      localStorage.setItem(GUIDE_KEY, 'seen')
+    } catch {
+      // The guide simply shows again next time.
+    }
+  }
+  if (!open)
+    return (
+      <button className="text-button paths-guide-link" onClick={() => setOpen(true)}>
+        How paths work
+      </button>
+    )
+  return (
+    <section className="paths-guide panel-card" aria-label="How paths work">
+      <div className="paths-guide-head">
+        <strong>How to get the most from a path</strong>
+        <button className="text-button" onClick={close}>
+          Got it
+        </button>
+      </div>
+      <ol>
+        <li>
+          <b>Say what you want to learn.</b> Pick one focus from the choices, so the books stay on what you want.
+        </li>
+        <li>
+          <b>Work one stage at a time.</b> Each stage has a few topics and a book or link to read.
+        </li>
+        <li>
+          <b>Read the book, not the app.</b> Highlight what matters. While you read, the stage and its topics sit beside
+          the page.
+        </li>
+        <li>
+          <b>Write in your own words.</b> Use the note button next to a topic. Putting an idea in your words is what
+          makes it stick.
+        </li>
+        <li>
+          <b>Ask Noema when you are stuck.</b> Select a passage and ask. Nothing is graded, and you can ask to be
+          quizzed whenever you like.
+        </li>
+        <li>
+          <b>Tick a topic when you could explain it.</b> Read next always tells you what to pick up.
+        </li>
+      </ol>
+    </section>
+  )
+}
+
 function HomeChecklist({
   steps,
   hidden,

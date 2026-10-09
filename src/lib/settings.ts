@@ -48,6 +48,7 @@ export type Settings = {
     onDevice: boolean
   }
   notifications: { reviewReminders: boolean }
+  ui: { mode: 'reader' | 'learner' }
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -79,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
   backup: { autoSync: true },
   ai: { enabled: true, length: 'balanced', useReadingText: true, useNotes: true, avoidSpoilers: true, onDevice: false },
   notifications: { reviewReminders: false },
+  ui: { mode: 'reader' },
 }
 
 export const ACCENTS: Record<
@@ -219,6 +221,7 @@ export function sanitizeSettings(input: unknown): Settings {
       onDevice: bool(ai.onDevice, d.ai.onDevice),
     },
     notifications: { reviewReminders: bool(notifications.reviewReminders, d.notifications.reviewReminders) },
+    ui: { mode: pick(obj(root.ui).mode, ['reader', 'learner'], d.ui.mode) },
   }
 }
 
