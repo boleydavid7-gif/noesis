@@ -9687,3 +9687,7 @@ input[type='radio'] {
   border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.2);
   background: rgba(var(--accent-rgb, 220, 194, 142), 0.07);
 }
+.reader-wide-footer,
+.reader-wide-topbar {
+  background: var(--surface-deep, #07121c);
+}
