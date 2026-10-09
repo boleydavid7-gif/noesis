@@ -1190,6 +1190,7 @@ export function Reader({
       className={
         'reader-page panel-card ' +
         (wideLayout ? 'reader-page-wide' : '') +
+        (wideLayout && toolsOpen ? ' reader-tools-open' : '') +
         (pageTurn ? ' reader-page-turn-' + pageTurn : '')
       }
     >
