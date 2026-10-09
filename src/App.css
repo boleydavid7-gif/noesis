@@ -9264,3 +9264,76 @@ input[type='radio'] {
   display: flex;
   gap: 14px;
 }
+
+.revisit-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+}
+.revisit-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.revisit-card li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+.revisit-card li > span:first-child {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.revisit-card small {
+  opacity: 0.7;
+}
+.revisit-actions {
+  display: flex;
+  gap: 12px;
+}
+.brain-organise {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.brain-organise select,
+.brain-merge select {
+  padding: 6px 8px;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.brain-organise option,
+.brain-merge option {
+  color: #111;
+}
+.brain-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.brain-tag-chips button {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: transparent;
+}
+.brain-tag-chips .brain-tag-on {
+  color: var(--accent-light, #f0d18a);
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.brain-merge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -44,6 +44,8 @@ export type BrainNote = {
   cfi?: string
   tags?: string[]
   quote?: string // the passage a note was written about
+  notebook?: string // a named folder the reader keeps this note in
+  revisit?: string // a day (YYYY-MM-DD) the reader asked to see this note again
   color?: HighlightColor
 }
 
@@ -140,6 +142,8 @@ function fromRemote(row: Record<string, unknown>): BrainNote {
     cfi: typeof saved.cfi === 'string' ? saved.cfi : undefined,
     tags: Array.isArray(saved.tags) ? saved.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
     quote: typeof saved.quote === 'string' ? saved.quote : undefined,
+    notebook: typeof saved.notebook === 'string' ? saved.notebook : undefined,
+    revisit: typeof saved.revisit === 'string' ? saved.revisit : undefined,
     color: HIGHLIGHT_COLORS.some((item) => item.id === saved.color) ? saved.color : undefined,
   }
 }
