@@ -41,3 +41,41 @@ export function libraryBooksForStage<T extends BookLike>(milestone: PlanMileston
   const wanted = milestone.bookTitles ?? []
   return books.filter((book) => wanted.some((title) => matchesTitle(book, title)))
 }
+
+export type ReadNext =
+  | { kind: 'continue' | 'start'; book: { id: string; title: string }; stage: string; why?: string }
+  | { kind: 'get'; title: string; stage: string; why?: string }
+  | { kind: 'read'; title: string; url: string; stage: string; why?: string }
+  | { kind: 'finished-all'; titles: string[]; stage: string }
+  | { kind: 'find'; stage: string }
+
+type LibraryItem = BookLike & { progress: number; finished?: string }
+
+// What to read next on a path: the book already in the library for the stage you are on, then a book to get,
+// then a free source, and only then a prompt to find materials. Null when every topic is done.
+export function readNextOnPath(path: LearningPath, library: LibraryItem[]): ReadNext | null {
+  const plan = path.plan
+  if (!plan) return null
+  const next = nextTopic(plan)
+  if (!next) return null
+  const stage = next.milestone
+  const owned = libraryBooksForStage(stage, library)
+  const done = (book: LibraryItem) => Boolean(book.finished) || book.progress >= 98
+  const started = owned.find((book) => !done(book) && book.progress > 0)
+  const fresh = owned.find((book) => !done(book))
+  const noteFor = (title: string) =>
+    plan.books.find(
+      (book) => matchesTitle({ id: '', title: book.title }, title) || matchesTitle({ id: '', title }, book.title),
+    )?.note
+  if (started) return { kind: 'continue', book: started, stage: stage.title, why: noteFor(started.title) }
+  if (fresh) return { kind: 'start', book: fresh, stage: stage.title, why: noteFor(fresh.title) }
+  if (owned.length > 0) return { kind: 'finished-all', titles: owned.map((book) => book.title), stage: stage.title }
+  const wanted = (stage.bookTitles ?? []).find((title) => !library.some((book) => matchesTitle(book, title)))
+  if (wanted) return { kind: 'get', title: wanted, stage: stage.title, why: noteFor(wanted) }
+  const resource = plan.resources.find((item) =>
+    (stage.resourceTitles ?? []).some((title) => title.trim().toLowerCase() === item.title.trim().toLowerCase()),
+  )
+  if (resource)
+    return { kind: 'read', title: resource.title, url: resource.url, stage: stage.title, why: resource.note }
+  return { kind: 'find', stage: stage.title }
+}

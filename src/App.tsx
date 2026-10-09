@@ -106,7 +106,7 @@ import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
 import { planProgress, toggleTopic, type LearningPath } from './lib/pathPlan'
-import { studyFor } from './lib/pathLink'
+import { readNextOnPath, studyFor } from './lib/pathLink'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
 import { WeatherPanel } from './WeatherPanel'
@@ -4339,6 +4339,12 @@ function PathSection({
                       ? `${plan.done} / ${plan.total} topics`
                       : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
                   </small>
+                  {(() => {
+                    const next = readNextOnPath(path, books)
+                    return next && (next.kind === 'continue' || next.kind === 'start') ? (
+                      <small className="path-tile-next">Read next: {next.book.title}</small>
+                    ) : null
+                  })()}
                   <span className="path-tile-track">
                     <span style={{ width: `${percent}%` }} />
                   </span>
