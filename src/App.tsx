@@ -1701,6 +1701,13 @@ function App() {
     setOverlay(null)
     setUtilityOverlay(null)
   }
+  function deletePath(id: string) {
+    const next = paths.filter((path) => path.id !== id)
+    markDeleted('path', id)
+    setPaths(next)
+    writePaths(next)
+    showNotice('Path removed.')
+  }
   function createPath(event: React.FormEvent) {
     event.preventDefault()
     if (!pathDraft.title.trim()) return
@@ -2225,6 +2232,7 @@ function App() {
                   paths={paths}
                   books={books}
                   onOpen={() => selectNav('Learning Paths')}
+                  onDelete={deletePath}
                   onUpdate={(updated) => {
                     const next = paths.map((path) => (path.id === updated.id ? updated : path))
                     setPaths(next)
@@ -2453,12 +2461,7 @@ function App() {
             books={books}
             editable
             initialOpen={justSavedPath}
-            onDelete={(id) => {
-              const next = paths.filter((path) => path.id !== id)
-              markDeleted('path', id)
-              setPaths(next)
-              writePaths(next)
-            }}
+            onDelete={deletePath}
             onAssign={(pathId, bookId) => {
               const next = paths.map((path) =>
                 path.id === pathId && bookId && !path.bookIds.includes(bookId)
@@ -4552,6 +4555,7 @@ function PathSection({
   onNote?: (title: string, source: string) => void
 }) {
   const [selected, setSelected] = useState<string | null>(initialOpen)
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
   // A path that was just saved opens straight away and scrolls into view.
   useEffect(() => {
@@ -4654,17 +4658,31 @@ function PathSection({
                 · {detail.percent >= 100 ? 'Complete' : `${detail.percent}%`}
               </small>
             </div>
-            {editable ? (
-              <button
-                className="path-delete"
-                onClick={() => {
-                  setSelected(null)
-                  onDelete?.(active.id)
-                }}
-                aria-label={`Delete ${active.title}`}
-              >
-                <Trash2 size={14} />
-              </button>
+            {onDelete ? (
+              <div className="path-remove">
+                {confirmRemove === active.id ? (
+                  <>
+                    <span>Remove this path?</span>
+                    <button
+                      className="secondary-button"
+                      onClick={() => {
+                        setSelected(null)
+                        setConfirmRemove(null)
+                        onDelete(active.id)
+                      }}
+                    >
+                      Yes, remove
+                    </button>
+                    <button className="text-button" onClick={() => setConfirmRemove(null)}>
+                      Keep
+                    </button>
+                  </>
+                ) : (
+                  <button className="text-button" onClick={() => setConfirmRemove(active.id)}>
+                    <Trash2 size={13} /> Remove path
+                  </button>
+                )}
+              </div>
             ) : null}
           </div>
           {active.plan && onUpdate ? (

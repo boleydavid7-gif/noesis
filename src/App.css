@@ -9556,3 +9556,63 @@ input[type='radio'] {
   font-size: 13px;
   opacity: 0.85;
 }
+
+.path-remove {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.path-remove .text-button {
+  opacity: 0.8;
+}
+
+/* Search fields show their focus ring on the whole field, never as a box around the text. */
+.field-with-icon input:focus-visible,
+.deep-search input:focus-visible,
+.reader-search input:focus-visible,
+.pdf-search input:focus-visible,
+.sidebar-search input:focus-visible,
+.top-search input:focus-visible,
+.explore-search input:focus-visible,
+.opds-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.field-with-icon:focus-within,
+.deep-search form:focus-within,
+.reader-search:focus-within,
+.pdf-search:focus-within,
+.sidebar-search:focus-within,
+.top-search:focus-within,
+.explore-search:focus-within,
+.opds-search:focus-within {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.7);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 220, 194, 142), 0.25);
+}
+
+/* On a computer the two side bars stay put and only the middle scrolls. */
+@media (min-width: 901px) {
+  .app-shell {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .sidebar {
+    position: relative;
+    top: auto;
+    height: 100vh;
+    align-self: stretch;
+  }
+  .main-column {
+    height: 100vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .desktop-context-sidebar {
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
