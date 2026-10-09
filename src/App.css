@@ -9128,3 +9128,76 @@ input[type='radio'] {
   font-size: 11px;
   opacity: 0.6;
 }
+
+.book-browser {
+  display: grid;
+  gap: 8px;
+}
+.book-browser-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.book-browser-tabs button {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: transparent;
+}
+.book-browser-tabs button small {
+  opacity: 0.6;
+}
+.book-browser-tabs .book-browser-tab-on {
+  color: var(--accent-light, #f0d18a);
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+}
+.book-browser-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.book-browser-list li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.book-browser-where {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.book-browser-list p {
+  margin: 0;
+  padding-left: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  border-left: 2px solid rgba(255, 255, 255, 0.18);
+}
+.book-browser-quote {
+  font-size: 11px;
+  opacity: 0.6;
+}
+.book-browser-actions {
+  display: flex;
+  gap: 6px;
+}
+.book-browser-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--gold-soft, #ead4a2);
+  border-radius: 6px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+}
