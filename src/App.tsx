@@ -2798,7 +2798,11 @@ function App() {
         }
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
-        onAsk={openNoemaPanel}
+        onAsk={(prompt, context) => {
+          openNoemaPanel(prompt, context)
+          // A passage you chose is asked about straight away; anything else waits for you to press Ask.
+          if (context?.selectedText) void askNoema(prompt, context)
+        }}
         onRecap={() => void recap(selectedBook)}
         onSaveWord={saveWord}
         onHighlight={saveHighlight}
@@ -4538,6 +4542,11 @@ function NoemaOverlay({
             <span>Use this page as context</span>
             <small>{[context.bookTitle, context.chapter].filter(Boolean).join(' · ')}</small>
           </div>
+        ) : null}
+        {context?.selectedText ? (
+          <blockquote className="noema-quote">
+            {context.selectedText.length > 220 ? `${context.selectedText.slice(0, 220)}…` : context.selectedText}
+          </blockquote>
         ) : null}
         <button className="noema-ask" onClick={() => onAsk(prompt)} disabled={busy}>
           {busy ? 'Thinking…' : 'Ask Noema'} <Sparkles size={15} />

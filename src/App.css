@@ -6722,6 +6722,7 @@ body {
 .planner-clarify {
   display: grid;
   gap: 12px;
+  padding: 18px 20px;
 }
 .planner-clarify h3,
 .planner-clarify p {
@@ -9018,4 +9019,29 @@ input[type='radio'] {
     min-height: calc(100svh - 215px);
     height: calc(100svh - 215px);
   }
+}
+
+.planner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+.planner-actions .primary-button {
+  flex: 1 1 100%;
+}
+.planner-actions .text-button {
+  font-size: 13px;
+}
+
+.noema-quote {
+  margin: 0;
+  padding: 8px 12px;
+  font-family: Georgia, serif;
+  font-size: 14px;
+  line-height: 1.5;
+  border-left: 3px solid var(--gold-warm, #c7a36a);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.08);
+  border-radius: 0 8px 8px 0;
+  opacity: 0.9;
 }
