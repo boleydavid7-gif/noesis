@@ -74,6 +74,7 @@ import { useLatest } from './lib/useLatest'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
+import { resumeLine } from './lib/resume'
 import { discoverQuery, interestTerms, libraryPicks, onboardingSteps } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
@@ -1954,19 +1955,19 @@ function App() {
                   <h2>{current.title}</h2>
                   <p className="muted">{current.author}</p>
                   <p className="chapter-line">
-                    <BookOpen size={14} /> {current.chapter || 'Not started'}
+                    <BookOpen size={14} />{' '}
+                    {isStarted(current) ? resumeLine(current) : current.chapter || 'Not started yet.'}
                   </p>
                   <div className="progress-row">
                     <div className="progress-track">
                       <span style={{ width: `${current.progress}%` }} />
                     </div>
-                    <strong>{Math.round(current.progress)}%</strong>
                   </div>
                   <div className="hero-continue-actions">
                     <button className="primary-button" onClick={() => openSavedBook(current)}>
                       Continue reading <ArrowRight size={16} />
                     </button>
-                    {current.format === 'epub' && current.progress > 0 ? (
+                    {current.format === 'epub' && isStarted(current) ? (
                       <button className="secondary-button" onClick={() => void recap(current)}>
                         Where was I?
                       </button>

@@ -8975,3 +8975,47 @@ input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--gold-warm, #c7a36a);
 }
+
+.reader-chapter-end {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 35;
+  display: grid;
+  width: min(460px, calc(100% - 24px));
+  gap: 8px;
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.4);
+  border-radius: 14px;
+  background: var(--surface-pop, #0a1626);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+}
+.reader-chapter-end > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.reader-controls-narrow {
+  display: none;
+  gap: 10px;
+}
+@media (max-width: 900px) {
+  .reader-controls-narrow {
+    display: grid;
+  }
+  .reader-settings {
+    display: none;
+  }
+  body.reading-focus .topbar,
+  body.reading-focus .mobile-bottom-nav {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-body {
+    min-height: calc(100svh - 215px);
+    height: calc(100svh - 215px);
+  }
+}

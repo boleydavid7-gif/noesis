@@ -233,6 +233,16 @@ function ReadingSection({ settings, set }: { settings: Settings; set: SetFn }) {
             ]}
           />
         </Row>
+        <Row
+          title="Pause at the end of a chapter"
+          detail="A quiet card offers to keep a thought or recap. It never quizzes you."
+        >
+          <Toggle
+            checked={reading.chapterEnd}
+            onChange={(value) => set('reading', 'chapterEnd', value)}
+            label="Pause at the end of a chapter"
+          />
+        </Row>
         <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
           <Toggle
             checked={reading.tapZones}
