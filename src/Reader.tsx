@@ -54,6 +54,7 @@ import { firstReadingIndex, openEpub, spineSections } from './lib/epub'
 import { loadEpubFile, type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { PdfReader } from './PdfReader'
+import { StudyPanel, type StudyInfo } from './StudyPanel'
 import { customFontCss } from './lib/customFont'
 import { autoScrollPixelsPerSecond, pageScroll, tapZone } from './lib/readerControls'
 import { parsePdfLocation } from './lib/pdfMarks'
@@ -198,6 +199,9 @@ export function Reader({
   onNote,
   onOpenNote,
   onAsk,
+  study,
+  onTick,
+  onTopicNote,
   onRecap,
   onHighlight,
   onHighlightEdit,
@@ -223,6 +227,9 @@ export function Reader({
   onNote: ReaderNoteHandler
   onOpenNote: (note: Note) => void
   onAsk: TutorHandler
+  study?: StudyInfo | null
+  onTick?: (topicId: string) => void
+  onTopicNote?: (topic: string, location: BrainNoteLocation) => void
   onRecap: () => void
   onHighlight: (text: string, color: HighlightColor, location: BrainNoteLocation) => void
   onHighlightEdit: (noteId: string, color: HighlightColor | null) => void
@@ -447,7 +454,7 @@ export function Reader({
     if (!container) return
     const check = () => {
       const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 12
-      const long = container.scrollHeight > container.clientHeight * 2.2
+      const long = container.scrollHeight > container.clientHeight * 2.2 && container.scrollTop > container.clientHeight
       const index = chapterIndexRef.current
       if (atEnd && long && !dismissedEnds.current.has(`${book.id}:${index}`)) setChapterEnd(index)
       else if (!atEnd) setChapterEnd(null)
@@ -1721,6 +1728,9 @@ export function Reader({
         </div>
         {!wideLayout ? (
           <aside className="reader-context-rail" aria-label="Reading context">
+            {study && onTick && onTopicNote ? (
+              <StudyPanel study={study} onTick={onTick} onNote={(topic) => onTopicNote(topic, currentNoteLocation())} />
+            ) : null}
             <div className="reader-context-head">
               <span>Second Brain</span>
               <button
@@ -1794,6 +1804,9 @@ export function Reader({
             cfi: book.cfi,
           }}
           onNote={onNote}
+          study={study}
+          onTick={onTick}
+          onTopicNote={onTopicNote ? (topic) => onTopicNote(topic, currentNoteLocation()) : undefined}
           onAsk={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
           onClose={() => setToolsOpen(false)}
         />
@@ -1869,9 +1882,15 @@ function ReaderWideSidebar({
   notes,
   location,
   onNote,
+  study,
+  onTick,
+  onTopicNote,
   onAsk,
   onClose,
 }: {
+  study?: StudyInfo | null
+  onTick?: (topicId: string) => void
+  onTopicNote?: (topic: string) => void
   book: LibraryBook
   notes: Note[]
   location: BrainNoteLocation
@@ -1890,6 +1909,7 @@ function ReaderWideSidebar({
         </button>
       </div>
 
+      {study && onTick && onTopicNote ? <StudyPanel study={study} onTick={onTick} onNote={onTopicNote} /> : null}
       <div className="reader-wide-sidebar-actions">
         <button onClick={() => onNote('', 'highlight', location)}>
           <Highlighter size={14} /> Highlight

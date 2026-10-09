@@ -101,7 +101,9 @@ import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { PathPlanDetail, PathPlanner } from './PathPlanner'
-import { planProgress, type LearningPath } from './lib/pathPlan'
+import { planProgress, toggleTopic, type LearningPath } from './lib/pathPlan'
+import { studyFor } from './lib/pathLink'
+import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
 import { WeatherPanel } from './WeatherPanel'
 import {
@@ -370,6 +372,18 @@ function App() {
   const authUserId = authUser?.id
   const cloudConnection = cloudConnectionForUser(cloudConnections, authUserId)
   const selectedBook = useMemo(() => books.find((book) => book.id === selectedBookId) ?? null, [books, selectedBookId])
+  const studyLink = useMemo(() => (selectedBook ? studyFor(selectedBook, paths) : null), [selectedBook, paths])
+  const studyInfo: StudyInfo | null =
+    studyLink && studyLink.path.plan
+      ? {
+          pathTitle: studyLink.path.title,
+          stage: studyLink.milestone.title,
+          stageNumber: studyLink.milestoneIndex + 1,
+          stageCount: studyLink.path.plan.milestones.length,
+          outcome: studyLink.milestone.outcome,
+          topics: studyLink.milestone.topics,
+        }
+      : null
   const filteredBooks = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase()
     const inShelf = shelfFilter.startsWith('shelf:')
@@ -1084,6 +1098,17 @@ function App() {
         ? `Brought in ${created.length} highlights and notes.`
         : `Brought in ${created.length}. ${clips.length - created.length} were already here.`,
     )
+  }
+  function tickStudyTopic(topicId: string) {
+    if (!studyLink?.path.plan) return
+    const updated = {
+      ...studyLink.path,
+      plan: toggleTopic(studyLink.path.plan, topicId),
+      updated: new Date().toISOString(),
+    }
+    const next = paths.map((path) => (path.id === updated.id ? updated : path))
+    setPaths(next)
+    writePaths(next)
   }
   function openTopicNote(title: string, source: string) {
     setNoteDraft({ title, body: '', source, kind: 'note' })
@@ -2084,6 +2109,10 @@ function App() {
               void askNoema(prompt)
             }}
             onNote={openTopicNote}
+            onOpenBook={(id) => {
+              const found = books.find((book) => book.id === id)
+              if (found) openSavedBook(found)
+            }}
           />
         </FreeCopyContext.Provider>
         <NotesSection
@@ -2293,6 +2322,10 @@ function App() {
               void askNoema(prompt)
             }}
             onNote={openTopicNote}
+            onOpenBook={(id) => {
+              const found = books.find((book) => book.id === id)
+              if (found) openSavedBook(found)
+            }}
             onUpdate={(updated) => {
               const next = paths.map((path) => (path.id === updated.id ? updated : path))
               setPaths(next)
@@ -2798,6 +2831,20 @@ function App() {
         }
         onNote={openNotePanel}
         onOpenNote={openNoteLocation}
+        study={studyInfo}
+        onTick={tickStudyTopic}
+        onTopicNote={(topic, location) => {
+          const source = [studyLink?.path.title, studyLink?.milestone.title].filter(Boolean).join(' · ')
+          setNoteDraft({
+            title: topic,
+            body: '',
+            source: `${selectedBook.title}${location.chapter ? ` · ${location.chapter}` : ''}${source ? ` — ${source}` : ''}`,
+            kind: 'note',
+            location,
+          })
+          setUtilityOverlay(null)
+          setOverlay('brain')
+        }}
         onAsk={(prompt, context) => {
           openNoemaPanel(prompt, context)
           // A passage you chose is asked about straight away; anything else waits for you to press Ask.
@@ -4077,8 +4124,10 @@ function PathSection({
   onUpdate,
   onAsk,
   onNote,
+  onOpenBook,
   initialOpen = null,
 }: {
+  onOpenBook?: (id: string) => void
   paths: LearningPath[]
   books: LibraryBook[]
   initialOpen?: string | null
@@ -4198,7 +4247,14 @@ function PathSection({
             ) : null}
           </div>
           {active.plan && onUpdate ? (
-            <PathPlanDetail path={active} onChange={onUpdate} onAsk={onAsk} onNote={onNote} />
+            <PathPlanDetail
+              path={active}
+              onChange={onUpdate}
+              onAsk={onAsk}
+              onNote={onNote}
+              library={books}
+              onOpenBook={onOpenBook}
+            />
           ) : null}
           {detail.pathBooks.length ? (
             <ul className="path-detail-books">

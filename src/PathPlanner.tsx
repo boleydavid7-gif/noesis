@@ -1,3 +1,4 @@
+import { libraryBooksForStage } from './lib/pathLink'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
@@ -159,13 +160,33 @@ export function ResourceList({ resources }: { resources: PlanResource[] }) {
   )
 }
 
-function StudyWith({ plan, milestone }: { plan: PathPlan; milestone: PlanMilestone }) {
+function StudyWith({
+  plan,
+  milestone,
+  library = [],
+  onOpenBook,
+}: {
+  plan: PathPlan
+  milestone: PlanMilestone
+  library?: Array<{ id: string; title: string; author?: string }>
+  onOpenBook?: (id: string) => void
+}) {
   const { resources, books } = milestoneGuide(plan, milestone)
-  if (resources.length === 0 && books.length === 0) return null
+  const owned = libraryBooksForStage(milestone, library)
+  if (resources.length === 0 && books.length === 0 && owned.length === 0) return null
   return (
     <div className="plan-study">
       <strong>Study with</strong>
       <ul>
+        {onOpenBook
+          ? owned.map((book) => (
+              <li key={`own-${book.id}`}>
+                <button className="text-button" onClick={() => onOpenBook(book.id)}>
+                  Open “{book.title}” from your library
+                </button>
+              </li>
+            ))
+          : null}
         {resources.map((resource) => (
           <li key={resource.url}>
             <a href={resource.url} target="_blank" rel="noreferrer noopener">
@@ -332,7 +353,11 @@ export function PathPlanDetail({
   onChange,
   onAsk,
   onNote,
+  library,
+  onOpenBook,
 }: {
+  library?: Array<{ id: string; title: string; author?: string }>
+  onOpenBook?: (id: string) => void
   path: LearningPath
   onChange: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
@@ -403,7 +428,7 @@ export function PathPlanDetail({
                 </li>
               </ol>
             ) : null}
-            <StudyWith plan={plan} milestone={next.milestone} />
+            <StudyWith plan={plan} milestone={next.milestone} library={library} onOpenBook={onOpenBook} />
             {findError ? (
               <p className="weather-error" role="alert">
                 {findError}
@@ -492,7 +517,9 @@ export function PathPlanDetail({
                 </li>
               ))}
             </ul>
-            {!current ? <StudyWith plan={plan} milestone={milestone} /> : null}
+            {!current ? (
+              <StudyWith plan={plan} milestone={milestone} library={library} onOpenBook={onOpenBook} />
+            ) : null}
             {!current ? (
               <button className="text-button" onClick={() => void findFor(milestone)} disabled={finding !== null}>
                 {finding === milestone.id ? 'Finding…' : 'Find materials for this stage'}
