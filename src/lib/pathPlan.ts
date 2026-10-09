@@ -2,7 +2,7 @@
 // milestones, topics) and names books and free resources; the app then looks
 // up the real books and checks the links, and drops anything it cannot find.
 
-export type PlanTopic = { id: string; label: string; done: boolean }
+export type PlanTopic = { id: string; label: string; done: boolean; picks?: BookCandidate[] } // picks: books suggested for this topic
 export type PlanMilestone = {
   id: string
   title: string
@@ -62,6 +62,7 @@ export type PathPlan = {
   level: string
   milestones: PlanMilestone[]
   hoursPerWeek?: number
+  cursor?: number // which topic the reader is on; set once they pick a book
   books: ResolvedBook[]
   resources: PlanResource[]
 }
@@ -517,5 +518,58 @@ export function unverifiedBook(candidate: BookCandidate): ResolvedBook {
     note: candidate.note,
     buy: buyLinks({ title: candidate.title, authors: candidate.author ? [candidate.author] : [] }),
     unverified: true,
+  }
+}
+
+// Every topic of the plan in order, with its stage.
+export function flatTopics(
+  plan: Pick<PathPlan, 'milestones'>,
+): Array<{ milestone: PlanMilestone; milestoneIndex: number; topic: PlanTopic; index: number }> {
+  const list: Array<{ milestone: PlanMilestone; milestoneIndex: number; topic: PlanTopic; index: number }> = []
+  for (const [milestoneIndex, milestone] of plan.milestones.entries())
+    for (const topic of milestone.topics) list.push({ milestone, milestoneIndex, topic, index: list.length })
+  return list
+}
+
+// The topic the reader is on. Older paths with ticked topics start at the first topic not ticked.
+export function currentTopic(plan: PathPlan) {
+  const list = flatTopics(plan)
+  const start =
+    plan.cursor ??
+    Math.max(
+      0,
+      list.findIndex((item) => !item.topic.done),
+    )
+  const found = list[Math.min(start < 0 ? 0 : start, list.length - 1)]
+  const finished =
+    (plan.cursor ?? 0) >= list.length ||
+    (plan.cursor === undefined && list.length > 0 && list.every((item) => item.topic.done))
+  return finished || !found ? null : found
+}
+
+// Choosing a book from the shelf means the reader has taken this step; the shelf moves to the next topic.
+export function advanceTopic(plan: PathPlan): PathPlan {
+  const here = currentTopic(plan)
+  return here ? { ...plan, cursor: here.index + 1 } : plan
+}
+
+export function addPicks(plan: PathPlan, topicId: string, picks: BookCandidate[]): PathPlan {
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+  return {
+    ...plan,
+    milestones: plan.milestones.map((milestone) => ({
+      ...milestone,
+      topics: milestone.topics.map((topic) =>
+        topic.id === topicId
+          ? {
+              ...topic,
+              picks: picks.reduce<BookCandidate[]>(
+                (kept, pick) => (kept.some((have) => same(have.title, pick.title)) ? kept : [...kept, pick]),
+                topic.picks ?? [],
+              ),
+            }
+          : topic,
+      ),
+    })),
   }
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { addPicks, advanceTopic, currentTopic } from './pathPlan'
 import { currentStage, libraryBooksForStage, readNextOnPath, studyFor } from './pathLink'
 import type { LearningPath } from './pathPlan'
 
@@ -58,10 +59,6 @@ describe('readNextOnPath', () => {
   it('starts one that is in the library but unopened', () => {
     expect(readNextOnPath(p, [{ id: '1', title: 'Letters from a Stoic', progress: 0 }])?.kind).toBe('start')
   })
-  it('finishes the path when the last stage books are finished', () => {
-    const next = readNextOnPath(p, [{ id: '1', title: 'Letters from a Stoic', progress: 100, finished: 'x' }])
-    expect(next).toBeNull()
-  })
   it('suggests getting a named book that is not in the library', () => {
     expect(readNextOnPath(p, [])).toMatchObject({ kind: 'get', title: 'Letters from a Stoic' })
   })
@@ -77,11 +74,23 @@ describe('readNextOnPath', () => {
   })
 })
 
-describe('moving on', () => {
-  it('skips a stage the reader moved past', () => {
-    const moved = path()
-    moved.plan!.milestones[1].moved = true
-    expect(readNextOnPath(moved, [])).toBeNull()
+describe('the topic you are on', () => {
+  it('moves to the next topic when a book is chosen, and finishes after the last', () => {
+    const plan = path().plan!
+    const first = currentTopic(plan)
+    expect(first?.topic.id).toBe('t2')
+    const after = advanceTopic(plan)
+    expect(currentTopic(after)).toBeNull()
+  })
+  it('keeps picks on the topic and does not duplicate them', () => {
+    const plan = addPicks(path().plan!, 't2', [
+      { title: 'A', author: 'x' },
+      { title: 'a', author: 'x' },
+    ])
+    expect(plan.milestones[1].topics[0].picks).toHaveLength(1)
+    expect(addPicks(plan, 't2', [{ title: 'A', author: 'x' }]).milestones[1].topics[0].picks).toHaveLength(1)
+  })
+  it('names the stage of the current topic', () => {
     expect(currentStage(path(), [])?.milestone.id).toBe('m2')
   })
 })

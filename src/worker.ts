@@ -354,7 +354,14 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
     'Sign in to find study materials.',
   )
   if (refused) return refused
-  let input: { goal?: unknown; stage?: unknown; topics?: unknown; level?: unknown }
+  let input: {
+    goal?: unknown
+    stage?: unknown
+    topics?: unknown
+    level?: unknown
+    booksOnly?: unknown
+    exclude?: unknown
+  }
   try {
     input = (await request.json()) as typeof input
   } catch {
@@ -370,6 +377,40 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
   if (!goal || !stage || topics.length === 0)
     return json({ ok: false, error: 'Tell Noema which stage to find materials for.' }, 400)
   const level = text(input.level, 40)
+  if (input.booksOnly === true) {
+    // Just books for one topic, with no link checks, so it is quick and cheap.
+    const exclude = (Array.isArray(input.exclude) ? input.exclude : [])
+      .map((item) => text(item, 120))
+      .filter(Boolean)
+      .slice(0, 30)
+    const more = await generate(env, {
+      system: [
+        'You recommend books for one topic of a learning path. Reply with JSON only, in exactly this shape: {"books":[{"title":"","author":"","note":""}]}.',
+        'Give six real, published books you are confident exist that teach exactly that topic, best fit first, with the author\'s name. "note" is one of: ' +
+          BOOK_NOTES.join(', ') +
+          '.',
+        level ? `Pitch them for a learner who is: ${level}.` : '',
+        exclude.length ? `Do not include any of these: ${exclude.join('; ')}.` : '',
+        'Never invent a book or an author.',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      prompt: `Learner's goal: ${goal}\nStage: ${stage}\nTopic: ${topics.join('; ')}`,
+      maxOutputTokens: 1_200,
+      temperature: 0.4,
+      json: true,
+      timeoutMs: 25_000,
+    })
+    if (!more.ok) return json({ ok: false, error: more.error }, more.status)
+    try {
+      const books = cleanBooks((JSON.parse(more.text) as { books?: unknown }).books, 8)
+      if (books.length === 0)
+        return json({ ok: false, error: 'Noema could not find books for that topic. Try again.' }, 502)
+      return json({ ok: true, books, resources: [] })
+    } catch {
+      return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+    }
+  }
   const result = await generate(env, {
     system: [
       'You recommend study materials for one stage of a learning path. Reply with JSON only, in exactly this shape:',

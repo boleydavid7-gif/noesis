@@ -1,7 +1,7 @@
 // Connects a book in the library to the stage of a learning path it belongs to.
 
 import type { LearningPath, PlanMilestone } from './pathPlan'
-import { matchScore, milestoneDone, nextTopic } from './pathPlan'
+import { currentTopic, matchScore, nextTopic } from './pathPlan'
 
 type BookLike = { id: string; title: string; author?: string }
 
@@ -42,20 +42,15 @@ export function libraryBooksForStage<T extends BookLike>(milestone: PlanMileston
   return books.filter((book) => wanted.some((title) => matchesTitle(book, title)))
 }
 
-// The stage you are on: the first one not moved past, ticked off earlier, or finished by reading its books.
+// The stage you are on: the stage of the topic the reader has reached.
 export function currentStage(
   path: LearningPath,
-  library: Array<BookLike & { progress: number; finished?: string }>,
+  _library?: unknown,
 ): { milestone: PlanMilestone; index: number } | null {
+  void _library
   const plan = path.plan
-  if (!plan) return null
-  for (const [index, milestone] of plan.milestones.entries()) {
-    if (milestoneDone(milestone)) continue
-    const owned = libraryBooksForStage(milestone, library)
-    if (owned.length > 0 && owned.every((book) => book.finished || book.progress >= 98)) continue
-    return { milestone, index }
-  }
-  return null
+  const here = plan ? currentTopic(plan) : null
+  return here ? { milestone: here.milestone, index: here.milestoneIndex } : null
 }
 
 export type ReadNext =
