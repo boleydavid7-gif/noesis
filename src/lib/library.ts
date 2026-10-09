@@ -36,7 +36,7 @@ export type LibraryBook = {
   favorite?: boolean
   cloudAt?: string // when this book was last confirmed in the account's cloud
   intent?: string // why the reader chose this book, in their own choice of words
-  toc?: Array<{ label: string; href: string }>
+  toc?: Array<{ label: string; href: string; level?: number }>
 }
 
 const BOOKS_KEY = 'noesis:library:v2'
