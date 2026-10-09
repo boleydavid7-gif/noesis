@@ -282,9 +282,21 @@ export function readSettings(): Settings {
   }
 }
 
-export function writeSettings(settings: Settings): void {
+const STAMP_KEY = 'noesis:settings-updated'
+
+/** When these settings were last changed on this device (or last received from the account). Empty if never. */
+export function settingsStamp(): string {
+  try {
+    return localStorage.getItem(STAMP_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function writeSettings(settings: Settings, stamp?: string): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(settings))
+    localStorage.setItem(STAMP_KEY, stamp ?? new Date().toISOString())
   } catch {
     // Private browsing can block storage; settings then last for this session only.
   }

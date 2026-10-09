@@ -1,13 +1,7 @@
 import { getAuthClient, isAnonymousUser } from './auth'
-import {
-  loadEpubFile,
-  readLibraryBooks,
-  saveBookText,
-  saveEpubFile,
-  writeLibraryBooks,
-  type LibraryBook,
-} from './library'
+import { loadEpubFile, readLibraryBooks, saveBookText, writeLibraryBooks, type LibraryBook } from './library'
 import { parseEpub } from './epub'
+import { sanitizeSettings, type Settings } from './settings'
 import { mergeBundles, sanitizeBundle, type SyncBundle } from './syncData'
 import {
   applyTombstones,
@@ -108,23 +102,27 @@ async function uploadLocalBook(userId: string, book: LibraryBook): Promise<boole
   return true
 }
 
-async function restoreRemoteBook(userId: string, book: LibraryBook): Promise<void> {
-  if (book.format !== 'epub' && book.format !== 'pdf') return
-  const result = await getAuthClient().storage.from(BUCKET).download(bookPath(userId, book))
+/** The book's file from the signed-in account's storage, or null when it is not there. */
+export async function downloadAccountBook(book: LibraryBook): Promise<ArrayBuffer | null> {
+  if (book.format !== 'epub' && book.format !== 'pdf') return null
+  const user = await signedInUser()
+  if (!user) return null
+  const result = await getAuthClient().storage.from(BUCKET).download(bookPath(user.id, book))
   if (result.error) {
-    if (isMissingFile(result.error)) return
-    throw new Error(`Supabase could not restore ${book.title}: ${result.error.message}`)
+    if (isMissingFile(result.error)) return null
+    throw new Error(`Supabase could not fetch ${book.title}: ${result.error.message}`)
   }
-  await saveEpubFile(book.id, await result.data.arrayBuffer())
-  if (book.format === 'epub') {
-    try {
-      const bytes = await loadEpubFile(book.id)
-      if (!bytes) return
-      const parsed = await parseEpub(bytes, book.fileName || `${book.title}.epub`)
-      if (parsed.text) await saveBookText(book.id, parsed.text)
-    } catch {
-      // The EPUB remains available even if indexing fails on this device.
-    }
+  return result.data.arrayBuffer()
+}
+
+/** Makes the text index for a book that has just come down from the cloud. Best effort. */
+export async function indexDownloadedBook(book: LibraryBook, bytes: ArrayBuffer): Promise<void> {
+  if (book.format !== 'epub') return
+  try {
+    const parsed = await parseEpub(bytes, book.fileName || `${book.title}.epub`)
+    if (parsed.text) await saveBookText(book.id, parsed.text)
+  } catch {
+    // The EPUB remains readable even if indexing fails on this device.
   }
 }
 
@@ -146,15 +144,64 @@ export async function syncAccountLibrary(localBooks: LibraryBook[]): Promise<Lib
   writeTombstones(tombstones)
   await writeRemoteManifest(user.id, books, tombstones)
   const inCloud = new Set<string>()
-  for (const book of books) if (await uploadLocalBook(user.id, book)) inCloud.add(book.id)
-  for (const book of books) await restoreRemoteBook(user.id, book)
+  // A file already uploaded (here or on another device) is not sent again.
+  for (const book of books) {
+    if (book.cloudAt) inCloud.add(book.id)
+    else if (await uploadLocalBook(user.id, book)) inCloud.add(book.id)
+  }
   const stamp = new Date().toISOString()
   // A book counts as synced once its file is in the cloud, or for links, once its entry is.
+  // Files themselves come down only when a book is opened (see bookFiles.ts).
   const marked = books.map((book) =>
-    inCloud.has(book.id) ? { ...book, cloudAt: stamp } : { ...book, cloudAt: undefined },
+    inCloud.has(book.id) ? { ...book, cloudAt: book.cloudAt ?? stamp } : { ...book, cloudAt: undefined },
   )
   writeLibraryBooks(marked)
   return marked
+}
+
+type SettingsFile = { version: 1; updatedAt: string; settings: unknown }
+const SETTINGS_NAME = 'data/settings.json'
+
+/**
+ * Keeps colours, look and reading preferences the same on every device signed in to the account.
+ * The newer copy wins. Returns the account's settings when they are newer than this device's, else null.
+ * Whether to sync at all stays a per-device choice and is never overwritten.
+ */
+export async function syncAccountSettings(
+  local: Settings,
+  localStamp: string,
+): Promise<{ settings: Settings; stamp: string } | null> {
+  const user = await signedInUser()
+  if (!user) return null
+  const storage = getAuthClient().storage.from(BUCKET)
+  const path = `${user.id}/${SETTINGS_NAME}`
+  const download = await storage.download(path)
+  let remote: SettingsFile | null = null
+  if (download.error) {
+    if (!isMissingFile(download.error))
+      throw new Error(`Supabase could not read your settings: ${download.error.message}`)
+  } else {
+    try {
+      const parsed = JSON.parse(await download.data.text()) as Partial<SettingsFile>
+      if (parsed.version === 1 && typeof parsed.updatedAt === 'string' && parsed.settings)
+        remote = parsed as SettingsFile
+    } catch {
+      remote = null
+    }
+  }
+  if (remote && (!localStamp || newer(localStamp, remote.updatedAt))) {
+    const incoming = sanitizeSettings(remote.settings)
+    return { settings: { ...incoming, backup: local.backup }, stamp: remote.updatedAt }
+  }
+  if (remote && !newer(remote.updatedAt, localStamp)) return null
+  const stamp = localStamp || new Date().toISOString()
+  const body: SettingsFile = { version: 1, updatedAt: stamp, settings: local }
+  const upload = await storage.upload(path, new Blob([JSON.stringify(body)], { type: 'application/json' }), {
+    upsert: true,
+    contentType: 'application/json',
+  })
+  if (upload.error) throw new Error(`Supabase could not save your settings: ${upload.error.message}`)
+  return null
 }
 
 type AccountDataFile = { version: 1; updatedAt: string; bundle: SyncBundle; tombstones?: Tombstones }
