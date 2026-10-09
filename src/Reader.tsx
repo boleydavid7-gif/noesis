@@ -46,6 +46,14 @@ import { canListen, startListening, type ListenBlock, type ListenController } fr
 import { HIGHLIGHT_COLORS, type BrainNote, type BrainNoteLocation, type HighlightColor } from './lib/knowledge'
 import { firstReadingIndex, openEpub, spineSections } from './lib/epub'
 import { openBookFile } from './lib/bookFiles'
+import {
+  bookProgress,
+  chapterFlags,
+  chapterPlace,
+  chapterStartIndex,
+  nextChapterIndex,
+  previousChapterIndex,
+} from './lib/chapterSteps'
 import { type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { cleanChapterLabel } from './lib/chapterLabel'
@@ -65,7 +73,7 @@ export type NoteAction = 'highlight' | 'note' | 'question' | 'reflect' | 'connec
 export type ReaderNoteHandler = (text: string, kind?: NoteAction, location?: BrainNoteLocation) => void
 
 type PageDirection = 'next' | 'previous'
-type ReaderChapter = { label: string; href: string }
+type ReaderChapter = { label: string; href: string; level?: number }
 type ReaderLocation = {
   start?: {
     index?: number
@@ -127,14 +135,14 @@ function chapterEntries(value: unknown): ReaderChapter[] {
   const seen = new Map<string, number>()
   return asArray(value).flatMap((entry, index) => {
     if (!entry || typeof entry !== 'object') return []
-    const record = entry as { label?: unknown; href?: unknown }
+    const record = entry as { label?: unknown; href?: unknown; level?: unknown }
     const href = typeof record.href === 'string' ? record.href.trim() : ''
     if (!href) return []
     let label = cleanChapterLabel(typeof record.label === 'string' ? record.label : '', index)
     const times = (seen.get(label) ?? 0) + 1
     seen.set(label, times)
     if (times > 1) label = `${label} (${times})`
-    return [{ label, href }]
+    return [typeof record.level === 'number' ? { label, href, level: record.level } : { label, href }]
   })
 }
 
@@ -299,10 +307,10 @@ export function Reader({
   const currentChapter = toc[chapterIndex] ?? { label: book.chapter || 'Opening', href: book.currentHref ?? '' }
   const chapterCount = toc.length
   const clampFraction = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
-  const overallProgress = (index: number, fraction: number, count = chapterCount) =>
-    count > 0
-      ? Math.round(((Math.max(0, Math.min(index, count - 1)) + clampFraction(fraction)) / count) * 100)
-      : Math.round(clampFraction(fraction) * 100)
+  const overallProgress = (index: number, fraction: number, entries: ReaderChapter[] = toc) =>
+    entries.length > 0 ? bookProgress(entries, index, fraction) : Math.round(clampFraction(fraction) * 100)
+  const chapterFlagList = chapterFlags(toc)
+  const place = chapterPlace(toc, chapterIndex)
   const visibleProgress = chapterCount > 0 ? overallProgress(chapterIndex, chapterProgress) : Math.round(book.progress)
   const currentNoteLocation = (): BrainNoteLocation => ({
     bookId: book.id,
@@ -324,6 +332,38 @@ export function Reader({
       visibleText: extractVisibleReaderText(frame.current) || undefined,
     }
   }
+  // After a jump the page can still be settling (pictures and fonts arrive late and push things down), so the
+  // landing place is checked again a few times, until the reader moves the page themselves.
+  const landAt = (href: string) => {
+    const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container') ?? null
+    const fragment = href.includes('#') ? decodeURIComponent(href.split('#')[1] ?? '') : ''
+    let moved = false
+    const stop = () => {
+      moved = true
+    }
+    const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+    for (const name of events) container?.addEventListener(name, stop, { passive: true, once: true })
+    const apply = () => {
+      if (moved) return
+      const doc = frame.current?.querySelector('iframe')?.contentDocument
+      if (!doc?.body) return
+      const anchor = fragment
+        ? (doc.getElementById(fragment) ?? doc.querySelector(`[name="${CSS.escape(fragment)}"]`))
+        : null
+      if (anchor) {
+        if (Math.abs(anchor.getBoundingClientRect().top) > 4) anchor.scrollIntoView({ block: 'start' })
+      } else {
+        // The top of the chapter, also when a link's anchor is missing, so a jump never lands partway down.
+        if (container && container.scrollTop > 0) container.scrollTop = 0
+        const scroller = doc.scrollingElement
+        if (scroller && scroller.scrollTop > 0) scroller.scrollTop = 0
+      }
+    }
+    for (const wait of [40, 250, 700, 1500, 3000]) window.setTimeout(apply, wait)
+    window.setTimeout(() => {
+      for (const name of events) container?.removeEventListener(name, stop)
+    }, 3200)
+  }
   const goToChapter = (targetIndex: number) => {
     const chapters = chaptersRef.current
     const target = chapters[targetIndex]
@@ -334,12 +374,22 @@ export function Reader({
     selectedTextRef.current = ''
     setPageNumber(undefined)
     setPageTurn(targetIndex > chapterIndex ? 'next' : 'previous')
-    const progress = overallProgress(targetIndex, 0, chapters.length)
+    const progress = overallProgress(targetIndex, 0, chapters)
     readerCallbacksRef.current.onProgress(progress, undefined, target.href, target.label, targetIndex, 0)
-    void rendition.current.display(target.href)
+    void rendition.current.display(target.href).then(() => landAt(target.href))
     window.setTimeout(() => setPageTurn(null), 360)
   }
+  // Back goes to the top of the chapter you are partway through; from the top it goes to the chapter before.
+  const goBack = () => {
+    const chapters = chaptersRef.current
+    const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container')
+    const deep = (container?.scrollTop ?? 0) > 160
+    const start = chapterStartIndex(chapters, chapterIndexRef.current)
+    goToChapter(deep && start >= 0 ? start : previousChapterIndex(chapters, chapterIndexRef.current))
+  }
+  const canGoBack = previousChapterIndex(toc, chapterIndex) >= 0 || chapterProgress > 0.02
   const goToChapterRef = useLatest(goToChapter)
+  const goBackRef = useLatest(goBack)
   const noteChapterWordsRef = useRef<() => void>(() => undefined)
   // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
   const [controlsOpen, setControlsOpen] = useState(false)
@@ -433,8 +483,8 @@ export function Reader({
       },
       onWord: (block, start, end) => markSpoken(block.element, start, end),
       onDone: () => {
-        const next = chapterIndexRef.current + 1
-        if (next < chaptersRef.current.length) {
+        const next = nextChapterIndex(chaptersRef.current, chapterIndexRef.current)
+        if (next >= 0) {
           goToChapterRef.current(next)
           window.setTimeout(() => listen(false), 1600)
         } else {
@@ -493,9 +543,9 @@ export function Reader({
       container.scrollTop = position
       if (position >= container.scrollHeight - container.clientHeight - 1) {
         // The end of the chapter: carry on into the next one.
-        const next = chapterIndexRef.current + 1
+        const next = nextChapterIndex(chaptersRef.current, chapterIndexRef.current)
         setAutoScroll(false)
-        if (book.format === 'epub' && next < chaptersRef.current.length) {
+        if (book.format === 'epub' && next >= 0) {
           goToChapterRef.current(next)
           window.setTimeout(() => setAutoScroll(true), 1500)
         }
@@ -531,8 +581,8 @@ export function Reader({
       ? timeLeft({
           chapterWords,
           chapterProgress,
-          chapterIndex,
-          chapterCount,
+          chapterIndex: place.ordinal - 1,
+          chapterCount: place.total,
           averageChapterWords: averageWords || chapterWords,
           wpm,
         })
@@ -758,11 +808,16 @@ export function Reader({
               : typeof record.url === 'string'
                 ? record.url.trim()
                 : ''
-          return href ? [{ label: `Chapter ${index + 1}`, href }] : []
+          return href ? [{ label: `Chapter ${index + 1}`, href } as ReaderChapter] : []
         })
         const savedChapters = chapterEntries(currentBook.toc)
-        const chapters =
+        // The saved list may predate nesting; the book's own navigation says which entries are sections.
+        const levelOf = new Map(navigationChapters.map((item) => [item.href, item.level ?? 0]))
+        const chosenChapters: ReaderChapter[] =
           savedChapters.length > 0 ? savedChapters : navigationChapters.length > 0 ? navigationChapters : spineChapters
+        const chapters = chosenChapters.map((item) =>
+          item.level === undefined && levelOf.has(item.href) ? { ...item, level: levelOf.get(item.href) } : item,
+        )
         // Page numbers come from scanning the whole book, which is slow, so the book opens first.
         // The result is kept for next time.
         let generatedLocationCount = 0
@@ -889,7 +944,7 @@ export function Reader({
             fractionOverride ?? activeFraction() ?? displayedFraction ?? location.start.percentage ?? 0,
           )
           const label = chapters[nextIndex]?.label ?? currentBook.chapter
-          const progress = overallProgress(nextIndex, fraction, chapters.length)
+          const progress = overallProgress(nextIndex, fraction, chapters)
           const generatedLocation =
             location.start.cfi && generatedLocationCount > 0
               ? (epub.locations.locationFromCfi(location.start.cfi) as unknown as number)
@@ -985,8 +1040,11 @@ export function Reader({
               zone === 'down'
                 ? container.scrollTop + container.clientHeight >= container.scrollHeight - 4
                 : container.scrollTop <= 4
-            const target = chapterIndexRef.current + (zone === 'down' ? 1 : -1)
-            if (atEdge && target >= 0 && target < chaptersRef.current.length) goToChapterRef.current(target)
+            const target =
+              zone === 'down'
+                ? nextChapterIndex(chaptersRef.current, chapterIndexRef.current)
+                : previousChapterIndex(chaptersRef.current, chapterIndexRef.current)
+            if (atEdge && target >= 0) goToChapterRef.current(target)
             else
               container.scrollBy({
                 top: (zone === 'down' ? 1 : -1) * pageScroll(container.clientHeight),
@@ -1180,7 +1238,7 @@ export function Reader({
     const index = toc.findIndex((item) => item.href === href)
     if (index >= 0) goToChapterRef.current(index)
   }
-  const chapterLabel = chapterCount > 0 ? `${chapterIndex + 1} of ${chapterCount}` : 'Opening'
+  const chapterLabel = chapterCount > 0 ? `${place.ordinal} of ${place.total}` : 'Opening'
   const bookNotes = notes.filter(
     (note) => note.bookId === book.id || note.source.toLowerCase().includes(book.title.toLowerCase()),
   )
@@ -1276,8 +1334,9 @@ export function Reader({
                 {toc.length === 0 ? (
                   <option value="">Contents</option>
                 ) : (
-                  toc.map((item) => (
+                  toc.map((item, index) => (
                     <option key={item.href + '-' + item.label} value={item.href}>
+                      {chapterFlagList[index] ? '' : '   '}
                       {item.label}
                     </option>
                   ))
@@ -1646,16 +1705,23 @@ export function Reader({
             </div>
             {book.format === 'epub' && toc.length > 0 ? (
               <div className="reader-chapter-list">
-                {toc.map((item, index) => (
-                  <button
-                    key={item.href + '-' + item.label}
-                    className={index === chapterIndex ? 'reader-chapter-active' : ''}
-                    onClick={() => goToChapterRef.current(index)}
-                  >
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
+                {toc.map((item, index) => {
+                  const isChapter = chapterFlagList[index]
+                  const number = chapterFlagList.slice(0, index + 1).filter(Boolean).length
+                  return (
+                    <button
+                      key={item.href + '-' + item.label}
+                      className={
+                        (index === chapterIndex ? 'reader-chapter-active' : '') +
+                        (isChapter ? '' : ' reader-chapter-section')
+                      }
+                      onClick={() => goToChapterRef.current(index)}
+                    >
+                      <span>{isChapter ? String(number).padStart(2, '0') : '·'}</span>
+                      <strong>{item.label}</strong>
+                    </button>
+                  )
+                })}
               </div>
             ) : (
               <p className="reader-rail-empty">This source has no chapter list. Keep reading in the center pane.</p>
@@ -1751,11 +1817,11 @@ export function Reader({
               <div className="reader-chapter-end" role="region" aria-label="End of chapter">
                 <strong>{toc[chapterEnd]?.label ? `End of ${toc[chapterEnd].label}` : 'End of the chapter'}</strong>
                 <div>
-                  {chapterEnd + 1 < toc.length ? (
+                  {nextChapterIndex(toc, chapterEnd) >= 0 ? (
                     <button
                       className="primary-button"
                       onClick={() => {
-                        const next = chapterEnd + 1
+                        const next = nextChapterIndex(toc, chapterEnd)
                         closeChapterEnd()
                         goToChapter(next)
                       }}
@@ -1929,8 +1995,8 @@ export function Reader({
         <div className="reader-pager" aria-label="Chapters">
           <button
             className="reader-page-button"
-            onClick={() => goToChapterRef.current(chapterIndex - 1)}
-            disabled={chapterIndex <= 0}
+            onClick={() => goBackRef.current()}
+            disabled={!canGoBack}
             aria-label="Previous chapter"
           >
             <ArrowLeft size={18} />
@@ -1938,8 +2004,8 @@ export function Reader({
           <span>{chapterLabel}</span>
           <button
             className="reader-page-button"
-            onClick={() => goToChapterRef.current(chapterIndex + 1)}
-            disabled={chapterIndex >= chapterCount - 1}
+            onClick={() => goToChapterRef.current(nextChapterIndex(toc, chapterIndex))}
+            disabled={nextChapterIndex(toc, chapterIndex) < 0}
             aria-label="Next chapter"
           >
             <ArrowRight size={18} />
@@ -1950,8 +2016,8 @@ export function Reader({
         <div className="reader-wide-footer">
           <button
             className="reader-page-button"
-            onClick={() => goToChapterRef.current(chapterIndex - 1)}
-            disabled={book.format !== 'epub' || chapterIndex <= 0}
+            onClick={() => goBackRef.current()}
+            disabled={book.format !== 'epub' || !canGoBack}
             aria-label="Previous chapter"
           >
             <ArrowLeft size={22} />
@@ -1979,8 +2045,8 @@ export function Reader({
           </div>
           <button
             className="reader-page-button"
-            onClick={() => goToChapterRef.current(chapterIndex + 1)}
-            disabled={book.format !== 'epub' || chapterIndex >= chapterCount - 1}
+            onClick={() => goToChapterRef.current(nextChapterIndex(toc, chapterIndex))}
+            disabled={book.format !== 'epub' || nextChapterIndex(toc, chapterIndex) < 0}
             aria-label="Next chapter"
           >
             <ArrowRight size={22} />

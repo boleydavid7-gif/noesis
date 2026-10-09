@@ -9787,3 +9787,12 @@ input[type='radio'] {
   font-size: 0.7rem;
   opacity: 0.7;
 }
+
+/* Sections listed inside a chapter sit a step in from the chapters themselves. */
+.reader-chapter-list .reader-chapter-section {
+  padding-left: 26px;
+}
+.reader-chapter-list .reader-chapter-section strong {
+  font-weight: 400;
+  opacity: 0.8;
+}

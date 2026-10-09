@@ -24,12 +24,13 @@ async function blobToDataUrl(url: string): Promise<string | undefined> {
 
 function flattenNavigation(
   items: NavItem[],
-  output: Array<{ label: string; href: string }> = [],
-): Array<{ label: string; href: string }> {
+  output: Array<{ label: string; href: string; level: number }> = [],
+  level = 0,
+): Array<{ label: string; href: string; level: number }> {
   for (const item of items) {
     if (!item || typeof item.label !== 'string' || typeof item.href !== 'string') continue
-    output.push({ label: item.label, href: item.href })
-    if (Array.isArray(item.subitems)) flattenNavigation(item.subitems, output)
+    output.push({ label: item.label, href: item.href, level })
+    if (Array.isArray(item.subitems)) flattenNavigation(item.subitems, output, level + 1)
   }
   return output
 }
@@ -101,7 +102,7 @@ export function spineSections(book: Book): Array<{ index: number; href?: string 
 export type ParsedEpub = {
   metadata: { title: string; author: string }
   coverDataUrl?: string
-  toc: Array<{ label: string; href: string }>
+  toc: Array<{ label: string; href: string; level?: number }>
   text: string
 }
 
