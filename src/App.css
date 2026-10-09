@@ -9371,3 +9371,31 @@ input[type='radio'] {
   white-space: nowrap;
   color: var(--gold-soft, #ead4a2);
 }
+
+.settings-subhead {
+  margin: 28px 0 8px;
+  padding-top: 18px;
+  font-family: Georgia, serif;
+  font-size: 18px;
+  font-weight: 500;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.settings-more {
+  margin: 8px 0;
+}
+.settings-more > summary {
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--gold-soft, #ead4a2);
+  cursor: pointer;
+}
+
+.reader-more {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 6px;
+}

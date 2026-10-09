@@ -18,6 +18,7 @@ import {
   Minimize2,
   PanelRight,
   Pause,
+  MoreHorizontal,
   SlidersHorizontal,
   Play,
   Plus,
@@ -341,6 +342,7 @@ export function Reader({
   const noteChapterWordsRef = useRef<() => void>(() => undefined)
   // Read-aloud: reads from the top of the visible page to the end of the chapter, then carries on.
   const [controlsOpen, setControlsOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [autoScroll, setAutoScroll] = useState(false)
   const [chapterEnd, setChapterEnd] = useState<number | null>(null)
   const [limitSeen, setLimitSeen] = useState(false)
@@ -1271,167 +1273,11 @@ export function Reader({
             {book.format === 'epub' ? (
               <button
                 className="icon-button"
-                onClick={() => void defineSelection()}
-                aria-label="Define the selected word"
-                title="Select a word, then define it"
+                onClick={() => setSearchOpen((value) => !value)}
+                aria-label="Search this book"
+                aria-pressed={searchOpen}
               >
-                <BookA size={16} />
-              </button>
-            ) : null}
-            <button
-              className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
-              onClick={() => setToolsOpen((value) => !value)}
-              aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
-              aria-pressed={toolsOpen}
-              title="Notes and Noema beside the page"
-            >
-              <PanelRight size={16} />
-            </button>
-            {book.format === 'epub' || book.format === 'pdf' ? (
-              <span className="reader-ambient">
-                <button
-                  className={
-                    'icon-button' + (autoScroll || reading.tapZones || reading.dim > 0 ? ' reader-listening' : '')
-                  }
-                  onClick={() => setControlsOpen((value) => !value)}
-                  aria-label="Page controls"
-                  aria-expanded={controlsOpen}
-                  title="Auto-scroll, dimming and tap zones"
-                >
-                  <SlidersHorizontal size={16} />
-                </button>
-                {controlsOpen ? (
-                  <div className="reader-ambient-pop reader-controls-pop">
-                    <button
-                      className={autoScroll ? 'reader-ambient-on' : ''}
-                      onClick={() => setAutoScroll((value) => !value)}
-                    >
-                      {autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
-                    </button>
-                    <label>
-                      Speed
-                      <input
-                        type="range"
-                        min="1"
-                        max="10"
-                        step="1"
-                        value={reading.autoScrollSpeed}
-                        aria-label="Auto-scroll speed"
-                        onChange={(event) => onReadingChange({ autoScrollSpeed: Number(event.target.value) })}
-                      />
-                    </label>
-                    <label>
-                      Dim the page
-                      <input
-                        type="range"
-                        min="0"
-                        max="60"
-                        step="5"
-                        value={reading.dim}
-                        aria-label="Dim the page"
-                        onChange={(event) => onReadingChange({ dim: Number(event.target.value) })}
-                      />
-                    </label>
-                    {book.format === 'epub' ? (
-                      <div className="reader-controls-narrow">
-                        <label>
-                          Text size
-                          <input
-                            type="range"
-                            min="85"
-                            max="125"
-                            step="5"
-                            value={fontSize}
-                            onChange={(event) => setFontSize(Number(event.target.value))}
-                            aria-label="Text size on a phone"
-                          />
-                        </label>
-                        <label>
-                          Page colour
-                          <select
-                            value={readerTheme}
-                            onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
-                            aria-label="Page colour on a phone"
-                          >
-                            <option value="paper">Paper</option>
-                            <option value="sepia">Sepia</option>
-                            <option value="night">Night</option>
-                            <option value="contrast">High contrast</option>
-                          </select>
-                        </label>
-                        <button className="secondary-button" onClick={() => setWideLayout(true)}>
-                          <Maximize2 size={14} /> Expand
-                        </button>
-                      </div>
-                    ) : null}
-                    {book.format === 'epub' && onOwnLook ? (
-                      <label className="reader-controls-check">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(ownLook)}
-                          onChange={(event) => onOwnLook(event.target.checked)}
-                        />
-                        Keep this page look (size, colour) for this book only
-                      </label>
-                    ) : null}
-                    {book.format === 'epub' ? (
-                      <label className="reader-controls-check">
-                        <input
-                          type="checkbox"
-                          checked={reading.tapZones}
-                          onChange={(event) => onReadingChange({ tapZones: event.target.checked })}
-                        />
-                        Tap the top or bottom to turn the page
-                      </label>
-                    ) : null}
-                  </div>
-                ) : null}
-              </span>
-            ) : null}
-            {canPlayAmbient() ? (
-              <span className="reader-ambient">
-                <button
-                  className={'icon-button' + (ambient.kind ? ' reader-listening' : '')}
-                  onClick={() => setAmbientOpen((value) => !value)}
-                  aria-label="Background sound"
-                  aria-expanded={ambientOpen}
-                  title="Background sound"
-                >
-                  <CloudRain size={16} />
-                </button>
-                {ambientOpen ? (
-                  <div className="reader-ambient-pop">
-                    {[{ id: null, label: 'Off' }, ...AMBIENT_OPTIONS].map((option) => (
-                      <button
-                        key={option.label}
-                        className={ambient.kind === option.id ? 'reader-ambient-on' : ''}
-                        onClick={() => chooseAmbient(option.id as AmbientKind | null)}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                    <input
-                      type="range"
-                      min="0.05"
-                      max="1"
-                      step="0.05"
-                      value={ambient.volume}
-                      aria-label="Sound volume"
-                      onChange={(event) => {
-                        const volume = Number(event.target.value)
-                        ambientRef.current?.setVolume(volume)
-                        const next = { kind: ambient.kind, volume }
-                        setAmbient(next)
-                        writeAmbient(next)
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </span>
-            ) : null}
-            {book.format === 'epub' ? (
-              <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
-                <History size={16} />
+                <Search size={17} />
               </button>
             ) : null}
             {book.format === 'epub' && canListen() ? (
@@ -1459,15 +1305,184 @@ export function Reader({
                 ) : null}
               </>
             ) : null}
-            {book.format === 'epub' ? (
-              <button
-                className="icon-button"
-                onClick={() => setSearchOpen((value) => !value)}
-                aria-label="Search this book"
-                aria-pressed={searchOpen}
-              >
-                <Search size={17} />
-              </button>
+            <button
+              className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
+              onClick={() => setToolsOpen((value) => !value)}
+              aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
+              aria-pressed={toolsOpen}
+              title="Notes and Noema beside the page"
+            >
+              <PanelRight size={16} />
+            </button>
+            <button
+              className={'icon-button' + (moreOpen ? ' reader-listening' : '')}
+              onClick={() => setMoreOpen((value) => !value)}
+              aria-label="More reading tools"
+              aria-expanded={moreOpen}
+              title="Define a word, page controls, background sound, where was I"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreOpen ? (
+              <div className="reader-more">
+                {book.format === 'epub' ? (
+                  <button
+                    className="icon-button"
+                    onClick={() => void defineSelection()}
+                    aria-label="Define the selected word"
+                    title="Select a word, then define it"
+                  >
+                    <BookA size={16} />
+                  </button>
+                ) : null}
+                {book.format === 'epub' || book.format === 'pdf' ? (
+                  <span className="reader-ambient">
+                    <button
+                      className={
+                        'icon-button' + (autoScroll || reading.tapZones || reading.dim > 0 ? ' reader-listening' : '')
+                      }
+                      onClick={() => setControlsOpen((value) => !value)}
+                      aria-label="Page controls"
+                      aria-expanded={controlsOpen}
+                      title="Auto-scroll, dimming and tap zones"
+                    >
+                      <SlidersHorizontal size={16} />
+                    </button>
+                    {controlsOpen ? (
+                      <div className="reader-ambient-pop reader-controls-pop">
+                        <button
+                          className={autoScroll ? 'reader-ambient-on' : ''}
+                          onClick={() => setAutoScroll((value) => !value)}
+                        >
+                          {autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
+                        </button>
+                        <label>
+                          Speed
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={reading.autoScrollSpeed}
+                            aria-label="Auto-scroll speed"
+                            onChange={(event) => onReadingChange({ autoScrollSpeed: Number(event.target.value) })}
+                          />
+                        </label>
+                        <label>
+                          Dim the page
+                          <input
+                            type="range"
+                            min="0"
+                            max="60"
+                            step="5"
+                            value={reading.dim}
+                            aria-label="Dim the page"
+                            onChange={(event) => onReadingChange({ dim: Number(event.target.value) })}
+                          />
+                        </label>
+                        {book.format === 'epub' ? (
+                          <div className="reader-controls-narrow">
+                            <label>
+                              Text size
+                              <input
+                                type="range"
+                                min="85"
+                                max="125"
+                                step="5"
+                                value={fontSize}
+                                onChange={(event) => setFontSize(Number(event.target.value))}
+                                aria-label="Text size on a phone"
+                              />
+                            </label>
+                            <label>
+                              Page colour
+                              <select
+                                value={readerTheme}
+                                onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
+                                aria-label="Page colour on a phone"
+                              >
+                                <option value="paper">Paper</option>
+                                <option value="sepia">Sepia</option>
+                                <option value="night">Night</option>
+                                <option value="contrast">High contrast</option>
+                              </select>
+                            </label>
+                            <button className="secondary-button" onClick={() => setWideLayout(true)}>
+                              <Maximize2 size={14} /> Expand
+                            </button>
+                          </div>
+                        ) : null}
+                        {book.format === 'epub' && onOwnLook ? (
+                          <label className="reader-controls-check">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(ownLook)}
+                              onChange={(event) => onOwnLook(event.target.checked)}
+                            />
+                            Keep this page look (size, colour) for this book only
+                          </label>
+                        ) : null}
+                        {book.format === 'epub' ? (
+                          <label className="reader-controls-check">
+                            <input
+                              type="checkbox"
+                              checked={reading.tapZones}
+                              onChange={(event) => onReadingChange({ tapZones: event.target.checked })}
+                            />
+                            Tap the top or bottom to turn the page
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </span>
+                ) : null}
+                {canPlayAmbient() ? (
+                  <span className="reader-ambient">
+                    <button
+                      className={'icon-button' + (ambient.kind ? ' reader-listening' : '')}
+                      onClick={() => setAmbientOpen((value) => !value)}
+                      aria-label="Background sound"
+                      aria-expanded={ambientOpen}
+                      title="Background sound"
+                    >
+                      <CloudRain size={16} />
+                    </button>
+                    {ambientOpen ? (
+                      <div className="reader-ambient-pop">
+                        {[{ id: null, label: 'Off' }, ...AMBIENT_OPTIONS].map((option) => (
+                          <button
+                            key={option.label}
+                            className={ambient.kind === option.id ? 'reader-ambient-on' : ''}
+                            onClick={() => chooseAmbient(option.id as AmbientKind | null)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                        <input
+                          type="range"
+                          min="0.05"
+                          max="1"
+                          step="0.05"
+                          value={ambient.volume}
+                          aria-label="Sound volume"
+                          onChange={(event) => {
+                            const volume = Number(event.target.value)
+                            ambientRef.current?.setVolume(volume)
+                            const next = { kind: ambient.kind, volume }
+                            setAmbient(next)
+                            writeAmbient(next)
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </span>
+                ) : null}
+                {book.format === 'epub' ? (
+                  <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
+                    <History size={16} />
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </div>
