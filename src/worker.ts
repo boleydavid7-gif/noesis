@@ -360,6 +360,7 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
     topics?: unknown
     level?: unknown
     booksOnly?: unknown
+    recent?: unknown
     exclude?: unknown
   }
   try {
@@ -385,10 +386,13 @@ async function findMaterials(request: Request, env: Env): Promise<Response> {
       .slice(0, 30)
     const more = await generate(env, {
       system: [
-        'You recommend books for one topic of a learning path. Reply with JSON only, in exactly this shape: {"books":[{"title":"","author":"","note":""}]}.',
-        'Give six real, published books you are confident exist that teach exactly that topic, best fit first, with the author\'s name. "note" is one of: ' +
+        'You recommend books for one topic of a learning path. Reply with JSON only, in exactly this shape: {"books":[{"title":"","author":"","year":0,"note":""}]}.',
+        'Give six real, published books you are confident exist that teach exactly that topic, best fit first, with the author\'s name and the "year" of the edition. "note" is one of: ' +
           BOOK_NOTES.join(', ') +
           '.',
+        input.recent === true
+          ? `This subject dates quickly, so give only editions published in ${new Date().getFullYear() - 4} or later.`
+          : '',
         level ? `Pitch them for a learner who is: ${level}.` : '',
         exclude.length ? `Do not include any of these: ${exclude.join('; ')}.` : '',
         'Never invent a book or an author.',
@@ -597,7 +601,7 @@ async function planPath(request: Request, env: Env): Promise<Response> {
 
   const system = [
     'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
-    '{"paths":[{"title":"","summary":"","level":"","milestones":[{"title":"","outcome":"","hours":0,"topics":[""],"resources":[""],"books":[""]}],"reading":[{"title":"","author":"","note":""}]}],',
+    '{"paths":[{"title":"","summary":"","level":"","fastChanging":false,"milestones":[{"title":"","outcome":"","hours":0,"topics":[""],"resources":[""],"books":[""]}],"reading":[{"title":"","author":"","note":""}]}],',
     '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
     focuses.length
       ? `Give exactly ${focuses.length} ${focuses.length === 1 ? 'path' : 'paths'}, one for each of these focus areas, using the focus area as the basis of the title: ${focuses.map((item) => `"${item}"`).join(', ')}.`
@@ -605,6 +609,7 @@ async function planPath(request: Request, env: Env): Promise<Response> {
     'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "level" is Beginner, Intermediate, or Advanced' +
       (level ? `; the learner described their level as "${level}", so pitch every path for that level` : '') +
       '.',
+    '"fastChanging" is true only when the subject dates quickly, such as medicine, nursing, technology, computing, data, law, finance, business, marketing, or the sciences, and false for lasting subjects such as philosophy, history, literature, languages, or classics. When it is true, every book in "reading" must be a recent edition published in the last four years. Add a "year" (the year of the edition you name) to every book in "reading".',
     purpose ? `The learner wants this for: ${purpose}. Let that shape what each path emphasises.` : '',
     'For every milestone give an "outcome", one sentence starting with a verb that says what the learner can do once the milestone is finished; "hours", your honest estimate of the total study hours an average learner needs for the whole milestone (a whole number); and "resources" and "books", each listing one or two items taken from your own lists that best fit that milestone, written with their exact titles. Do not give dates or durations.',
     'Every path has its own "reading" list of six real, published books you are confident exist, specific to that path\'s focus (include the standard foundational textbooks or introductions for that focus, not just general titles), with the author\'s name. "note" is one of: ' +

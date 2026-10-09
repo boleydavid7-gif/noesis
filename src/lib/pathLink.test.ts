@@ -94,3 +94,13 @@ describe('the topic you are on', () => {
     expect(currentStage(path(), [])?.milestone.id).toBe('m2')
   })
 })
+
+describe('recent books', () => {
+  it('keeps books from the last four years and ones with no known year', async () => {
+    const { isRecent } = await import('./pathPlan')
+    expect(isRecent(2024, 2026)).toBe(true)
+    expect(isRecent(2022, 2026)).toBe(true)
+    expect(isRecent(2021, 2026)).toBe(false)
+    expect(isRecent(undefined, 2026)).toBe(true)
+  })
+})

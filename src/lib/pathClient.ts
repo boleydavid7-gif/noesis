@@ -88,6 +88,7 @@ export async function requestTopicBooks(input: {
   stage: string
   topic: string
   level?: string
+  recent?: boolean
   exclude: string[]
 }): Promise<BookCandidate[]> {
   const result = await post<{ books?: BookCandidate[] }>(

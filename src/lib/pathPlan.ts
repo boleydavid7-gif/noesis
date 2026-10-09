@@ -43,10 +43,11 @@ export type SuggestedPath = {
   summary: string
   weeks: string
   level: string
+  fastChanging?: boolean // the subject dates quickly, so suggested books should be recent
   milestones: PlanMilestone[]
   books: BookCandidate[] // this path's own reading list
 }
-export type BookCandidate = { title: string; author: string; note?: string }
+export type BookCandidate = { title: string; author: string; note?: string; year?: number }
 export type Suggestion = {
   goal: string
   paths: SuggestedPath[]
@@ -62,6 +63,7 @@ export type PathPlan = {
   level: string
   milestones: PlanMilestone[]
   hoursPerWeek?: number
+  fastChanging?: boolean // suggested books should be recent (within four years)
   cursor?: number // which topic the reader is on; set once they pick a book
   books: ResolvedBook[]
   resources: PlanResource[]
@@ -148,7 +150,10 @@ export function cleanBooks(value: unknown, limit = 12): BookCandidate[] {
       if (!title || seen.has(key)) return []
       seen.add(key)
       const note = clip(row.note, 40)
-      return [{ title, author, note: note || undefined }]
+      const year = Number(row.year)
+      return [
+        { title, author, note: note || undefined, year: year >= 1400 && year <= 2200 ? Math.round(year) : undefined },
+      ]
     })
     .slice(0, limit)
 }
@@ -199,6 +204,7 @@ export function cleanSuggestion(goal: string, raw: unknown): Suggestion | null {
         summary: clip(row.summary, 260),
         weeks: clip(row.weeks, 24) || 'Self-paced',
         level: clip(row.level, 24) || 'Beginner',
+        fastChanging: row.fastChanging === true ? true : undefined,
         milestones,
         books: own,
       },
@@ -357,6 +363,7 @@ export function pathFromSuggestion(
       summary: path.summary,
       weeks: path.weeks,
       level: path.level,
+      fastChanging: path.fastChanging,
       milestones: path.milestones,
       hoursPerWeek,
       books,
@@ -573,3 +580,9 @@ export function addPicks(plan: PathPlan, topicId: string, picks: BookCandidate[]
     })),
   }
 }
+
+// How old a suggested book may be on a fast-changing subject.
+export const RECENT_YEARS = 4
+
+export const isRecent = (year: number | undefined, now = new Date().getFullYear()) =>
+  year === undefined || year >= now - RECENT_YEARS // a book with no known year is not hidden
