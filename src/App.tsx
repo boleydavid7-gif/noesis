@@ -152,6 +152,7 @@ import {
   syncAccountSettings,
 } from './lib/accountLibrary'
 import { backUpAssets } from './lib/assetFiles'
+import { CoverFinder } from './CoverFinder'
 import { openBookFile } from './lib/bookFiles'
 import { downloadBackup as downloadBackupFile, restoreBackup } from './lib/backup'
 import {
@@ -329,6 +330,7 @@ function App() {
   const [tutorReply, setTutorReply] = useState('')
   const [tutorContext, setTutorContext] = useState<ReaderTutorContext | null>(null)
   const [tutorBusy, setTutorBusy] = useState(false)
+  const [coverFinderOpen, setCoverFinderOpen] = useState(false)
   const [selectionOffer, setSelectionOffer] = useState<SelectionOffer | null>(null)
   const [noteDraft, setNoteDraft] = useState<NoteDraft>({ title: '', body: '', source: '', kind: 'note' })
   const [pathDraft, setPathDraft] = useState({ title: '', description: '' })
@@ -3430,16 +3432,24 @@ function App() {
                   onSubmit={(event) => {
                     event.preventDefault()
                     const { book, title, author, cover, coverCleared } = editing
-                    setBooks(
-                      upsertLibraryBook({
-                        ...book,
-                        title: title.trim() || book.title,
-                        author: author.trim() || book.author,
-                        coverDataUrl: coverCleared ? undefined : (cover ?? book.coverDataUrl),
-                        coverUrl: coverCleared || cover ? undefined : book.coverUrl,
-                        updated: new Date().toISOString(),
-                      }),
-                    )
+                    try {
+                      setBooks(
+                        upsertLibraryBook({
+                          ...book,
+                          title: title.trim() || book.title,
+                          author: author.trim() || book.author,
+                          coverDataUrl: coverCleared ? undefined : (cover ?? book.coverDataUrl),
+                          coverUrl: coverCleared || cover ? undefined : book.coverUrl,
+                          updated: new Date().toISOString(),
+                        }),
+                      )
+                    } catch (reason) {
+                      showNotice(
+                        `Could not save these details${reason instanceof Error && reason.message ? `: ${reason.message}` : '.'}`,
+                      )
+                      return
+                    }
+                    setCoverFinderOpen(false)
                     setEditing(null)
                     showNotice('Book details saved.')
                   }}
@@ -3489,6 +3499,9 @@ function App() {
                           }}
                         />
                       </label>
+                      <button type="button" className="secondary-button" onClick={() => setCoverFinderOpen(true)}>
+                        Find a cover online
+                      </button>
                       <button
                         type="button"
                         className="text-button"
@@ -3507,6 +3520,17 @@ function App() {
                     </button>
                   </div>
                 </form>
+                {coverFinderOpen ? (
+                  <CoverFinder
+                    title={editing.title.trim() || editing.book.title}
+                    author={editing.author.trim() || editing.book.author}
+                    onPick={(cover) => {
+                      setEditing((current) => current && { ...current, cover, coverCleared: false })
+                      setCoverFinderOpen(false)
+                    }}
+                    onClose={() => setCoverFinderOpen(false)}
+                  />
+                ) : null}
               </div>
             ) : null}
             {finishPrompt ? (
