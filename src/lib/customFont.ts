@@ -54,7 +54,8 @@ export async function customFontCss(): Promise<string | null> {
   try {
     const meta = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { type?: string } | null
     if (!meta) return null
-    const data = await loadEpubFile(FILE)
+    // On a device that does not have the file yet, it comes from the account or a connected cloud.
+    const data = (await loadEpubFile(FILE)) ?? (await (await import('./assetFiles')).fetchFont())
     if (!data) return null
     return `@font-face{font-family:'${CUSTOM_FONT_FAMILY}';src:url(data:${meta.type ?? 'font/ttf'};base64,${toBase64(data)});font-display:swap}`
   } catch {
