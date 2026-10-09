@@ -9344,3 +9344,30 @@ input[type='radio'] {
   font-size: 12px;
   opacity: 0.7;
 }
+
+.plan-read-next {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-left: 3px solid var(--gold-warm, #c7a36a);
+  border-radius: 0 8px 8px 0;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.08);
+}
+.plan-read-next p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.plan-read-next .primary-button {
+  justify-self: start;
+}
+.path-tile-next {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gold-soft, #ead4a2);
+}

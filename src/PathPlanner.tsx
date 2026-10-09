@@ -1,4 +1,4 @@
-import { libraryBooksForStage } from './lib/pathLink'
+import { libraryBooksForStage, readNextOnPath } from './lib/pathLink'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
@@ -358,7 +358,7 @@ export function PathPlanDetail({
   library,
   onOpenBook,
 }: {
-  library?: Array<{ id: string; title: string; author?: string }>
+  library?: Array<{ id: string; title: string; author?: string; progress?: number; finished?: string }>
   onOpenBook?: (id: string) => void
   path: LearningPath
   onChange: (path: LearningPath) => void
@@ -370,6 +370,10 @@ export function PathPlanDetail({
   const [findError, setFindError] = useState('')
   if (!plan) return null
   const next = nextTopic(plan)
+  const readNext = readNextOnPath(
+    path,
+    (library ?? []).map((book) => ({ ...book, progress: book.progress ?? 0 })),
+  )
   const { done } = planProgress(plan)
   const tick = (topicId: string) =>
     onChange({ ...path, plan: toggleTopic(plan, topicId), updated: new Date().toISOString() })
@@ -429,6 +433,44 @@ export function PathPlanDetail({
                     : 'Move to the next stage once every topic here is ticked.'}
                 </li>
               </ol>
+            ) : null}
+            {readNext ? (
+              <div className="plan-read-next">
+                <strong>Read next</strong>
+                {readNext.kind === 'continue' || readNext.kind === 'start' ? (
+                  <>
+                    <p>
+                      {readNext.kind === 'continue' ? 'Carry on with' : 'Start'} <em>{readNext.book.title}</em>.
+                      {readNext.why ? ` ${readNext.why}.` : ''}
+                    </p>
+                    {onOpenBook ? (
+                      <button className="primary-button" onClick={() => onOpenBook(readNext.book.id)}>
+                        {readNext.kind === 'continue' ? 'Continue reading' : 'Start reading'}
+                      </button>
+                    ) : null}
+                  </>
+                ) : readNext.kind === 'get' ? (
+                  <p>
+                    Get <em>{readNext.title}</em> for this stage. Free copies and where to buy it are listed under Study
+                    with.
+                    {readNext.why ? ` ${readNext.why}.` : ''}
+                  </p>
+                ) : readNext.kind === 'read' ? (
+                  <p>
+                    <a href={readNext.url} target="_blank" rel="noreferrer noopener">
+                      {readNext.title} <ExternalLink size={11} />
+                    </a>
+                    {readNext.why ? ` ${readNext.why}.` : ''}
+                  </p>
+                ) : readNext.kind === 'finished-all' ? (
+                  <p>
+                    You have finished {readNext.titles.map((title) => `“${title}”`).join(' and ')}. Tick the topics you
+                    could explain, or find another source for this stage.
+                  </p>
+                ) : (
+                  <p>Nothing is chosen for this stage yet. Find materials to get something to read.</p>
+                )}
+              </div>
             ) : null}
             <StudyWith plan={plan} milestone={next.milestone} library={library} onOpenBook={onOpenBook} />
             {findError ? (
