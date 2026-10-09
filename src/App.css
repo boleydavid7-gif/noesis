@@ -9073,3 +9073,58 @@ input[type='radio'] {
 .reader-controls-pop option {
   color: #111;
 }
+
+.study-panel {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.07);
+}
+.study-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold-soft, #ead4a2);
+}
+.study-panel strong {
+  font-family: Georgia, serif;
+  font-size: 15px;
+}
+.study-outcome {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.study-panel ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.study-panel li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.study-panel li label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+.study-done span {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+.study-panel small {
+  font-size: 11px;
+  opacity: 0.6;
+}
