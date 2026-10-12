@@ -22,12 +22,14 @@
     "@capacitor/core": "^7.6.9",
     "@capacitor/ios": "^7.6.9",
     "@supabase/supabase-js": "^2.116.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "epubjs": "^0.3.93",
     "jszip": "^3.10.2",
     "lucide-react": "^1.52.0",
     "pdfjs-dist": "^4.10.38",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

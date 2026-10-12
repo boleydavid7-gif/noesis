@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bookmark,
   BookA,
+  Languages,
   CloudRain,
   Brain,
   CircleHelp,
@@ -57,6 +58,8 @@ import {
 import { type LibraryBook } from './lib/library'
 import { useLatest } from './lib/useLatest'
 import { cleanChapterLabel } from './lib/chapterLabel'
+import { useNowPlaying, useWakeLock } from './lib/device'
+import { languageName, myLanguage, translatePassage, translateHere } from './lib/translate'
 import { PdfReader } from './PdfReader'
 import { StudyPanel, type StudyInfo } from './StudyPanel'
 import { BookNotesBrowser } from './BookNotesBrowser'
@@ -510,6 +513,29 @@ export function Reader({
     },
     [],
   )
+  // The screen stays on while a book is open (Settings > Reading), and Listen shows on the lock screen.
+  useWakeLock(reading.keepAwake)
+  const listenChapter = (to: number) => {
+    if (to < 0 || to >= chaptersRef.current.length) return
+    stopListening()
+    goToChapterRef.current(to)
+    window.setTimeout(() => listen(false), 1600)
+  }
+  useNowPlaying(
+    listening === 'off'
+      ? null
+      : {
+          title: currentChapter.label || book.title,
+          artist: book.author || book.title,
+          album: book.title,
+          artwork: book.coverDataUrl || book.coverUrl || undefined,
+          playing: listening === 'on',
+          onPlayPause: toggleListening,
+          onNext: () => listenChapter(nextChapterIndex(chaptersRef.current, chapterIndexRef.current)),
+          onPrevious: () => listenChapter(chapterIndexRef.current - 1),
+          onStop: stopListening,
+        },
+  )
   // At the bottom of a long chapter a quiet card offers a pause. It appears once per chapter and never blocks reading.
   useEffect(() => {
     if (book.format !== 'epub' || loading || !reading.chapterEnd || !learner) return
@@ -698,6 +724,34 @@ export function Reader({
     if (pick.noteId) onHighlightEdit(pick.noteId, color)
     else onHighlight(pick.text, color, pick.location)
     finishPick()
+  }
+
+  // The selected passage in the reader's own language, translated on the device (where the browser can).
+  const [translated, setTranslated] = useState<{
+    state: 'working' | 'done' | 'same' | 'none'
+    text?: string
+    from?: string
+  } | null>(null)
+  const translateSelection = async () => {
+    const iframe = frame.current?.querySelector('iframe')
+    const selected = (iframe?.contentWindow?.getSelection()?.toString().trim() || selectedTextRef.current).trim()
+    if (!selected) {
+      setTranslated({ state: 'none' })
+      return
+    }
+    setTranslated({ state: 'working' })
+    try {
+      const result = await translatePassage(selected.slice(0, 4000))
+      setTranslated(
+        'text' in result
+          ? { state: 'done', text: result.text, from: result.from }
+          : 'same' in result
+            ? { state: 'same' }
+            : { state: 'none' },
+      )
+    } catch {
+      setTranslated({ state: 'none' })
+    }
   }
 
   // The meaning of the selected word.
@@ -1430,6 +1484,16 @@ export function Reader({
                     <BookA size={16} />
                   </button>
                 ) : null}
+                {book.format === 'epub' && translateHere() ? (
+                  <button
+                    className="icon-button"
+                    onClick={() => void translateSelection()}
+                    aria-label="Translate the selected passage"
+                    title="Select a passage, then translate it on this device"
+                  >
+                    <Languages size={16} />
+                  </button>
+                ) : null}
                 {book.format === 'epub' || book.format === 'pdf' ? (
                   <span className="reader-ambient">
                     <button
@@ -1579,6 +1643,34 @@ export function Reader({
           </div>
         </div>
       )}
+      {translated ? (
+        <div className="reader-define" role="status">
+          {translated.state === 'working' ? <span>Translating…</span> : null}
+          {translated.state === 'same' ? <span>That passage is already in {languageName(myLanguage())}.</span> : null}
+          {translated.state === 'none' ? (
+            <span>Select a passage first. Translation works on this device for the languages the browser has.</span>
+          ) : null}
+          {translated.state === 'done' ? (
+            <>
+              <strong>
+                In {languageName(myLanguage())} <em>from {languageName(translated.from ?? '')}</em>
+              </strong>
+              <p>{translated.text}</p>
+              <button
+                className="text-button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(translated.text ?? '').then(() => onCopied('Translation copied'))
+                }}
+              >
+                Copy
+              </button>
+            </>
+          ) : null}
+          <button className="text-button" onClick={() => setTranslated(null)}>
+            Close
+          </button>
+        </div>
+      ) : null}
       {define ? (
         <div className="reader-define" role="status">
           {define.state === 'looking' ? <span>Looking up “{define.word}”…</span> : null}

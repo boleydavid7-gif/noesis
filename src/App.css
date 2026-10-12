@@ -9796,3 +9796,88 @@ input[type='radio'] {
   font-weight: 400;
   opacity: 0.8;
 }
+
+/* ---------- The device's own settings ----------
+   Reduce transparency (iPhone, Mac, Windows): glass panels turn solid. Increase contrast: muted words as strong
+   as the main text and clearer edges. */
+
+@media (prefers-reduced-transparency: reduce) {
+  *,
+  *::before,
+  *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  :root:root {
+    --panel: rgb(11, 27, 45);
+  }
+  .rail-card,
+  .hero-continue .continue-details {
+    background: rgb(11, 27, 45) !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root:root:root {
+    --muted: #e6eef7;
+    --muted-2: #c9d6e4;
+    --line: rgba(220, 235, 250, 0.45);
+    --line-strong: rgba(160, 205, 255, 0.75);
+  }
+}
+
+/* The words of a scanned PDF page, read on the device. */
+.pdf-scan-text {
+  max-height: 40vh;
+  overflow: auto;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  user-select: text;
+}
+.pdf-scan-note {
+  margin: 8px 12px;
+  color: var(--muted);
+}
+.pdf-scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 12px 10px;
+}
+
+/* Passkeys on the Account page. */
+.passkey-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.passkeys-panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+.passkeys-detail {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+.passkeys-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.passkeys-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+}
+.passkeys-list small {
+  display: block;
+  color: var(--muted);
+}

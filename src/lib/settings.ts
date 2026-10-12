@@ -30,6 +30,7 @@ export type Settings = {
     chapterEnd: boolean
     dim: number // 0 to 60: how much the page is darkened
     autoScrollSpeed: number // 1 to 10
+    keepAwake: boolean // the screen stays on while a book is open
   }
   appearance: { accent: AccentName; surface: SurfaceName; scenery: boolean; reduceMotion: boolean; compact: boolean }
   library: {
@@ -69,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
     chapterEnd: true,
     dim: 0,
     autoScrollSpeed: 3,
+    keepAwake: true,
   },
   appearance: { accent: 'gold', surface: 'midnight', scenery: true, reduceMotion: false, compact: false },
   library: {
@@ -233,6 +235,7 @@ export function sanitizeSettings(input: unknown): Settings {
       dim: Math.round(num(reading.dim, 0, 60, d.reading.dim) / 5) * 5,
       autoScrollSpeed: Math.round(num(reading.autoScrollSpeed, 1, 10, d.reading.autoScrollSpeed)),
       letterSpacing: pick(reading.letterSpacing, ['normal', 'wide'], d.reading.letterSpacing),
+      keepAwake: bool(reading.keepAwake, d.reading.keepAwake),
     },
     appearance: {
       accent: pick(

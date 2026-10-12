@@ -35,12 +35,30 @@
     }
   ],
   "share_target": {
-    "action": "/",
-    "method": "GET",
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
     "params": {
       "title": "share-title",
       "text": "share-text",
-      "url": "share-url"
+      "url": "share-url",
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            "application/epub+zip",
+            ".epub",
+            "application/pdf",
+            ".pdf",
+            ".mobi",
+            ".azw3",
+            ".docx",
+            ".fb2",
+            ".cbz",
+            "text/plain"
+          ]
+        }
+      ]
     }
   },
   "shortcuts": [
@@ -59,6 +77,24 @@
       "name": "Second Brain",
       "short_name": "Notes",
       "url": "/?page=notes"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/epub+zip": [".epub"],
+        "application/pdf": [".pdf"],
+        "application/x-mobipocket-ebook": [".mobi", ".azw", ".azw3", ".prc"],
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+        "application/vnd.oasis.opendocument.text": [".odt"],
+        "application/rtf": [".rtf"],
+        "text/plain": [".txt", ".text"],
+        "text/markdown": [".md", ".markdown"],
+        "text/html": [".html", ".htm", ".xhtml"],
+        "application/x-fictionbook+xml": [".fb2", ".fbz"],
+        "application/vnd.comicbook+zip": [".cbz"]
+      }
     }
   ]
 }

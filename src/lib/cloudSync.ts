@@ -1,3 +1,4 @@
+import { oneAtATime } from './device'
 import { loadEpubFile, readLibraryBooks, writeLibraryBooks, type LibraryBook } from './library'
 import type { BrainNote } from './knowledge'
 import { mergeById } from './merge'
@@ -106,7 +107,7 @@ async function uploadLocalBooks(connection: CloudConnection, books: LibraryBook[
   }
 }
 
-export async function syncCloudState(connection: CloudConnection, local: CloudSyncState): Promise<CloudSyncState> {
+async function syncCloudStateHere(connection: CloudConnection, local: CloudSyncState): Promise<CloudSyncState> {
   // React state can be briefly stale during auth transitions. Read the durable
   // local catalog as well so a sign-out/sign-in cycle can never replace a
   // library with an empty in-memory value.
@@ -133,4 +134,9 @@ export async function syncCloudState(connection: CloudConnection, local: CloudSy
   await uploadLocalBooks(connection, merged.books)
   writeLibraryBooks(merged.books)
   return merged
+}
+
+/** syncCloudState, one tab or window at a time (Web Locks), so two never write the same records at once. */
+export function syncCloudState(connection: CloudConnection, local: CloudSyncState): Promise<CloudSyncState> {
+  return oneAtATime('noesis-sync-cloud', () => syncCloudStateHere(connection, local))
 }

@@ -92,3 +92,36 @@ limit). Set `TUTOR_REQUIRE_AUTH=true` as a Worker variable to require a valid
 Supabase session before Noema calls Gemini. `/api/models` returns 404 unless
 `ADMIN_TOKEN` is set and sent as `x-admin-token`. `/api/resource` follows
 redirects only to allowlisted hosts and refuses files over 80 MB.
+
+### Passkeys and review reminders
+
+Both need the migration `supabase/migrations/20261013000000_passkeys_and_review_push.sql` (run it in the Supabase
+SQL editor) and the Worker secret `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API keys → the
+service role / secret key). The Worker uses it only for the passkey and reminder tables and for making a one-time
+sign-in; it is never sent to the app.
+
+- **Passkeys** (Account): sign in with Face ID, a fingerprint or the device's PIN. A passkey is offered in the email
+  field's suggestions and by "Sign in with a passkey". Signed in, Account lists them with Add a passkey and Remove.
+  The Worker checks the passkey's signature (`/api/passkey/begin`, `/api/passkey/finish`) and returns a one-time
+  sign-in; no email is sent. Passkeys belong to the site they were made on.
+- **Review reminders with Noesis closed**: generate keys once with `npx web-push generate-vapid-keys`, then add the
+  Worker variable `VAPID_PUBLIC_KEY`, and the secrets `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (for example
+  `mailto:you@example.com`). `wrangler.jsonc` runs the Worker every 15 minutes (`triggers.crons`); it sends one
+  plain push ("Review cards are ready.") to each device whose next card has come due, at most once a day. Turn on
+  Settings → Notifications → Review reminders while signed in, in the installed app.
+
+### Device features (no setup)
+
+- Reader: the screen stays on while a book is open (Settings → Reading → Keep the screen on); Listen shows the
+  chapter and book on the lock screen with play, pause and next or previous chapter (Android and computers; on
+  iPhone the built-in voice stops when the screen locks).
+- Open with Noesis (computers, Chrome or Edge, installed app): EPUB, PDF, Kindle (DRM-free), Word, text, Markdown,
+  web pages, FictionBook and CBZ files (`file_handlers`). Share into Noesis (Android, computers): files go through
+  `POST /share` in the service worker to the ordinary import; shared words and links still become a note.
+- Scanned PDFs: "Read this page's text" in the PDF toolbar reads a scanned page on the device (Tesseract; the
+  worker, core and English data are copied into `dist/ocr/` by the build, about 7 MB fetched the first time).
+  Keep it as a note, ask Noema about it, or copy it.
+- Translate a selected passage on the device (Chrome's built-in Translator), from the reader's more menu.
+- Pages cross-fade (View Transitions), unless motion is turned down. Reduce transparency and Increase contrast in
+  the device's settings make panels solid and muted text stronger. Highlighting and grading a review card give a
+  light tap (Android; iPhone with iOS 18 and later). Account and cloud syncs run one tab or window at a time.

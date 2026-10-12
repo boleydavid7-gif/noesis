@@ -4,6 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import { installNativeApi } from './lib/nativeApi'
 import { startLibrary } from './lib/library'
+import { startIncoming } from './lib/incoming'
+
+// Books opened with Noesis or shared into it wait for the app to take them.
+startIncoming()
 
 installNativeApi()
 

@@ -281,6 +281,13 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
               label="Pause at the end of a chapter"
             />
           </Row>
+          <Row title="Keep the screen on" detail="The screen does not dim while a book is open.">
+            <Toggle
+              checked={reading.keepAwake}
+              onChange={(value) => set('reading', 'keepAwake', value)}
+              label="Keep the screen on"
+            />
+          </Row>
           <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
             <Toggle
               checked={reading.tapZones}
@@ -761,7 +768,7 @@ function NotificationsSection({
             ? 'Not supported in this browser.'
             : permission === 'denied'
               ? 'Blocked by your browser. Allow notifications for this site to turn this on.'
-              : 'Shows a notification once a day, when you open Noesis and review cards are due.'
+              : 'A notification when review cards are due, at most once a day. With Noesis closed too, once you are signed in.'
         }
       >
         <Toggle

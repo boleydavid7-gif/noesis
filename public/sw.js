@@ -8,7 +8,8 @@ self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      for (const name of await caches.keys()) if (name !== CACHE) await caches.delete(name)
+      for (const name of await caches.keys())
+        if (name !== CACHE && name !== 'noesis-share-inbox') await caches.delete(name)
       await self.clients.claim()
     })(),
   )
@@ -19,8 +20,44 @@ async function trim(cache) {
   for (const key of keys.slice(0, Math.max(0, keys.length - KEEP))) await cache.delete(key)
 }
 
+// Shared into Noesis from another app (Android, computers). Books wait in a cache for the app to import them;
+// shared words and links go on to the page as before.
+async function takeShare(request) {
+  const form = await request.formData().catch(() => null)
+  const params = new URLSearchParams()
+  if (form) {
+    for (const key of ['share-title', 'share-text', 'share-url']) {
+      const value = form.get(key)
+      if (typeof value === 'string' && value) params.set(key, value)
+    }
+    const files = form.getAll('files').filter((file) => typeof file === 'object' && file.size > 0)
+    if (files.length) {
+      const inbox = await caches.open('noesis-share-inbox')
+      await Promise.all(
+        files.map((file, i) =>
+          inbox.put(
+            `/share-inbox/${Date.now()}-${i}`,
+            new Response(file, {
+              headers: {
+                'content-type': file.type || 'application/octet-stream',
+                'x-name': encodeURIComponent(file.name || 'shared'),
+              },
+            }),
+          ),
+        ),
+      )
+    }
+  }
+  const query = params.toString()
+  return Response.redirect(query ? `/?${query}` : '/', 303)
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
+  if (request.method === 'POST' && new URL(request.url).pathname === '/share') {
+    event.respondWith(takeShare(request))
+    return
+  }
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
@@ -69,5 +106,33 @@ self.addEventListener('fetch', (event) => {
       }
       return (await refresh) || Response.error()
     })(),
+  )
+})
+
+// Review reminders with Noesis closed: the Worker sends an empty push when cards come due (see src/lib/reviewPush.ts).
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    self.registration.showNotification('Noesis', {
+      body: 'Review cards are ready.',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'noesis-review',
+      data: { url: '/?page=review' },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => 'focus' in client)
+      if (open) {
+        void open.navigate?.(url)
+        return open.focus()
+      }
+      return self.clients.openWindow(url)
+    }),
   )
 })

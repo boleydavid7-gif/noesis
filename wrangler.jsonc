@@ -11,6 +11,8 @@
     "VITE_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_FPe82WH-6DgriZj9e0FwJA_2ehBLYuV",
     "VITE_SUPABASE_URL": "https://dbcvziimlumlqpehgapi.supabase.co"
   },
+  // Review reminders with Noesis closed: every 15 minutes the Worker sends the ones whose time has come.
+  "triggers": { "crons": ["*/15 * * * *"] },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

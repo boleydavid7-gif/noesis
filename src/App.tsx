@@ -75,6 +75,7 @@ import {
 } from './lib/library'
 import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } from './Reader'
 import { useLatest } from './lib/useLatest'
+import { moveTo, tap } from './lib/device'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
@@ -87,6 +88,9 @@ import { readDiary } from './lib/diary'
 import { dueNotes, revisitDate } from './lib/noteLinks'
 import { BOOKMARK_TAG, isBookmark } from './lib/bookmarks'
 import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
+import { onIncoming } from './lib/incoming'
+import { syncReviewPush } from './lib/reviewPush'
+import { PasskeySignIn, PasskeysPanel } from './Passkeys'
 import { applyImages } from './lib/images'
 import { notesToZip } from './lib/exportNotes'
 import { bookmarkletCode, decodeCollection, encodeCollection, readIncoming, type SharedCollection } from './lib/share'
@@ -317,7 +321,9 @@ function App() {
       return ''
     }
   })
-  const [activeNav, setActiveNav] = useState('Home')
+  const [activeNav, setActiveNavNow] = useState('Home')
+  // Moving between pages cross-fades where the browser can (View Transitions), unless motion is turned down.
+  const setActiveNav = useCallback((next: string) => moveTo(() => setActiveNavNow(next)), [])
   const [libraryQuery, setLibraryQuery] = useState('')
   const [librarySort, setLibrarySort] = useState<LibrarySort>(() => settings.library.defaultSort)
   const [resourceQuery, setResourceQuery] = useState('')
@@ -670,6 +676,15 @@ function App() {
       icon: '/icons/icon-192.png',
     })
   }, [dueCount, settings.notifications.reviewReminders])
+  // With Noesis closed: this device's push address and when its next card is due go to the account, and the Worker
+  // sends one plain reminder when that time comes (at most once a day).
+  useEffect(() => {
+    const signedIn = Boolean(authUser && !isAnonymousUser(authUser))
+    const next = readReviewCards()
+      .map((card) => card.dueAt)
+      .sort()[0]
+    void syncReviewPush(settings.notifications.reviewReminders && signedIn, next)
+  }, [settings.notifications.reviewReminders, authUser, dataVersion, reviewRemount])
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(timer)
@@ -908,6 +923,7 @@ function App() {
       }
     } else if (page === 'library') setActiveNav('My Library')
     else if (page === 'notes') setActiveNav('Notes')
+    else if (page === 'review') setActiveNav('Review')
     if (params.has('continue') || params.has('page')) window.history.replaceState(null, '', window.location.pathname)
   }, [])
   // Something shared into Noesis from another app or a web page.
@@ -1101,6 +1117,7 @@ function App() {
     await askNoema(RECAP_QUESTION, undefined, { book, recap: true, readText })
   }
   function saveHighlight(text: string, color: HighlightColor, location: BrainNoteLocation) {
+    tap()
     void addNote({
       title:
         text.trim().split(/\s+/).slice(0, 7).join(' ') + (text.trim().split(/\s+/).length > 7 ? '…' : '') ||
@@ -1345,6 +1362,9 @@ function App() {
         .join(' '),
     )
   }
+  // Books opened with Noesis on a computer, or shared into it, are imported like chosen files.
+  const importFilesRef = useLatest(importFiles)
+  useEffect(() => onIncoming((files) => void importFilesRef.current(files)), [])
   async function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(event.target.files ?? [])]
     event.target.value = ''
@@ -2976,6 +2996,9 @@ function App() {
               </label>
             </div>
           </section>
+        ) : null}
+        {authUser && !anonymous ? (
+          <PasskeysPanel onNotice={showNotice} />
         ) : (
           <form className="auth-form panel-card" onSubmit={handleAuth}>
             <div className="auth-tabs">
@@ -3014,7 +3037,7 @@ function App() {
               Email
               <input
                 type="email"
-                autoComplete="email"
+                autoComplete={authMode === 'sign-in' ? 'email webauthn' : 'email'}
                 value={authEmail}
                 onChange={(event) => setAuthEmail(event.target.value)}
                 placeholder="you@example.com"
@@ -3043,6 +3066,9 @@ function App() {
               <button type="button" className="text-button auth-reset" onClick={() => void handleResetPassword()}>
                 Forgot password?
               </button>
+            ) : null}
+            {authMode === 'sign-in' ? (
+              <PasskeySignIn onSignedIn={() => showNotice('Signed in.')} onNotice={showNotice} />
             ) : null}
             <p className="auth-footnote">
               {authMode === 'sign-in' && books.length + notes.length + paths.length > 0

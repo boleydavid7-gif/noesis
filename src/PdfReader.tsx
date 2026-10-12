@@ -1,7 +1,7 @@
 // Reads a PDF on the page itself, so text can be selected, searched and highlighted.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Minus, Plus, ScanText, Search } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -51,6 +51,65 @@ export function PdfReader(props: Props) {
   const [outline, setOutline] = useState<Array<{ title: string; dest: unknown }>>([])
   const texts = useRef<string[]>([])
   const restored = useRef(false)
+  // A scanned page has no text to select. Its words can be read on the device (once per page, kept for the visit).
+  const [pageHasText, setPageHasText] = useState(true)
+  const [scan, setScan] = useState<{
+    page: number
+    state: 'reading' | 'done' | 'trouble'
+    text?: string
+    share?: number
+  } | null>(null)
+  const scanned = useRef(new Map<number, string>())
+  useEffect(() => {
+    if (!doc) return
+    let cancelled = false
+    void doc
+      .getPage(page)
+      .then((proxy) => proxy.getTextContent())
+      .then((content) => {
+        if (cancelled) return
+        const words = content.items
+          .map((item) => ('str' in item ? item.str : ''))
+          .join('')
+          .trim()
+        setPageHasText(words.length > 20)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [doc, page])
+  const readPage = async (target: number) => {
+    if (!doc) return
+    const known = scanned.current.get(target)
+    if (known !== undefined) {
+      setScan({ page: target, state: 'done', text: known })
+      return
+    }
+    setScan({ page: target, state: 'reading', share: 0 })
+    try {
+      const proxy = await doc.getPage(target)
+      const viewport = proxy.getViewport({ scale: 2 })
+      const canvasEl = document.createElement('canvas')
+      canvasEl.width = Math.round(viewport.width)
+      canvasEl.height = Math.round(viewport.height)
+      const context = canvasEl.getContext('2d')
+      if (!context) throw new Error('no canvas')
+      await proxy.render({ canvasContext: context, viewport, canvas: canvasEl } as Parameters<typeof proxy.render>[0])
+        .promise
+      const image = await new Promise<Blob>((resolve, reject) =>
+        canvasEl.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('no image'))), 'image/png'),
+      )
+      const { readImageText } = await import('./lib/ocr')
+      const text = (await readImageText(image, (share) => setScan({ page: target, state: 'reading', share }))).trim()
+      scanned.current.set(target, text)
+      // Search finds it too, once the pages' text has been gathered.
+      if (texts.current.length >= target) texts.current[target - 1] = text
+      setScan({ page: target, state: 'done', text })
+    } catch {
+      setScan({ page: target, state: 'trouble' })
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -264,6 +323,17 @@ export function PdfReader(props: Props) {
           <ChevronRight size={16} />
         </button>
         <span className="pdf-toolbar-gap" />
+        {!pageHasText ? (
+          <button
+            className="icon-button"
+            aria-label="Read this page's text"
+            title="A scanned page: read its words on this device"
+            disabled={scan?.state === 'reading'}
+            onClick={() => void readPage(page)}
+          >
+            <ScanText size={15} />
+          </button>
+        ) : null}
         <button
           className="icon-button"
           aria-label="Smaller"
@@ -324,6 +394,53 @@ export function PdfReader(props: Props) {
         </div>
       ) : null}
       {searching ? <div className="pdf-status">Searching…</div> : null}
+      {scan ? (
+        <div className="pdf-results pdf-scan" role="region" aria-label={`Text of page ${scan.page}`}>
+          <div className="pdf-results-head">
+            <strong>Page {scan.page}</strong>
+            <button className="text-button" onClick={() => setScan(null)}>
+              Close
+            </button>
+          </div>
+          {scan.state === 'reading' ? (
+            <p className="pdf-scan-note">Reading the page… {Math.round((scan.share ?? 0) * 100)}%</p>
+          ) : null}
+          {scan.state === 'trouble' ? (
+            <p className="pdf-scan-note">
+              The page could not be read here. The first time needs a connection (about 7 MB).
+            </p>
+          ) : null}
+          {scan.state === 'done' && !scan.text ? (
+            <p className="pdf-scan-note">No words were found on this page.</p>
+          ) : null}
+          {scan.state === 'done' && scan.text ? (
+            <>
+              <div className="pdf-scan-text">{scan.text}</div>
+              <div className="pdf-scan-actions">
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    props.onNote(scan.text ?? '', locationFor({ text: scan.text ?? '', page: scan.page, rects: [] }))
+                  }
+                >
+                  Keep as a note
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    props.onAsk(scan.text ?? '', locationFor({ text: scan.text ?? '', page: scan.page, rects: [] }))
+                  }
+                >
+                  Ask Noema
+                </button>
+                <button className="text-button" onClick={() => void navigator.clipboard?.writeText(scan.text ?? '')}>
+                  Copy
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <div
         className="pdf-scroll"
         ref={scroller}

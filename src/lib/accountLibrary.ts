@@ -1,3 +1,4 @@
+import { oneAtATime } from './device'
 import { getAuthClient, isAnonymousUser } from './auth'
 import { loadEpubFile, readLibraryBooks, saveBookText, writeLibraryBooks, type LibraryBook } from './library'
 import { parseEpub } from './epub'
@@ -154,7 +155,7 @@ export async function indexDownloadedBook(book: LibraryBook, bytes: ArrayBuffer)
  * Supabase Storage. This is intentionally separate from external cloud
  * providers, so a normal Noesis account can restore books without setup.
  */
-export async function syncAccountLibrary(localBooks: LibraryBook[]): Promise<LibraryBook[]> {
+async function syncAccountLibraryHere(localBooks: LibraryBook[]): Promise<LibraryBook[]> {
   const user = await signedInUser()
   if (!user) return localBooks
   const remote = await readRemoteManifest(user.id)
@@ -325,7 +326,7 @@ type AccountDataFile = { version: 1; updatedAt: string; bundle: SyncBundle; tomb
  * account's private storage. Newer edits win per item, and deletions recorded
  * on any device are applied everywhere. Returns what this device should now show.
  */
-export async function syncAccountBundle(local: SyncBundle): Promise<SyncBundle> {
+async function syncAccountBundleHere(local: SyncBundle): Promise<SyncBundle> {
   const user = await signedInUser()
   if (!user) return local
   const storage = getAuthClient().storage.from(BUCKET)
@@ -360,4 +361,14 @@ export async function syncAccountBundle(local: SyncBundle): Promise<SyncBundle> 
   })
   if (upload.error) throw new Error(`Supabase could not save your synced data: ${upload.error.message}`)
   return merged
+}
+
+/** syncAccountLibrary, one tab or window at a time (Web Locks), so two never write the same records at once. */
+export function syncAccountLibrary(localBooks: LibraryBook[]): Promise<LibraryBook[]> {
+  return oneAtATime('noesis-sync-library', () => syncAccountLibraryHere(localBooks))
+}
+
+/** syncAccountBundle, one tab or window at a time (Web Locks), so two never write the same records at once. */
+export function syncAccountBundle(local: SyncBundle): Promise<SyncBundle> {
+  return oneAtATime('noesis-sync-bundle', () => syncAccountBundleHere(local))
 }

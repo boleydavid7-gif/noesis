@@ -1,3 +1,4 @@
+import { tap } from './lib/device'
 import { useEffect, useMemo, useState } from 'react'
 import { authHeaders } from './lib/auth'
 import { markRemoved } from './lib/tombstones'
@@ -69,6 +70,7 @@ export function ReviewPage({
   }
 
   function grade(rating: ReviewRating) {
+    tap()
     if (!current) return
     save(cards.map((card) => (card.id === current.id ? gradeCard(card, rating) : card)))
     setRevealed(false)

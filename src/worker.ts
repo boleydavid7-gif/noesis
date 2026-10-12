@@ -13,6 +13,7 @@ import {
   type BookRecord,
   type RatingSource,
 } from './lib/pathPlan'
+import { handlePasskey, sendReviewReminders } from './workerAccount'
 
 type Env = {
   ASSETS: { fetch(request: Request): Promise<Response> }
@@ -35,6 +36,12 @@ type Env = {
   DROPBOX_APP_KEY?: string
   // Optional: lets Google Drive connections renew themselves (Google needs the secret for that).
   GOOGLE_DRIVE_CLIENT_SECRET?: string
+  // Secret: passkey sign-in and review reminders read and write their tables with it (never sent to the app).
+  SUPABASE_SERVICE_ROLE_KEY?: string
+  // Review reminders with Noesis closed (Web Push). The public key is shown to the app; the private one is a secret.
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY?: string
+  VAPID_SUBJECT?: string
 }
 
 const RETRY_PAUSE_MS = 1_500
@@ -1475,6 +1482,8 @@ const worker = {
         googleDriveClientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim() || '',
         oneDriveClientId: env.VITE_ONEDRIVE_CLIENT_ID?.trim() || env.ONEDRIVE_CLIENT_ID?.trim() || '',
         dropboxAppKey: env.VITE_DROPBOX_APP_KEY?.trim() || env.DROPBOX_APP_KEY?.trim() || '',
+        vapidPublicKey: env.VAPID_PUBLIC_KEY?.trim() || '',
+        passkeys: Boolean(env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
       })
     }
     if (url.pathname === '/api/cloud-token' && request.method === 'POST') {
@@ -1598,11 +1607,19 @@ const worker = {
       if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return lookupBook(request, env)
     }
+    if (url.pathname.startsWith('/api/passkey/')) {
+      if (rateLimited(request, 'passkey', 30)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
+      return handlePasskey(request, env, url.pathname.slice('/api/passkey/'.length))
+    }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)
     if (url.pathname === '/api/covers' && request.method === 'GET') return searchCovers(request, env)
     if (url.pathname === '/api/cover' && request.method === 'GET') return proxyCover(request)
     return env.ASSETS.fetch(request)
+  },
+  // Every 15 minutes (wrangler.jsonc triggers): review reminders whose time has come.
+  async scheduled(_event: unknown, env: Env, context: { waitUntil(promise: Promise<unknown>): void }): Promise<void> {
+    context.waitUntil(sendReviewReminders(env))
   },
 }
 
