@@ -21,6 +21,11 @@ The product centers on four things:
   changing it, bump `CACHE` in `public/sw.js`.
 - Inside the app the tile is never shown: `NoesisMark` draws the same shapes (`src/lib/markGlyph.ts`, kept equal to the
   generator by a test) in one colour, the lighter parts as a lighter shade. No "by Proairetos" in Noesis's own header.
+- Every picture is a flat drawn scene in the Proairetos family's style, drawn by `scripts/scenes/noesis.mjs`
+  (`engine.mjs` is a copy of the family's kit): the default reading view (`noesis-hero.jpg`, `noesis-header.webp`,
+  `noesis-sidebar.webp`: a lake at sunset from a sill with an open book) and every choosable scene in `public/scenes/`,
+  at the same names and sizes. Run `node scripts/scenes/noesis.mjs [part of a file name]` (needs ffmpeg), then bump
+  `CACHE` in `public/sw.js`.
 - Noema's sign is the speech bubble with a question mark (`MessageCircleQuestionMark` as `NoemaIcon`), never a sparkle.
 - The design block at the end of `src/App.css`: no glow under buttons or around Noema; choices and Noema's options are
   grouped rows; labels are sentence case; the serif is for page titles, book titles, quotes and highlights.

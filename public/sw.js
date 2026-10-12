@@ -1,6 +1,6 @@
 // Lets Noesis open without a connection. The app's own files are kept after the first visit; anything
 // that talks to a server (sign-in, AI, search, sync) always goes to the network.
-const CACHE = 'noesis-app-v2'
+const CACHE = 'noesis-app-v3'
 const KEEP = 250
 
 self.addEventListener('install', () => self.skipWaiting())
