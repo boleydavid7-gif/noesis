@@ -13,53 +13,59 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../public')
 
-export const TILE = { top: '#1d3c5e', bottom: '#0b1a2c' }
-export const GOLD = '#e2bd76'
-export const GOLD_LIGHT = '#f3dcae'
-
-/** An olive leaf from (x, y) at `angle` degrees, as a plain path (no transform, so it can sit anywhere). */
-function leaf(x, y, angle, length, width) {
-  const r = (angle * Math.PI) / 180
-  const at = (along, across) => {
-    const px = x + along * Math.cos(r) - across * Math.sin(r)
-    const py = y + along * Math.sin(r) + across * Math.cos(r)
-    return `${px.toFixed(1)} ${py.toFixed(1)}`
-  }
-  return `M${at(0, 0)} C${at(length * 0.3, -width)} ${at(length * 0.72, -width)} ${at(length, 0)} C${at(length * 0.72, width)} ${at(length * 0.3, width)} ${at(0, 0)}Z`
+/** The tile: a soft diagonal from deep colour (bottom left) to warm light (top right), with two low hills. */
+export const TILES = {
+  navy: { from: '#13263f', mid: '#3d5d78', to: '#f3cf86', hill: '#0d1c30', hillLight: '#5d7488' },
+  green: { from: '#1c4842', mid: '#6f9a6c', to: '#f1d48c', hill: '#163a35', hillLight: '#7da27a' },
 }
+export const TILE_NAME = process.env.NOESIS_TILE ?? 'navy'
+export const CREAM = '#f6eedb'
+export const CREAM_SHADE = '#e6d8bb'
 
-/** The glyph's shapes on the 1024 canvas: [path, which gold]. The branch rises from the spine. */
+/** The glyph on the 1024 canvas: [path, kind]. 'light' is the cream, 'gold' its shade (the lower pages), 'stem' a
+ * stroke, 'vein' a cut through a leaf. An open book with two layers of pages, a sprout of two leaves from the spine. */
 export const GLYPH = [
-  ['M512 560 C442 518 338 508 248 526 V796 C338 778 442 788 512 828Z', 'light'],
-  ['M512 560 C582 518 686 508 776 526 V796 C686 778 582 788 512 828Z', 'gold'],
-  ['M504 556 C494 452 520 326 600 196', 'stem'],
-  [leaf(502, 470, 200, 118, 36), 'gold'],
-  [leaf(512, 400, -20, 118, 36), 'light'],
-  [leaf(528, 336, 210, 112, 34), 'light'],
-  [leaf(550, 286, -35, 108, 32), 'gold'],
-  [leaf(574, 238, 230, 96, 29), 'gold'],
-  [leaf(598, 200, -60, 84, 27), 'light'],
+  [
+    'M151 667 C300 662 452 712 507 812 L512 834 L517 812 C572 712 724 662 873 667 L925 748 C764 745 604 770 518 838 L512 852 L506 838 C420 770 260 745 99 748 Z',
+    'gold',
+  ],
+  ['M231 549 C340 548 458 594 507 790 C430 690 310 640 162 643 Z', 'light'],
+  ['M793 549 C684 548 566 594 517 790 C594 690 714 640 862 643 Z', 'light'],
+  ['M512 806 C508 700 510 624 518 566', 'stem'],
+  ['M528 566 C468 420 566 252 800 196 C792 372 702 512 528 566 Z', 'light'],
+  ['M505 568 C428 562 298 500 256 360 C380 356 492 430 505 568 Z', 'light'],
+  ['M552 536 C600 448 662 360 744 282', 'vein'],
+  ['M486 542 C436 498 368 438 300 392', 'vein'],
 ]
 
-export function glyphMarkup(gold = GOLD, light = GOLD_LIGHT) {
+export function glyphMarkup(tile = TILES[TILE_NAME]) {
   return GLYPH.map(([d, kind]) =>
     kind === 'stem'
-      ? `<path d="${d}" fill="none" stroke="${gold}" stroke-width="22" stroke-linecap="round"/>`
-      : `<path d="${d}" fill="${kind === 'light' ? light : gold}"/>`,
+      ? `<path d="${d}" fill="none" stroke="${CREAM}" stroke-width="22" stroke-linecap="round"/>`
+      : kind === 'vein'
+        ? `<path d="${d}" fill="none" stroke="${tile.mid}" stroke-width="13" stroke-linecap="round"/>`
+        : `<path d="${d}" fill="${kind === 'light' ? CREAM : CREAM_SHADE}"/>`,
   ).join('')
 }
 
-export function iconSvg(shape = 'square') {
+export function iconSvg(shape = 'square', name = TILE_NAME) {
+  const tile = TILES[name]
   const rx = shape === 'rounded' ? 229 : 0
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="noesis-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${TILE.top}"/><stop offset="1" stop-color="${TILE.bottom}"/></linearGradient>
-    <radialGradient id="noesis-light" cx="50%" cy="0%" r="75%"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
-    <filter id="noesis-lift" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity=".28"/></filter>
+    <linearGradient id="noesis-tile-${name}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="${tile.from}"/><stop offset="0.55" stop-color="${tile.mid}"/><stop offset="1" stop-color="${tile.to}"/></linearGradient>
+    <radialGradient id="noesis-light-${name}" cx="78%" cy="18%" r="60%"><stop offset="0" stop-color="#fff6dc" stop-opacity=".45"/><stop offset="1" stop-color="#fff6dc" stop-opacity="0"/></radialGradient>
+    <clipPath id="noesis-clip-${name}"><rect width="1024" height="1024" rx="${rx}"/></clipPath>
+    <filter id="noesis-lift-${name}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".25"/></filter>
   </defs>
-  <rect width="1024" height="1024" rx="${rx}" fill="url(#noesis-tile)"/>
-  <rect width="1024" height="1024" rx="${rx}" fill="url(#noesis-light)"/>
-  <g filter="url(#noesis-lift)" transform="translate(0 0)">${glyphMarkup()}</g>
+  <g clip-path="url(#noesis-clip-${name})">
+    <rect width="1024" height="1024" fill="url(#noesis-tile-${name})"/>
+    <rect width="1024" height="1024" fill="url(#noesis-light-${name})"/>
+    <path d="M0 250 C260 200 460 300 640 470 C760 580 880 640 1024 650 V1024 H0 Z" fill="${tile.hillLight}" opacity=".18"/>
+    <path d="M0 560 C220 520 420 600 600 700 C760 790 900 800 1024 760 V1024 H0 Z" fill="${tile.hill}" opacity=".35"/>
+    <path d="M0 900 C260 840 520 880 760 950 C860 980 950 990 1024 980 V1024 H0 Z" fill="${tile.hill}" opacity=".35"/>
+  </g>
+  <g filter="url(#noesis-lift-${name})"><g transform="translate(512 540) scale(1.07) translate(-512 -540)">${glyphMarkup(tile)}</g></g>
 </svg>
 `
 }

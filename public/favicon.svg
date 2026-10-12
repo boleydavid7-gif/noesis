@@ -1,10 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="noesis-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d3c5e"/><stop offset="1" stop-color="#0b1a2c"/></linearGradient>
-    <radialGradient id="noesis-light" cx="50%" cy="0%" r="75%"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
-    <filter id="noesis-lift" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity=".28"/></filter>
+    <linearGradient id="noesis-tile-navy" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#13263f"/><stop offset="0.55" stop-color="#3d5d78"/><stop offset="1" stop-color="#f3cf86"/></linearGradient>
+    <radialGradient id="noesis-light-navy" cx="78%" cy="18%" r="60%"><stop offset="0" stop-color="#fff6dc" stop-opacity=".45"/><stop offset="1" stop-color="#fff6dc" stop-opacity="0"/></radialGradient>
+    <clipPath id="noesis-clip-navy"><rect width="1024" height="1024" rx="229"/></clipPath>
+    <filter id="noesis-lift-navy" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".25"/></filter>
   </defs>
-  <rect width="1024" height="1024" rx="229" fill="url(#noesis-tile)"/>
-  <rect width="1024" height="1024" rx="229" fill="url(#noesis-light)"/>
-  <g filter="url(#noesis-lift)" transform="translate(0 0)"><path d="M512 560 C442 518 338 508 248 526 V796 C338 778 442 788 512 828Z" fill="#f3dcae"/><path d="M512 560 C582 518 686 508 776 526 V796 C686 778 582 788 512 828Z" fill="#e2bd76"/><path d="M504 556 C494 452 520 326 600 196" fill="none" stroke="#e2bd76" stroke-width="22" stroke-linecap="round"/><path d="M502.0 470.0 C456.4 491.7 409.9 474.8 391.1 429.6 C434.5 407.1 481.0 424.1 502.0 470.0Z" fill="#e2bd76"/><path d="M512.0 400.0 C533.0 354.1 579.5 337.1 622.9 359.6 C604.1 404.8 557.6 421.7 512.0 400.0Z" fill="#f3dcae"/><path d="M528.0 336.0 C481.9 348.6 441.2 325.1 431.0 280.0 C475.2 266.2 515.9 289.8 528.0 336.0Z" fill="#f3dcae"/><path d="M550.0 286.0 C558.2 241.2 595.3 215.2 638.5 224.1 C632.1 267.6 594.9 293.6 550.0 286.0Z" fill="#e2bd76"/><path d="M574.0 238.0 C533.3 234.6 507.4 203.7 512.3 164.5 C551.8 166.4 577.7 197.3 574.0 238.0Z" fill="#e2bd76"/><path d="M598.0 200.0 C587.2 164.7 604.9 134.1 640.0 127.3 C651.6 161.1 634.0 191.7 598.0 200.0Z" fill="#f3dcae"/></g>
+  <g clip-path="url(#noesis-clip-navy)">
+    <rect width="1024" height="1024" fill="url(#noesis-tile-navy)"/>
+    <rect width="1024" height="1024" fill="url(#noesis-light-navy)"/>
+    <path d="M0 250 C260 200 460 300 640 470 C760 580 880 640 1024 650 V1024 H0 Z" fill="#5d7488" opacity=".18"/>
+    <path d="M0 560 C220 520 420 600 600 700 C760 790 900 800 1024 760 V1024 H0 Z" fill="#0d1c30" opacity=".35"/>
+    <path d="M0 900 C260 840 520 880 760 950 C860 980 950 990 1024 980 V1024 H0 Z" fill="#0d1c30" opacity=".35"/>
+  </g>
+  <g filter="url(#noesis-lift-navy)"><g transform="translate(512 540) scale(1.07) translate(-512 -540)"><path d="M151 667 C300 662 452 712 507 812 L512 834 L517 812 C572 712 724 662 873 667 L925 748 C764 745 604 770 518 838 L512 852 L506 838 C420 770 260 745 99 748 Z" fill="#e6d8bb"/><path d="M231 549 C340 548 458 594 507 790 C430 690 310 640 162 643 Z" fill="#f6eedb"/><path d="M793 549 C684 548 566 594 517 790 C594 690 714 640 862 643 Z" fill="#f6eedb"/><path d="M512 806 C508 700 510 624 518 566" fill="none" stroke="#f6eedb" stroke-width="22" stroke-linecap="round"/><path d="M528 566 C468 420 566 252 800 196 C792 372 702 512 528 566 Z" fill="#f6eedb"/><path d="M505 568 C428 562 298 500 256 360 C380 356 492 430 505 568 Z" fill="#f6eedb"/><path d="M552 536 C600 448 662 360 744 282" fill="none" stroke="#3d5d78" stroke-width="13" stroke-linecap="round"/><path d="M486 542 C436 498 368 438 300 392" fill="none" stroke="#3d5d78" stroke-width="13" stroke-linecap="round"/></g></g>
 </svg>

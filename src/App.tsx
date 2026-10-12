@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { MARK_GLYPH } from './lib/markGlyph'
 import { createPortal } from 'react-dom'
 import {
@@ -289,22 +289,33 @@ function displayNameFor(user: User | null, preferred = ''): string {
  * is given), the icon's lighter parts as a lighter shade.
  */
 function NoesisMark({ size = 22, color = 'currentColor' }: { size?: number; color?: string }) {
+  const cut = `noesis-veins-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   return (
     <svg
       className="noesis-mark"
       width={size}
       height={size}
-      viewBox="152 118 720 720"
+      viewBox="200 150 624 720"
       aria-hidden="true"
       style={{ color, flex: 'none' }}
     >
-      {MARK_GLYPH.map(([d, kind]) =>
-        kind === 'stem' ? (
-          <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth={22} strokeLinecap="round" />
-        ) : (
-          <path key={d} d={d} fill="currentColor" opacity={kind === 'light' ? 0.62 : 1} />
-        ),
-      )}
+      <defs>
+        <mask id={cut} maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+          <rect width="1024" height="1024" fill="#fff" />
+          {MARK_GLYPH.filter(([, kind]) => kind === 'vein').map(([d]) => (
+            <path key={d} d={d} fill="none" stroke="#000" strokeWidth={22} strokeLinecap="round" />
+          ))}
+        </mask>
+      </defs>
+      <g mask={`url(#${cut})`}>
+        {MARK_GLYPH.map(([d, kind]) =>
+          kind === 'vein' ? null : kind === 'stem' ? (
+            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth={26} strokeLinecap="round" />
+          ) : (
+            <path key={d} d={d} fill="currentColor" opacity={kind === 'gold' ? 0.62 : 1} />
+          ),
+        )}
+      </g>
     </svg>
   )
 }
