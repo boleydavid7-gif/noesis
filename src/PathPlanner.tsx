@@ -1,6 +1,16 @@
 import { libraryBooksForStage } from './lib/pathLink'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, Clock, ExternalLink, Lightbulb, Search, Sparkles, Star, StickyNote } from 'lucide-react'
+import {
+  BookOpen,
+  Check,
+  Clock,
+  ExternalLink,
+  Lightbulb,
+  Search,
+  MessageCircleQuestionMark as NoemaIcon,
+  Star,
+  StickyNote,
+} from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
 import {
@@ -278,7 +288,7 @@ function TopicCheck({
     return (
       <div className="topic-check">
         <button className="secondary-button" onClick={() => void ask()}>
-          <Sparkles size={14} /> Check yourself
+          <NoemaIcon size={14} /> Check yourself
         </button>
         {error ? (
           <p className="weather-error" role="alert">
@@ -495,7 +505,7 @@ export function PathPlanDetail({
                       aria-label={`Ask Noema about ${topic.label}`}
                       title="Ask Noema to explain this"
                     >
-                      <Sparkles size={13} />
+                      <NoemaIcon size={13} />
                     </button>
                   ) : null}
                   {onNote ? (
@@ -763,7 +773,7 @@ export function PathPlanner({
         <form className="planner-goal panel-card" onSubmit={clarify}>
           <div className="planner-goal-head">
             <span className="planner-spark">
-              <Sparkles size={20} />
+              <NoemaIcon size={20} />
             </span>
             <div>
               <h3>What do you want to learn?</h3>
@@ -910,7 +920,7 @@ export function PathPlanner({
           </div>
           <div className="planner-actions">
             <button className="primary-button" onClick={() => void build()} disabled={busy || !picked}>
-              <Sparkles size={15} /> {status === 'planning' ? 'Building…' : 'Build this path'}
+              {status === 'planning' ? 'Building…' : 'Build this path'}
             </button>
             <button
               className="text-button"

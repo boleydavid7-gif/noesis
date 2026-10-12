@@ -13,6 +13,18 @@ The product centers on four things:
 - Group books into learning paths and track real reading and review progress.
 - Turn notes into review questions you approve, then study them on a schedule.
 
+## Icon and design
+
+- The icon is drawn by `scripts/icons/build.mjs` (`node scripts/icons/build.mjs`): a navy tile lit from the top, the
+  open book with an olive branch in gold, on the same keylines as the Proairetos family's icons and inside the circle a
+  maskable crop keeps. It writes `public/favicon.svg`, `public/noesis-mark.svg` and every PNG in `public/icons/`. After
+  changing it, bump `CACHE` in `public/sw.js`.
+- Inside the app the tile is never shown: `NoesisMark` draws the same shapes (`src/lib/markGlyph.ts`, kept equal to the
+  generator by a test) in one colour, the lighter parts as a lighter shade. No "by Proairetos" in Noesis's own header.
+- Noema's sign is the speech bubble with a question mark (`MessageCircleQuestionMark` as `NoemaIcon`), never a sparkle.
+- The design block at the end of `src/App.css`: no glow under buttons or around Noema; choices and Noema's options are
+  grouped rows; labels are sentence case; the serif is for page titles, book titles, quotes and highlights.
+
 ## Development
 
 ```sh

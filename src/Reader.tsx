@@ -25,7 +25,7 @@ import {
   Plus,
   Search,
   Square,
-  Sparkles,
+  MessageCircleQuestionMark as NoemaIcon,
   Type,
   X,
 } from 'lucide-react'
@@ -1347,7 +1347,7 @@ export function Reader({
               aria-label="Ask Noema about this page"
               title="Ask Noema about this page"
             >
-              <Sparkles size={18} />
+              <NoemaIcon size={18} />
             </button>
             <button
               className="icon-button"
@@ -1996,11 +1996,7 @@ export function Reader({
                 </button>
               </div>
             ) : null}
-            {loading ? (
-              <div className="reader-overlay">
-                <Sparkles size={18} /> Opening {book.title}…
-              </div>
-            ) : null}
+            {loading ? <div className="reader-overlay">Opening {book.title}…</div> : null}
             {error ? (
               <div className="reader-overlay reader-error">
                 <CircleHelp size={18} />
@@ -2054,7 +2050,7 @@ export function Reader({
               className="reader-ask-button"
               onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
             >
-              <Sparkles size={14} /> Ask Noema about this
+              <NoemaIcon size={14} /> Ask Noema about this
             </button>
           </aside>
         ) : null}
@@ -2209,7 +2205,7 @@ function ReaderWideSidebar({
       </div>
       <div className="reader-wide-tutor">
         <div>
-          <Sparkles size={15} />
+          <NoemaIcon size={15} />
           <strong>Noema</strong>
         </div>
         <p>Ask about the page you are reading.</p>

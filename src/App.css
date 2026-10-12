@@ -106,10 +106,7 @@
 .brand-mark .noesis-mark {
   --mark-accent: var(--accent-mark, #e0b86b);
 }
-.home-hero-mark .noesis-mark {
-  --mark-accent: var(--accent-mark, #e5bd70);
-  filter: drop-shadow(0 0 12px rgba(224, 184, 107, 0.28));
-}
+
 .main-nav {
   display: grid;
   gap: 4px;
@@ -213,11 +210,11 @@
 .eyebrow {
   margin: 0;
   color: var(--gold-soft, #ead4a2);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   line-height: 1.4;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .sidebar-eyebrow {
   padding: 0 3px 8px;
@@ -1297,10 +1294,10 @@
   display: grid;
   gap: 6px;
   color: #bbbbbb;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .brain-form input,
 .brain-form textarea {
@@ -1847,10 +1844,10 @@
 }
 .resource-source {
   color: var(--gold-soft, #ead4a2);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .resource-card h3 {
   margin: 5px 0 4px;
@@ -2161,10 +2158,10 @@
 }
 .reader-wide-capture > span {
   color: #cdb078;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .reader-wide-capture select {
   max-width: 112px;
@@ -2258,10 +2255,10 @@
 }
 .reader-wide-location span {
   color: var(--gold-soft, #ead4a2);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .reader-wide-location strong {
   overflow: hidden;
@@ -2664,10 +2661,10 @@
   flex: 1;
   gap: 6px;
   color: #bbbbbb;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .profile-name-form input {
   width: 100%;
@@ -2835,10 +2832,10 @@
   display: grid;
   gap: 6px;
   color: #bbbbbb;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .auth-form input {
   width: 100%;
@@ -3641,10 +3638,10 @@ body {
   gap: 7px;
   margin: 17px 0 9px;
   color: #dbbc7d;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .reader-rail-heading small,
 .reader-notes-heading small {
@@ -4270,10 +4267,10 @@ body {
   display: flex;
   justify-content: space-between;
   color: #d5b879;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .reader-wide-sidebar-label small {
   color: #939393;
@@ -5429,16 +5426,14 @@ body {
 }
 .brand-lockup .noesis-mark {
   --mark-accent: var(--accent-mark, #e0b86b);
-  filter: drop-shadow(0 0 14px rgba(224, 184, 107, 0.22));
 }
 .brand-lockup strong {
   margin-top: 4px;
   color: var(--gold-soft, #ead4a2);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 23px;
+  font-size: 26px;
   font-weight: 400;
-  letter-spacing: 0.34em;
-  text-indent: 0.34em;
+  letter-spacing: 0;
 }
 .brand-lockup span {
   margin: 0;
@@ -6558,10 +6553,10 @@ body {
 .plan-next-label {
   margin: 0;
   color: var(--gold-soft, #ead4a2);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .plan-next h4 {
   margin: 0;
@@ -6598,9 +6593,9 @@ body {
 }
 .plan-study > strong {
   color: var(--gold-soft, #ead4a2);
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .plan-study > ul {
   display: grid;
@@ -6795,9 +6790,9 @@ body {
 }
 .path-reads h5 {
   margin: 0 0 6px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--muted);
 }
 .path-reads ol {
@@ -8290,9 +8285,9 @@ body {
 .command-group {
   padding: 8px 10px 4px;
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .command-item {
   display: flex;
@@ -9092,9 +9087,9 @@ input[type='radio'] {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--gold-soft, #ead4a2);
 }
 .study-panel strong {
@@ -9880,4 +9875,88 @@ input[type='radio'] {
 .passkeys-list small {
   display: block;
   color: var(--muted);
+}
+
+/* ---------- Design pass ---------- */
+/* Fewer template tells, same look: no glow under buttons or around Noema, lists as grouped rows rather than a card
+   per choice, and one serif rule (page titles, book titles, quotes and highlights; other headings are the sans). */
+
+.primary-button,
+.continue-actions .primary-button {
+  box-shadow: none;
+}
+.primary-button:hover {
+  transform: none;
+}
+
+.noema-orb {
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.35);
+  color: var(--gold-soft, #ead4a2);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
+  box-shadow: none;
+}
+
+.start-choices,
+.noema-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.start-choice,
+.noema-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.start-choice + .start-choice,
+.noema-action + .noema-action {
+  border-top: 1px solid var(--line);
+}
+.start-choice svg {
+  grid-row: span 2;
+}
+.start-choice strong {
+  font-size: 15px;
+}
+.start-choice span {
+  grid-column: 2;
+  color: var(--muted, rgba(222, 232, 242, 0.72));
+}
+.noema-action-icon {
+  background: transparent;
+}
+
+.paths-guide ol {
+  font-weight: 400;
+}
+
+:is(.section-heading h2, .reader-wide-sidebar-head h2, .context-section-heading h2, .planner-goal-head h3, .plan-next h4,
+  .settings-subhead, .study-panel strong, .reader-wide-tutor strong, .shelf-add-frame span, .weather-current strong) {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+:is(.section-heading h2, .planner-goal-head h3, .plan-next h4, .reader-wide-sidebar-head h2, .settings-subhead) {
+  font-size: 18px;
+}
+
+.noema-head .eyebrow {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+.noema-ask {
+  background: var(--accent-fill, #b48b4e);
+  box-shadow: none;
 }
