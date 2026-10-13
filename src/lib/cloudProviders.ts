@@ -203,22 +203,90 @@ function randomState(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-export function consumeCloudOAuthRedirect(): void {
-  if (typeof window === 'undefined') return
+// A connection started in the same window (an iPhone Home Screen app, or a blocked popup): what the return needs.
+const PENDING_KEY = 'noesis:cloud-pending:v1'
+type PendingConnection = { provider: CloudProviderId; state: string; verifier: string; ownerUserId?: string; at: number }
+
+/** An installed Home Screen app: a popup there opens apart from the app and cannot hand anything back. */
+function installedApp(): boolean {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
+function readPending(): PendingConnection | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as PendingConnection | null
+    localStorage.removeItem(PENDING_KEY)
+    return value && Date.now() - value.at < 30 * 60 * 1000 ? value : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Back in the same window from the provider: finishes the connection here. Resolves with a line to show, or null
+ * when there was nothing to finish.
+ */
+async function finishInThisWindow(
+  provider: CloudProviderId,
+  state: string | null,
+  code: string | null,
+  accessToken: string | null,
+  expiresIn: number,
+  error: string | null,
+): Promise<string | null> {
+  const pending = readPending()
+  if (!pending || pending.provider !== provider || pending.state !== state) return null
+  const label = providerDetails[provider].label
+  if (error || !(code || accessToken)) return `${label} was not connected.`
+  try {
+    const tokens = code
+      ? await exchangeCode(provider, code, pending.verifier)
+      : { accessToken: String(accessToken), refreshToken: undefined, expiresIn }
+    if (code) rememberRenewalWorked(provider)
+    writeCloudConnections([
+      ...readCloudConnections().filter((item) => item.provider !== provider),
+      {
+        provider,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: Date.now() + Math.max(60, tokens.expiresIn) * 1000,
+        connectedAt: new Date().toISOString(),
+        ownerUserId: pending.ownerUserId,
+      },
+    ])
+    return `${label} connected. Noesis will sync your library automatically.`
+  } catch (reason) {
+    if (code) rememberRenewalBroke(provider)
+    return reason instanceof Error ? `${label} could not be connected: ${reason.message}` : `${label} could not be connected.`
+  }
+}
+
+export async function consumeCloudOAuthRedirect(): Promise<string | null> {
+  if (typeof window === 'undefined') return null
   const query = new URLSearchParams(window.location.search)
   // The legacy ?noesis-oauth=1&provider=... form is still accepted so a
   // redirect URI registered earlier keeps working.
   const provider =
     oauthProviderFromPath(window.location.pathname) ??
     (query.has('noesis-oauth') ? (query.get('provider') as CloudProviderId | null) : null)
-  if (!provider) return
+  if (!provider) return null
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
   const error = hash.get('error') || query.get('error')
   if (!window.opener) {
-    // Nothing to hand the token to (the popup lost its opener or the page was
-    // opened directly). Drop it from the address bar instead of leaving it there.
+    // Started in this same window (an installed app, or a blocked popup): finish here. Either way the code
+    // leaves the address bar.
     window.history.replaceState(null, '', '/')
-    return
+    return finishInThisWindow(
+      provider,
+      hash.get('state') || query.get('state'),
+      query.get('code'),
+      hash.get('access_token'),
+      Number(hash.get('expires_in') || 3600),
+      error,
+    )
   }
   window.opener.postMessage(
     {
@@ -233,6 +301,7 @@ export function consumeCloudOAuthRedirect(): void {
     window.location.origin,
   )
   window.close()
+  return null
 }
 
 export async function connectCloudProvider(provider: CloudProviderId, ownerUserId?: string): Promise<CloudConnection> {
@@ -262,12 +331,17 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
     if (renewable) params.set('prompt', 'consent')
     params.set('include_granted_scopes', 'true')
   }
-  const popup = window.open(
-    `${config.authUrl}?${params.toString()}`,
-    'noesis-cloud-auth',
-    'popup=yes,width=520,height=700',
-  )
-  if (!popup) throw new Error('Your browser blocked the sign-in popup. Allow popups for Noesis and try again.')
+  const address = `${config.authUrl}?${params.toString()}`
+  const sameWindow = () => {
+    // The page leaves for the provider and comes back to /oauth/<provider>, which finishes the connection.
+    const pending: PendingConnection = { provider, state, verifier, ownerUserId, at: Date.now() }
+    localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+    window.location.assign(address)
+    return new Promise<CloudConnection>(() => undefined)
+  }
+  if (installedApp()) return sameWindow()
+  const popup = window.open(address, 'noesis-cloud-auth', 'popup=yes,width=520,height=700')
+  if (!popup) return sameWindow()
   return new Promise<CloudConnection>((resolve, reject) => {
     let finished = false
     const cleanup = () => {

@@ -750,7 +750,11 @@ function App() {
     }
   }, [])
   useEffect(() => {
-    consumeCloudOAuthRedirect()
+    void consumeCloudOAuthRedirect().then((line) => {
+      if (!line) return
+      setCloudConnections(readCloudConnections())
+      showNotice(line)
+    })
     let cancelled = false
     void getCurrentSession()
       .then((session) => {
