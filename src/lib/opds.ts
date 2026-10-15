@@ -1,4 +1,4 @@
-// Reading an OPDS catalogue: the standard way book servers (Calibre-Web, Kavita, Standard Ebooks,
+// Reading an OPDS catalog: the standard way book servers (Calibre-Web, Kavita, Standard Ebooks,
 // Project Gutenberg and others) list their books. Plain string work, so it runs anywhere.
 
 export type OpdsLink = { href: string; rel: string; type: string; title: string }
@@ -124,6 +124,6 @@ export function searchTemplateFrom(description: string): string | undefined {
 export const searchAddress = (template: string, query: string) =>
   template.replace(/\{searchTerms\}|%7BsearchTerms%7D/g, encodeURIComponent(query))
 
-// Standard Ebooks asks for a sign-in before listing its whole catalogue, so it is searched from the
+// Standard Ebooks asks for a sign-in before listing its whole catalog, so it is searched from the
 // Explore results instead.
 export const OPDS_PRESETS = [{ name: 'Project Gutenberg', url: 'https://www.gutenberg.org/ebooks.opds/' }]

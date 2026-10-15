@@ -62,12 +62,12 @@ export function PdfReader(props: Props) {
   const scanned = useRef(new Map<number, string>())
   useEffect(() => {
     if (!doc) return
-    let cancelled = false
+    let canceled = false
     void doc
       .getPage(page)
       .then((proxy) => proxy.getTextContent())
       .then((content) => {
-        if (cancelled) return
+        if (canceled) return
         const words = content.items
           .map((item) => ('str' in item ? item.str : ''))
           .join('')
@@ -76,7 +76,7 @@ export function PdfReader(props: Props) {
       })
       .catch(() => undefined)
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [doc, page])
   const readPage = async (target: number) => {
@@ -112,14 +112,14 @@ export function PdfReader(props: Props) {
   }
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     let loaded: PDFDocumentProxy | null = null
     void (async () => {
       try {
         const pdfjs = await import('pdfjs-dist')
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
         loaded = await pdfjs.getDocument({ data: new Uint8Array(data.slice(0)) }).promise
-        if (cancelled) {
+        if (canceled) {
           void loaded.destroy()
           return
         }
@@ -130,11 +130,11 @@ export function PdfReader(props: Props) {
           const pageProxy = await loaded.getPage(index)
           const view = pageProxy.getViewport({ scale: 1 })
           found.push({ width: view.width, height: view.height })
-          if (cancelled) return
+          if (canceled) return
           if (index === 1 || index % 40 === 0 || index === loaded.numPages) setSizes([...found])
         }
         const raw = await loaded.getOutline().catch(() => null)
-        if (!cancelled && raw) {
+        if (!canceled && raw) {
           setOutline(
             raw
               .slice(0, 80)
@@ -143,7 +143,7 @@ export function PdfReader(props: Props) {
           )
         }
       } catch (reason) {
-        if (!cancelled)
+        if (!canceled)
           setError(
             reason instanceof Error && /password/i.test(reason.message)
               ? 'This PDF is password protected.'
@@ -152,7 +152,7 @@ export function PdfReader(props: Props) {
       }
     })()
     return () => {
-      cancelled = true
+      canceled = true
       void loaded?.destroy()
     }
   }, [data])
@@ -207,7 +207,7 @@ export function PdfReader(props: Props) {
     onPage(page, doc.numPages)
   }, [page, doc, onPage])
 
-  // Selecting text offers the highlight colours.
+  // Selecting text offers the highlight colors.
   const checkSelection = useCallback(() => {
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
@@ -246,7 +246,7 @@ export function PdfReader(props: Props) {
     cfi: `pdf:${target.page}:${target.rects.map((rect) => `${rect.x},${rect.y},${rect.w},${rect.h}`).join(';')}`,
   })
 
-  // Tapping a highlight lets the reader change its colour or remove it.
+  // Tapping a highlight lets the reader change its color or remove it.
   const tapPage = (event: React.MouseEvent<HTMLDivElement>, pageNumber: number) => {
     if (window.getSelection()?.toString()) return
     const box = event.currentTarget.getBoundingClientRect()
@@ -581,14 +581,14 @@ function PdfPageView({
       layer.replaceChildren()
       return
     }
-    let cancelled = false
+    let canceled = false
     let task: { cancel: () => void } | null = null
     let text: { cancel: () => void } | null = null
     void (async () => {
       try {
         const pdfjs = await import('pdfjs-dist')
         const pageProxy = await doc.getPage(number)
-        if (cancelled) return
+        if (canceled) return
         const viewport = pageProxy.getViewport({ scale })
         const ratio = Math.min(window.devicePixelRatio || 1, 2)
         target.width = Math.floor(viewport.width * ratio)
@@ -604,7 +604,7 @@ function PdfPageView({
         })
         task = render
         await render.promise
-        if (cancelled) return
+        if (canceled) return
         layer.replaceChildren()
         layer.style.setProperty('--scale-factor', String(scale))
         const textRender = new pdfjs.TextLayer({
@@ -619,7 +619,7 @@ function PdfPageView({
       }
     })()
     return () => {
-      cancelled = true
+      canceled = true
       task?.cancel()
       text?.cancel()
     }

@@ -1,5 +1,5 @@
 // User preferences, stored locally. Every value here is read by the app, so a
-// setting that appears in the Settings page changes behaviour.
+// setting that appears in the Settings page changes behavior.
 
 export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
 export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy' | 'custom'
@@ -305,8 +305,8 @@ export function writeSettings(settings: Settings, stamp?: string): void {
   }
 }
 
-// The dark colours behind the whole app. Midnight is the stylesheet's own default.
-// A dark set of colours built around one hue, so every theme keeps the same depth.
+// The dark colors behind the whole app. Midnight is the stylesheet's own default.
+// A dark set of colors built around one hue, so every theme keeps the same depth.
 function surfaceFrom(hue: number, saturation = 1): Record<string, string> {
   const hex = (h: number, s: number, l: number) => {
     const a = (s / 100) * Math.min(l / 100, 1 - l / 100)

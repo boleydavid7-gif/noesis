@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { HIGHLIGHT_COLORS } from './knowledge'
 import { ACCENTS, SURFACES, SURFACE_SWATCH, sanitizeSettings } from './settings'
 
-describe('colour choices', () => {
-  it('has a bright swatch and full variables for every app colour', () => {
+describe('color choices', () => {
+  it('has a bright swatch and full variables for every app color', () => {
     for (const name of Object.keys(SURFACES) as Array<keyof typeof SURFACES>) {
       expect(SURFACE_SWATCH[name]).toMatch(/^#[0-9a-f]{6}$/i)
       if (name !== 'midnight') expect(Object.keys(SURFACES[name].vars)).toContain('--surface-main-b')

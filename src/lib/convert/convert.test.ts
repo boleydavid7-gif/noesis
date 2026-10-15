@@ -46,7 +46,7 @@ describe('formats', () => {
     expect(result.opf).toContain('<dc:title>Tiny Tale</dc:title>')
     expect(result.opf).toContain('A. Writer')
     expect(result.chapters).toHaveLength(2)
-    expect(result.text).not.toContain('licence')
+    expect(result.text).not.toContain('license')
   })
 
   it('reads Windows-1252 text', async () => {

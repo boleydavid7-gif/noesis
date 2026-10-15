@@ -380,7 +380,7 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
       )
         return
       if (event.data.error || !(event.data.accessToken || event.data.code)) {
-        finish(() => reject(new Error(event.data.error || 'Cloud provider authorization was cancelled.')))
+        finish(() => reject(new Error(event.data.error || 'Cloud provider authorization was canceled.')))
         return
       }
       if (event.data.code) {
@@ -422,7 +422,7 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
       })
     }
     const timer = window.setInterval(() => {
-      if (popup.closed) finish(() => reject(new Error('Cloud provider authorization was cancelled.')))
+      if (popup.closed) finish(() => reject(new Error('Cloud provider authorization was canceled.')))
     }, 500)
     const timeout = window.setTimeout(
       () => finish(() => reject(new Error('Cloud provider authorization timed out.'))),

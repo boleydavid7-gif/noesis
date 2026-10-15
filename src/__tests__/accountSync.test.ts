@@ -66,7 +66,7 @@ describe('account sync between two devices', () => {
 
   it('removes an event on every device after it is deleted on one', async () => {
     useDevice(laptop)
-    const event = newEvent({ title: 'Cancelled lab', date: '2026-10-21' })
+    const event = newEvent({ title: 'Canceled lab', date: '2026-10-21' })
     const first = await syncAccountBundle({ ...empty(), events: [event] })
 
     useDevice(phone)

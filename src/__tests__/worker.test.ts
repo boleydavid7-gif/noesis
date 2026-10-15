@@ -418,7 +418,7 @@ describe('learning path routes', () => {
     expect(String((mock.mock.calls[0] as unknown as [string])[0])).toContain('key=key123')
   })
 
-  it('answers null when nothing matches closely, and 502 when the catalogue is down', async () => {
+  it('answers null when nothing matches closely, and 502 when the catalog is down', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify({ items: [volume('Gardening for Beginners', ['Pat Green'])] }))),
@@ -584,7 +584,7 @@ describe('book ratings from two sources', () => {
     expect(body.book.ratings).toHaveLength(1)
   })
 
-  it('reports an outage only when both catalogues fail', async () => {
+  it('reports an outage only when both catalogs fail', async () => {
     vi.stubGlobal('fetch', route(null, null))
     expect((await lookup('title=Network%20Warrior', '10.0.0.4')).status).toBe(502)
   })
@@ -802,7 +802,7 @@ describe('opds proxy', () => {
   const ask = (target: string, ip: string) =>
     call(`/api/opds?url=${encodeURIComponent(target)}`, { headers: { 'cf-connecting-ip': ip } }, {})
 
-  it('passes on a public catalogue', async () => {
+  it('passes on a public catalog', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -815,7 +815,7 @@ describe('opds proxy', () => {
     expect(await response.text()).toContain('<title>Books</title>')
   })
 
-  it('refuses private addresses, plain http and things that are not catalogues', async () => {
+  it('refuses private addresses, plain http and things that are not catalogs', async () => {
     expect((await ask('http://books.example.com/opds', '7.9.4.2')).status).toBe(400)
     expect((await ask('https://192.168.1.5/opds', '7.9.4.3')).status).toBe(400)
     expect((await ask('https://localhost/opds', '7.9.4.4')).status).toBe(400)
@@ -869,7 +869,7 @@ describe('webdav proxy', () => {
 })
 
 describe('cover search', () => {
-  it('collects covers from both catalogues without duplicates', async () => {
+  it('collects covers from both catalogs without duplicates', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL) => {

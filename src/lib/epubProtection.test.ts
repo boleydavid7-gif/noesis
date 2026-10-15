@@ -24,7 +24,7 @@ describe('copy-protected EPUBs', () => {
     await expect(assertNotProtected(await epubWith(xml))).resolves.toBeUndefined()
   })
 
-  it('recognises encrypted chapters', async () => {
+  it('recognizes encrypted chapters', async () => {
     const xml = wrap(block('http://www.w3.org/2001/04/xmlenc#aes128-cbc', 'OEBPS/chapter1.xhtml'))
     await expect(assertNotProtected(await epubWith(xml))).rejects.toBeInstanceOf(EpubProtectedError)
   })

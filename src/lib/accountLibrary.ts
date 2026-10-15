@@ -187,7 +187,7 @@ type SettingsFile = { version: 1; updatedAt: string; settings: unknown }
 const SETTINGS_NAME = 'data/settings.json'
 
 /**
- * Keeps colours, look and reading preferences the same on every device signed in to the account.
+ * Keeps colors, look and reading preferences the same on every device signed in to the account.
  * The newer copy wins. Returns the account's settings when they are newer than this device's, else null.
  * Whether to sync at all stays a per-device choice and is never overwritten.
  */

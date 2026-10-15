@@ -40,7 +40,7 @@ describe('resolveBook', () => {
     expect(mock).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the suggestion but marks it unverified when the catalogue is down, without caching it', async () => {
+  it('keeps the suggestion but marks it unverified when the catalog is down, without caching it', async () => {
     const mock = vi.fn(async () => reply({ ok: false }, 502))
     vi.stubGlobal('fetch', mock)
     const book = await resolveBook({ title: 'Network Warrior', author: 'Donahue' })

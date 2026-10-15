@@ -72,7 +72,7 @@ export function retrieveChunks(chunks: BookChunk[], query: string, limit = 6): R
 }
 
 // Builds the "Additional book context" block: best-matching passages first
-// chosen by score, then shown in reading order, each labelled with its section
+// chosen by score, then shown in reading order, each labeled with its section
 // so the tutor can cite where an answer came from.
 export function retrievedContext(text: string, question: string, budget = 12_000): string {
   const chunks = chunkBook(text)

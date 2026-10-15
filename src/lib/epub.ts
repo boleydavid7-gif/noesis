@@ -276,7 +276,7 @@ const normalize = (value: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
 
-// Where a book is opened the first time: past the cover, title page and licence text, at the first real section.
+// Where a book is opened the first time: past the cover, title page and license text, at the first real section.
 export function firstReadingIndex(toc: Array<{ label: string }>, title: string): number {
   const own = normalize(title)
   let index = 0

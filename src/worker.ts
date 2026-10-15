@@ -281,7 +281,7 @@ async function answerTutor(request: Request, env: Env): Promise<Response> {
     'For borrowed or hosted books, distinguish metadata from the actual text. Explain exact passages only when the learner supplies the passage or notes. Never claim access to protected reader contents; ask the learner to paste a passage when needed.',
     "Treat the supplied visible reading text and selected passage as the learner's immediate context. Prefer that text over general book metadata or distant excerpts.",
     'When relevant text is supplied, explain it from that text, mention the current chapter or page when available, and distinguish direct evidence from interpretation.',
-    'Book excerpts are labelled [Section N]. When you rely on one, cite it as (Section N) so the learner can find it, and never cite a section you were not given.',
+    'Book excerpts are labeled [Section N]. When you rely on one, cite it as (Section N) so the learner can find it, and never cite a section you were not given.',
     'Keep the answer focused unless the learner asks for a deep explanation.',
   ].join(' ')
   const prompt = [
@@ -801,9 +801,9 @@ function olCover(doc: OpenLibraryDoc | undefined): string | undefined {
   return doc?.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined
 }
 
-// Finds the real catalogue record for a book the AI named, with reader ratings
+// Finds the real catalog record for a book the AI named, with reader ratings
 // combined from Google Books and Open Library. Answers { book: null } when
-// nothing matches closely enough, and a 502 when no catalogue could be reached.
+// nothing matches closely enough, and a 502 when no catalog could be reached.
 async function lookupBook(request: Request, env: Env): Promise<Response> {
   if (rateLimited(request, 'book', 80))
     return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
@@ -1405,13 +1405,13 @@ async function proxyCover(request: Request): Promise<Response> {
   })
 }
 
-// Fetches a public OPDS catalogue for the browser, which often cannot read other sites directly.
-// Only public https addresses, only catalogue-like answers, and a size limit.
+// Fetches a public OPDS catalog for the browser, which often cannot read other sites directly.
+// Only public https addresses, only catalog-like answers, and a size limit.
 async function proxyCatalogue(request: Request): Promise<Response> {
   if (rateLimited(request, 'opds', 40))
     return json({ ok: false, error: 'Too many requests. Try again in a minute.' }, 429)
   const target = new URL(request.url).searchParams.get('url') ?? ''
-  if (!isPublicHttps(target)) return json({ ok: false, error: 'Use the public https address of the catalogue.' }, 400)
+  if (!isPublicHttps(target)) return json({ ok: false, error: 'Use the public https address of the catalog.' }, 400)
   let url = new URL(target)
   let response: Response
   try {
@@ -1427,19 +1427,19 @@ async function proxyCatalogue(request: Request): Promise<Response> {
       const location = response.headers.get('location')
       if (response.status < 300 || response.status >= 400 || !location) break
       if (hop >= MAX_RESOURCE_REDIRECTS)
-        return json({ ok: false, error: 'The catalogue redirected too many times.' }, 502)
+        return json({ ok: false, error: 'The catalog redirected too many times.' }, 502)
       url = new URL(location, url)
       if (!isPublicHttps(url.toString()))
-        return json({ ok: false, error: 'The catalogue redirected somewhere unsafe.' }, 400)
+        return json({ ok: false, error: 'The catalog redirected somewhere unsafe.' }, 400)
     }
   } catch {
-    return json({ ok: false, error: 'The catalogue did not respond in time.' }, 502)
+    return json({ ok: false, error: 'The catalog did not respond in time.' }, 502)
   }
-  if (!response.ok) return json({ ok: false, error: `The catalogue returned ${response.status}.` }, 502)
+  if (!response.ok) return json({ ok: false, error: `The catalog returned ${response.status}.` }, 502)
   const type = response.headers.get('content-type') ?? ''
-  if (!/xml|atom|opds/i.test(type)) return json({ ok: false, error: 'That address is not an OPDS catalogue.' }, 422)
+  if (!/xml|atom|opds/i.test(type)) return json({ ok: false, error: 'That address is not an OPDS catalog.' }, 422)
   const text = await response.text()
-  if (text.length > 4_000_000) return json({ ok: false, error: 'That catalogue page is too large.' }, 413)
+  if (text.length > 4_000_000) return json({ ok: false, error: 'That catalog page is too large.' }, 413)
   return new Response(text, {
     status: 200,
     headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'private, max-age=60' },

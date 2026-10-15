@@ -132,7 +132,7 @@ export async function requestGrade(input: QuizTopic & { question: string; answer
   }
 }
 
-// null means "no such book was found" (so it is left out); a catalogue outage
+// null means "no such book was found" (so it is left out); a catalog outage
 // keeps the suggestion but marks it unverified.
 export async function resolveBook(candidate: BookCandidate, now = Date.now()): Promise<ResolvedBook | null> {
   const key = bookKey(candidate)

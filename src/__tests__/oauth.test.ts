@@ -9,7 +9,7 @@ describe('oauth redirect paths', () => {
     }
   })
 
-  it('recognises each callback path, with or without a trailing slash', () => {
+  it('recognizes each callback path, with or without a trailing slash', () => {
     expect(oauthProviderFromPath('/oauth/onedrive')).toBe('onedrive')
     expect(oauthProviderFromPath('/oauth/dropbox/')).toBe('dropbox')
     expect(oauthProviderFromPath('/oauth/google-drive')).toBe('google-drive')

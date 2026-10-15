@@ -399,7 +399,7 @@ export type BookRecord = {
   freeUrl?: string
 }
 
-// Scores how well a catalogue record matches what the AI asked for. Requires
+// Scores how well a catalog record matches what the AI asked for. Requires
 // most of the title words to appear, and the author's surname when given.
 export function matchScore(record: Pick<BookRecord, 'title' | 'authors'>, title: string, author: string): number {
   const wanted = words(title)
@@ -516,7 +516,7 @@ export const EXAMPLE_GOALS = [
   'Learn to write a novel',
 ]
 
-// Used when the book catalogue could not be reached: the suggestion is kept, but
+// Used when the book catalog could not be reached: the suggestion is kept, but
 // marked as unverified and given search links instead of exact ones.
 export function unverifiedBook(candidate: BookCandidate): ResolvedBook {
   return {

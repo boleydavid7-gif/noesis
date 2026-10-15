@@ -1,4 +1,4 @@
-// A contents entry the reader can recognise: spaces tidied, a trailing "CHAPTER II." picked out of a caption,
+// A contents entry the reader can recognize: spaces tidied, a trailing "CHAPTER II." picked out of a caption,
 // and a plain "Section N" when the book gave nothing usable.
 export function cleanChapterLabel(raw: string, index: number): string {
   const label = raw.replace(/\s+/g, ' ').trim()

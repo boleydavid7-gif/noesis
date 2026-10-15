@@ -43,7 +43,7 @@ export function writeTombstones(tombstones: Tombstones): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(tombstones))
   } catch {
-    // Storage can be unavailable; sync then falls back to the old behaviour.
+    // Storage can be unavailable; sync then falls back to the old behavior.
   }
 }
 

@@ -337,7 +337,7 @@ export function Reader({
   const readingRef = useLatest(reading)
   const setFontSize = (value: number) => onReadingChange({ fontSize: value })
   const setReaderTheme = (value: ReaderTheme) => onReadingChange({ theme: value })
-  // What the reader has just selected, or the highlight they tapped, with the colours to choose from.
+  // What the reader has just selected, or the highlight they tapped, with the colors to choose from.
   const [pick, setPick] = useState<{
     text: string
     location: BrainNoteLocation
@@ -738,7 +738,7 @@ export function Reader({
   )
   const pdfStart = parsePdfLocation(jumpLocation?.cfi)?.page ?? parsePdfLocation(book.cfi)?.page ?? 1
 
-  // Highlights are drawn on the page in the colour they were saved with.
+  // Highlights are drawn on the page in the color they were saved with.
   const drawn = useRef(new Map<string, { cfi: string; color: HighlightColor }>())
   const highlightKey = notes
     .filter((note) => note.bookId === book.id && note.kind === 'highlight' && note.cfi?.startsWith('epubcfi'))
@@ -892,7 +892,7 @@ export function Reader({
     }
   }, [book.format, wideLayout, loading])
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     let cleanupReading = () => undefined
     const currentBook = bookRef.current
     const { onProgress: reportProgress } = readerCallbacksRef.current
@@ -907,14 +907,14 @@ export function Reader({
         }
         const data = await openBookFile(currentBook)
         if (currentBook.format === 'pdf') {
-          if (!cancelled) {
+          if (!canceled) {
             setPdfData(data)
             setLoading(false)
           }
           return
         }
         const epub = await openEpub(data)
-        if (cancelled || !frame.current) {
+        if (canceled || !frame.current) {
           epub.destroy()
           return
         }
@@ -958,7 +958,7 @@ export function Reader({
           void epub.locations
             .generate(1200)
             .then(() => {
-              if (cancelled) return
+              if (canceled) return
               generatedLocationCount = epub.locations.length()
               try {
                 localStorage.setItem(locationsKey, epub.locations.save())
@@ -1232,7 +1232,7 @@ export function Reader({
         for (const target of candidates) {
           try {
             await instance.display(target)
-            if (cancelled) return
+            if (canceled) return
             displayedOnce = true
             if (shownContent()) {
               opened = true
@@ -1247,7 +1247,7 @@ export function Reader({
         const settle = async () => {
           for (const wait of [350, 1100, 2500]) {
             await new Promise((resolve) => window.setTimeout(resolve, wait))
-            if (cancelled) return
+            if (canceled) return
             try {
               ;(instance as unknown as { resize: () => void }).resize()
               const frameDoc = frame.current?.querySelector('iframe')
@@ -1280,14 +1280,14 @@ export function Reader({
           scrollTargets.clear()
         }
       } catch (reason) {
-        if (!cancelled) setError(friendlyBookError(reason, 'Could not open this EPUB.'))
+        if (!canceled) setError(friendlyBookError(reason, 'Could not open this EPUB.'))
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!canceled) setLoading(false)
       }
     }
     void start()
     return () => {
-      cancelled = true
+      canceled = true
       cleanupReading()
       rendition.current?.destroy()
       epubRef.current?.destroy()
@@ -1624,11 +1624,11 @@ export function Reader({
                               />
                             </label>
                             <label>
-                              Page colour
+                              Page color
                               <select
                                 value={readerTheme}
                                 onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
-                                aria-label="Page colour on a phone"
+                                aria-label="Page color on a phone"
                               >
                                 <option value="paper">Paper</option>
                                 <option value="sepia">Sepia</option>
@@ -1645,7 +1645,7 @@ export function Reader({
                               checked={Boolean(ownLook)}
                               onChange={(event) => onOwnLook(event.target.checked)}
                             />
-                            Keep this page look (size, colour) for this book only
+                            Keep this page look (size, color) for this book only
                           </label>
                         ) : null}
                         {book.format === 'epub' ? (

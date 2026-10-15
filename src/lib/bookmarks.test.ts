@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { citation, inBookOrder, isBookmark, sameSpot } from './bookmarks'
 
 describe('bookmarks', () => {
-  it('recognises the tag', () => {
+  it('recognizes the tag', () => {
     expect(isBookmark({ tags: ['bookmark'] })).toBe(true)
     expect(isBookmark({ tags: ['word'] })).toBe(false)
     expect(isBookmark({})).toBe(false)

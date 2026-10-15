@@ -4,7 +4,7 @@ import { firstReadingIndex } from './epub'
 const toc = (...labels: string[]) => labels.map((label) => ({ label }))
 
 describe('firstReadingIndex', () => {
-  it('skips the title and licence entries', () => {
+  it('skips the title and license entries', () => {
     expect(firstReadingIndex(toc('PRIDE. and PREJUDICE', 'Chapter I.', 'Chapter II.'), 'Pride and Prejudice')).toBe(1)
     expect(firstReadingIndex(toc('Cover', 'Title Page', 'Copyright', 'Chapter 1'), 'Anything')).toBe(3)
   })

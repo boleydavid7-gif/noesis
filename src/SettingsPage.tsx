@@ -513,15 +513,15 @@ function LibrarySection({
   const [usage, setUsage] = useState<{ used: number; quota: number } | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void navigator.storage
       ?.estimate?.()
       .then((estimate) => {
-        if (!cancelled && estimate.usage !== undefined) setUsage({ used: estimate.usage, quota: estimate.quota ?? 0 })
+        if (!canceled && estimate.usage !== undefined) setUsage({ used: estimate.usage, quota: estimate.quota ?? 0 })
       })
       .catch(() => undefined)
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [progress])
   const bookBytes = books.reduce((sum, book) => sum + (book.fileSize ?? 0), 0)
@@ -643,17 +643,17 @@ function LibrarySection({
 function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
   const [status, setStatus] = useState<'checking' | 'ready' | 'missing' | 'offline'>('checking')
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void fetch('/api/health', { cache: 'no-store' })
       .then((response) => response.json() as Promise<{ geminiConfigured?: boolean }>)
       .then((body) => {
-        if (!cancelled) setStatus(body.geminiConfigured ? 'ready' : 'missing')
+        if (!canceled) setStatus(body.geminiConfigured ? 'ready' : 'missing')
       })
       .catch(() => {
-        if (!cancelled) setStatus('offline')
+        if (!canceled) setStatus('offline')
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [])
   const ai = settings.ai
@@ -859,15 +859,15 @@ type SoundCredit = { name: string; title: string; author: string; license: strin
 function AboutSection() {
   const [credits, setCredits] = useState<SoundCredit[]>([])
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void fetch('/audio/ambient/credits.json')
       .then((response) => (response.ok ? response.json() : []))
       .then((list: unknown) => {
-        if (!cancelled && Array.isArray(list)) setCredits(list as SoundCredit[])
+        if (!canceled && Array.isArray(list)) setCredits(list as SoundCredit[])
       })
       .catch(() => undefined)
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [])
   return (

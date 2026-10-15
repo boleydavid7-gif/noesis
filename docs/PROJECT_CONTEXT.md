@@ -100,6 +100,9 @@ cannot be processed. Public links can be inaccessible, paywalled, or dynamic.
 AI output must remain grounded in imported text and should be reviewable before
 it is treated as a learning record.
 
+The app's words use American English (color, center, catalog, canceled, recognize, behavior);
+cited titles stay as published.
+
 ## Verification
 
 The current source passes `npm run typecheck`, `npm run build`, `npm run lint`,

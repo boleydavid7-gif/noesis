@@ -8761,7 +8761,7 @@ body {
   }
 }
 
-/* Second Brain, Noema and the reader's side panel follow the chosen app colours and accent. */
+/* Second Brain, Noema and the reader's side panel follow the chosen app colors and accent. */
 .noema-panel,
 .utility-panel,
 .brain-panel {
@@ -8913,7 +8913,7 @@ body {
   color: var(--accent-light, #efc66e);
 }
 
-/* The reader's frame and rails follow the app colours too. */
+/* The reader's frame and rails follow the app colors too. */
 .reader-page.panel-card {
   background: var(--surface-pop, #0c1925);
 }
@@ -9307,12 +9307,12 @@ input[type='radio'] {
   display: flex;
   gap: 12px;
 }
-.brain-organise {
+.brain-organize {
   display: grid;
   gap: 8px;
   margin-bottom: 8px;
 }
-.brain-organise select,
+.brain-organize select,
 .brain-merge select {
   padding: 6px 8px;
   color: inherit;
@@ -9320,7 +9320,7 @@ input[type='radio'] {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
 }
-.brain-organise option,
+.brain-organize option,
 .brain-merge option {
   color: #111;
 }
@@ -9640,7 +9640,7 @@ input[type='radio'] {
   background: rgba(6, 14, 24, 0.65);
 }
 
-/* Scrollbars follow the chosen accent and app colours. */
+/* Scrollbars follow the chosen accent and app colors. */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--accent-rgb, 220, 194, 142), 0.45) transparent;
@@ -9663,7 +9663,7 @@ input[type='radio'] {
   background-clip: padding-box;
 }
 
-/* The round add button's icon sits dead centre. */
+/* The round add button's icon sits dead center. */
 .context-section-heading .context-plus {
   display: grid;
   place-items: center;
@@ -9677,7 +9677,7 @@ input[type='radio'] {
   display: block;
 }
 
-/* The expanded reader and its Second Brain panel follow the chosen colours. */
+/* The expanded reader and its Second Brain panel follow the chosen colors. */
 .reader-page-wide,
 .reader-page.panel-card.reader-page-wide {
   background: var(--surface-deep, #07121c);

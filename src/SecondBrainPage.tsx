@@ -261,7 +261,7 @@ export function SecondBrainPage({
           ))}
         </div>
         {notes.some((note) => note.color) ? (
-          <span className="brain-page-colors" role="group" aria-label="Filter by highlight colour">
+          <span className="brain-page-colors" role="group" aria-label="Filter by highlight color">
             {HIGHLIGHT_COLORS.map((item) => (
               <button
                 key={item.id}
@@ -405,7 +405,7 @@ export function SecondBrainPage({
               </select>
             </div>
             {notebooks.length > 0 || tags.length > 0 || saved.length > 0 || query.trim() ? (
-              <div className="brain-organise">
+              <div className="brain-organize">
                 {notebooks.length > 0 ? (
                   <select value={notebook} onChange={(event) => setNotebook(event.target.value)} aria-label="Notebook">
                     <option value="">All notebooks</option>

@@ -25,7 +25,7 @@ const NUMERAL = /^(?:[IVXLC]{1,7}|\d{1,3})\.?$/
 
 export function textToDraft(raw: string, filename: string): Draft {
   let text = raw.replace(/\r\n?/g, '\n')
-  // Project Gutenberg wraps books in licence text; keep the book itself.
+  // Project Gutenberg wraps books in license text; keep the book itself.
   const start = text.match(/\*\*\* ?START OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*\n/i)
   const end = text.search(/\*\*\* ?END OF (?:THE|THIS) PROJECT GUTENBERG/i)
   if (start && start.index !== undefined && end > start.index) text = text.slice(start.index + start[0].length, end)

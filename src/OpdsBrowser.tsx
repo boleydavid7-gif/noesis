@@ -2,18 +2,18 @@ import { useState } from 'react'
 import { ArrowLeft, BookOpen, ChevronRight, Download, Plus, Search, Trash2 } from 'lucide-react'
 import { OPDS_PRESETS, parseOpds, searchAddress, searchTemplateFrom, type OpdsEntry, type OpdsFeed } from './lib/opds'
 
-type Catalogue = { id: string; name: string; url: string; user?: string; pass?: string }
+type Catalog = { id: string; name: string; url: string; user?: string; pass?: string }
 const KEY = 'noesis:opds:v1'
 
-function readCatalogues(): Catalogue[] {
+function readCatalogues(): Catalog[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Catalogue[]
+    const parsed = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Catalog[]
     return Array.isArray(parsed) ? parsed.filter((item) => item?.id && item.url) : []
   } catch {
     return []
   }
 }
-const writeCatalogues = (list: Catalogue[]) => {
+const writeCatalogues = (list: Catalog[]) => {
   try {
     localStorage.setItem(KEY, JSON.stringify(list))
   } catch {
@@ -21,24 +21,24 @@ const writeCatalogues = (list: Catalogue[]) => {
   }
 }
 
-const basic = (catalogue: Catalogue): Record<string, string> =>
-  catalogue.user ? { authorization: `Basic ${btoa(`${catalogue.user}:${catalogue.pass ?? ''}`)}` } : {}
+const basic = (catalog: Catalog): Record<string, string> =>
+  catalog.user ? { authorization: `Basic ${btoa(`${catalog.user}:${catalog.pass ?? ''}`)}` } : {}
 
-// Reads a catalogue page: straight from the server if it allows that, otherwise through our own
-// server for public catalogues.
-async function loadFeed(address: string, catalogue: Catalogue): Promise<OpdsFeed> {
-  return parseOpds(await loadText(address, catalogue), address)
+// Reads a catalog page: straight from the server if it allows that, otherwise through our own
+// server for public catalogs.
+async function loadFeed(address: string, catalog: Catalog): Promise<OpdsFeed> {
+  return parseOpds(await loadText(address, catalog), address)
 }
 
-async function loadText(address: string, catalogue: Catalogue): Promise<string> {
-  const headers = { accept: 'application/atom+xml,application/xml;q=0.9', ...basic(catalogue) }
+async function loadText(address: string, catalog: Catalog): Promise<string> {
+  const headers = { accept: 'application/atom+xml,application/xml;q=0.9', ...basic(catalog) }
   try {
     const response = await fetch(address, { headers })
     if (response.status === 401) throw new Error('The server asked for a username and password.')
     if (response.ok) return await response.text()
   } catch (error) {
     if (error instanceof Error && /username and password/.test(error.message)) throw error
-    if (catalogue.user) {
+    if (catalog.user) {
       throw new Error(
         'This server does not let Noesis connect from the web. Its owner needs to allow cross-origin requests (CORS).',
       )
@@ -47,14 +47,14 @@ async function loadText(address: string, catalogue: Catalogue): Promise<string> 
   const proxied = await fetch(`/api/opds?url=${encodeURIComponent(address)}`)
   if (!proxied.ok) {
     const body = (await proxied.json().catch(() => ({}))) as { error?: string }
-    throw new Error(body.error || 'Could not open that catalogue.')
+    throw new Error(body.error || 'Could not open that catalog.')
   }
   return proxied.text()
 }
 
-async function loadFile(href: string, catalogue: Catalogue): Promise<Blob> {
+async function loadFile(href: string, catalog: Catalog): Promise<Blob> {
   try {
-    const response = await fetch(href, { headers: basic(catalogue) })
+    const response = await fetch(href, { headers: basic(catalog) })
     if (response.ok) return await response.blob()
   } catch {
     // Try our own server next.
@@ -68,23 +68,23 @@ async function loadFile(href: string, catalogue: Catalogue): Promise<Blob> {
 }
 
 export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<void> }) {
-  const [catalogues, setCatalogues] = useState<Catalogue[]>(readCatalogues)
+  const [catalogs, setCatalogues] = useState<Catalog[]>(readCatalogues)
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ name: '', url: '', user: '', pass: '' })
-  const [open, setOpen] = useState<Catalogue | null>(null)
+  const [open, setOpen] = useState<Catalog | null>(null)
   const [trail, setTrail] = useState<Array<{ address: string; title: string }>>([])
   const [feed, setFeed] = useState<OpdsFeed | null>(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
 
-  const save = (next: Catalogue[]) => {
+  const save = (next: Catalog[]) => {
     setCatalogues(next)
     writeCatalogues(next)
   }
   // mode: "start" begins a trail, "push" goes deeper, "none" is used for going back, "append" adds the next page.
   async function visit(
-    catalogue: Catalogue,
+    catalog: Catalog,
     address: string,
     title: string,
     mode: 'start' | 'push' | 'none' | 'append' = 'push',
@@ -92,16 +92,16 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
     setBusy('Loading…')
     setError('')
     try {
-      const next = await loadFeed(address, catalogue)
+      const next = await loadFeed(address, catalog)
       if (!next.search && next.searchDescription) {
         // Some servers name their search address in a separate small file.
         try {
-          next.search = searchTemplateFrom(await loadText(next.searchDescription, catalogue))
+          next.search = searchTemplateFrom(await loadText(next.searchDescription, catalog))
         } catch {
           // Without it there is simply no search box.
         }
       }
-      setOpen(catalogue)
+      setOpen(catalog)
       setFeed((current) =>
         mode === 'append' && current ? { ...next, entries: [...current.entries, ...next.entries] } : next,
       )
@@ -109,7 +109,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
       if (mode === 'start') setTrail([{ address, title: label }])
       else if (mode === 'push') setTrail((current) => [...current, { address, title: label }])
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not open that catalogue.')
+      setError(reason instanceof Error ? reason.message : 'Could not open that catalog.')
     } finally {
       setBusy('')
     }
@@ -136,7 +136,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
     const url = /^https?:\/\//i.test(draft.url.trim()) ? draft.url.trim() : `https://${draft.url.trim()}`
     if (!draft.url.trim()) return
     save([
-      ...catalogues,
+      ...catalogs,
       {
         id: `opds-${crypto.randomUUID()}`,
         name: draft.name.trim() || new URL(url).hostname,
@@ -168,7 +168,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
               }
             }}
           >
-            <ArrowLeft size={14} /> {trail.length > 1 ? 'Back' : 'All catalogues'}
+            <ArrowLeft size={14} /> {trail.length > 1 ? 'Back' : 'All catalogs'}
           </button>
           <h3>{feed.title || open.name}</h3>
         </div>
@@ -243,8 +243,8 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
         <div>
           <h2>Your book servers</h2>
           <p>
-            Connect a catalogue (OPDS) such as Calibre-Web or Kavita, or browse a free one, and add books straight to
-            your library.
+            Connect a catalog (OPDS) such as Calibre-Web or Kavita, or browse a free one, and add books straight to your
+            library.
           </p>
         </div>
         <button className="text-button" onClick={() => setAdding((value) => !value)}>
@@ -268,7 +268,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
             />
           </label>
           <label>
-            Catalogue address
+            Catalog address
             <input
               value={draft.url}
               onChange={(event) => setDraft({ ...draft, url: event.target.value })}
@@ -295,7 +295,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
           </label>
           <small>
             Saved only on this device. Servers on your home network need to be reachable over https from the web and
-            allow CORS; public catalogues always work.
+            allow CORS; public catalogs always work.
           </small>
           <div className="recovery-actions">
             <button className="primary-button" type="submit">
@@ -310,19 +310,19 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
       <ul className="opds-servers">
         {[
           ...OPDS_PRESETS.map((preset) => ({ id: `preset-${preset.name}`, ...preset, preset: true })),
-          ...catalogues.map((item) => ({ ...item, preset: false })),
+          ...catalogs.map((item) => ({ ...item, preset: false })),
         ].map((item) => (
           <li key={item.id}>
-            <button className="opds-server" onClick={() => void visit(item as Catalogue, item.url, item.name, 'start')}>
+            <button className="opds-server" onClick={() => void visit(item as Catalog, item.url, item.name, 'start')}>
               <strong>{item.name}</strong>
-              <small>{item.preset ? 'Free catalogue' : new URL(item.url).hostname}</small>
+              <small>{item.preset ? 'Free catalog' : new URL(item.url).hostname}</small>
               <ChevronRight size={16} />
             </button>
             {!item.preset ? (
               <button
                 className="icon-button tiny"
                 aria-label={`Remove ${item.name}`}
-                onClick={() => save(catalogues.filter((entry) => entry.id !== item.id))}
+                onClick={() => save(catalogs.filter((entry) => entry.id !== item.id))}
               >
                 <Trash2 size={13} />
               </button>

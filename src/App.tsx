@@ -298,7 +298,7 @@ function displayNameFor(user: User | null, preferred = ''): string {
   return firstNameFromValue(emailName)
 }
 /**
- * The book and olive branch from Noesis's icon, without the tile: one colour (the text colour around it unless one
+ * The book and olive branch from Noesis's icon, without the tile: one color (the text color around it unless one
  * is given), the icon's lighter parts as a lighter shade.
  */
 function NoesisMark({ size = 22, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -600,7 +600,7 @@ function App() {
   }, [])
   useEffect(() => {
     if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
-    let cancelled = false
+    let canceled = false
     const timer = window.setTimeout(async () => {
       try {
         const merged = await syncAccountBundle({
@@ -609,7 +609,7 @@ function App() {
           focus: focusToSync(focusState),
           paths,
         })
-        if (cancelled) return
+        if (canceled) return
         applyBundle(merged)
         markSynced()
       } catch {
@@ -618,20 +618,20 @@ function App() {
       }
     }, 1500)
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(timer)
     }
     // focusState is read through focusSignature so timer ticks do not trigger a sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUserId, events, paths, focusSignature, dataVersion, settings.backup.autoSync, applyBundle])
-  // Colours, look and reading preferences follow the account: the newer copy wins on every device.
+  // Colors, look and reading preferences follow the account: the newer copy wins on every device.
   useEffect(() => {
     if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
-    let cancelled = false
+    let canceled = false
     const timer = window.setTimeout(async () => {
       try {
         const incoming = await syncAccountSettings(settings, settingsStamp())
-        if (cancelled || !incoming) return
+        if (canceled || !incoming) return
         writeSettings(incoming.settings, incoming.stamp)
         setSettings(incoming.settings)
       } catch {
@@ -639,19 +639,19 @@ function App() {
       }
     }, 2000)
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(timer)
     }
   }, [authUserId, settings])
   // The small things kept on the device (name, pictures, saved searches, reading diary) and the font follow the account too.
   useEffect(() => {
     if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
-    let cancelled = false
+    let canceled = false
     const run = async () => {
       try {
         const taken = await syncAccountPreferences()
         await backUpAssets()
-        if (cancelled || taken.length === 0) return
+        if (canceled || taken.length === 0) return
         // Just opened: refresh straight away. Otherwise let the reader choose the moment.
         if (performance.now() < 20000) window.location.reload()
         else showNotice('Your account has newer preferences. Reload to use them.')
@@ -666,7 +666,7 @@ function App() {
     document.addEventListener('visibilitychange', onHide)
     const every = window.setInterval(() => void run(), 300_000)
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(first)
       window.clearInterval(every)
       document.removeEventListener('visibilitychange', onHide)
@@ -732,12 +732,12 @@ function App() {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     void loadCloudProviderConfig().then((providers) => {
-      if (!cancelled) setCloudProviders(providers)
+      if (!canceled) setCloudProviders(providers)
     })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [])
   useEffect(() => {
@@ -773,10 +773,10 @@ function App() {
       setCloudConnections(readCloudConnections())
       showNotice(line)
     })
-    let cancelled = false
+    let canceled = false
     void getCurrentSession()
       .then((session) => {
-        if (!cancelled) setAuthUser(session?.user ?? null)
+        if (!canceled) setAuthUser(session?.user ?? null)
       })
       .catch(() => undefined)
     const unsubscribe = subscribeToAuth((event, session) => {
@@ -784,7 +784,7 @@ function App() {
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
     })
     return () => {
-      cancelled = true
+      canceled = true
       unsubscribe()
     }
   }, [])
@@ -798,18 +798,18 @@ function App() {
   }, [authUser, authUserId])
   useEffect(() => {
     if (!authUser || isAnonymousUser(authUser) || !settings.backup.autoSync) return
-    let cancelled = false
+    let canceled = false
     const restore = async () => {
       try {
         const restored = await syncAccountLibrary(readLibraryBooks())
-        if (!cancelled) {
+        if (!canceled) {
           setBooks((current) =>
             JSON.stringify(current) === JSON.stringify(restored) ? current : (writeLibraryBooks(restored), restored),
           )
           markSynced()
         }
       } catch (reason) {
-        if (!cancelled) {
+        if (!canceled) {
           const message = reason instanceof Error ? reason.message : ''
           showNotice(
             /Bucket not found|NoSuchBucket/i.test(message)
@@ -821,7 +821,7 @@ function App() {
     }
     void restore()
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [authUser, authUserId, settings.backup.autoSync])
   useEffect(() => {
@@ -835,17 +835,17 @@ function App() {
     )
   }, [authUser, authUserId])
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const hydrate = async () => {
       const user = authUserRef.current
       const currentNotes = notesRef.current
       const value =
         user && !isAnonymousUser(user) ? await syncPendingNotes(currentNotes) : await hydrateRemoteNotes(currentNotes)
-      if (!cancelled) setNotes(value)
+      if (!canceled) setNotes(value)
     }
     void hydrate()
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [authUserId, authUserRef, notesRef])
   useEffect(() => {
@@ -855,7 +855,7 @@ function App() {
       cloudReady.current = false
       return
     }
-    let cancelled = false
+    let canceled = false
     const run = async () => {
       setCloudSyncing(true)
       try {
@@ -865,7 +865,7 @@ function App() {
           paths,
           bundle: { events, cards: readReviewCards(), focus: focusToSync(focusState) },
         })
-        if (cancelled) return
+        if (canceled) return
         if (merged.bundle) applyBundle(merged.bundle)
         setBooks((current) =>
           JSON.stringify(current) === JSON.stringify(merged.books)
@@ -884,24 +884,24 @@ function App() {
         )
         markSynced()
       } catch (reason) {
-        if (!cancelled)
+        if (!canceled)
           showNotice(
             reason instanceof Error ? reason.message : 'Cloud sync failed. Reconnect the provider and try again.',
           )
       } finally {
-        if (!cancelled) setCloudSyncing(false)
+        if (!canceled) setCloudSyncing(false)
       }
     }
     if (!cloudReady.current) {
       cloudReady.current = true
       void run()
       return () => {
-        cancelled = true
+        canceled = true
       }
     }
     const timer = window.setTimeout(() => void run(), 1400)
     return () => {
-      cancelled = true
+      canceled = true
       window.clearTimeout(timer)
     }
     // focusState is read through focusSignature so timer ticks do not trigger a sync.
@@ -1297,7 +1297,7 @@ function App() {
         recent: plan.fastChanging,
         exclude: [...(here.topic.picks ?? []).map((pick) => pick.title), ...(here.milestone.bookTitles ?? [])],
       })
-      // The catalogue knows the real year, so it overrides the AI's guess; books it cannot find are dropped.
+      // The catalog knows the real year, so it overrides the AI's guess; books it cannot find are dropped.
       const checked = await resolveBooks(found)
       const withYears = found
         .map((candidate) => {

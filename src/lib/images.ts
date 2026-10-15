@@ -92,7 +92,7 @@ export function applyImages(root: HTMLElement = document.documentElement): void 
     if (css) root.style.setProperty(variable, css)
     else root.style.removeProperty(variable)
   }
-  // A picture with a pale top fades into the app's own colour instead of showing as a white block.
+  // A picture with a pale top fades into the app's own color instead of showing as a white block.
   const fade = SCENES.some((scene) => scene.fadeTop && scene.id === saved.sidebar)
   if (fade) {
     root.style.setProperty('--sidebar-mask', 'linear-gradient(180deg, transparent 0%, transparent 45%, #000 80%)')

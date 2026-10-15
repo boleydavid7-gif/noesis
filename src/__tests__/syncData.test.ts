@@ -72,7 +72,7 @@ describe('mergeBundles', () => {
     expect(merged.focus.tasks).toHaveLength(4)
   })
 
-  it('takes a focus step edit and honours a deleted step', () => {
+  it('takes a focus step edit and honors a deleted step', () => {
     const local = defaultFocusState()
     const remoteTasks = local.tasks.map((task, index) =>
       index === 0 ? { ...task, done: true, updated: '2026-10-05T00:00:00.000Z' } : task,
@@ -161,7 +161,7 @@ describe('learning paths in the bundle', () => {
     expect(mergeBundles(remote, local, none).paths?.[0].title).toBe('Edited on phone')
   })
 
-  it('adds a path from the other device and honours a deleted one', () => {
+  it('adds a path from the other device and honors a deleted one', () => {
     const merged = mergeBundles(
       bundle({ paths: [path('a', '2026-10-02T00:00:00.000Z')] }),
       bundle({ paths: [path('b', '2026-10-03T00:00:00.000Z')] }),

@@ -23,21 +23,21 @@ export function CoverFinder({
   const [choosing, setChoosing] = useState('')
 
   useEffect(() => {
-    let cancelled = false
+    let canceled = false
     const query = new URLSearchParams({ title, author })
     fetch(`/api/covers?${query}`)
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as { covers?: Cover[]; error?: string } | null
         if (!response.ok) throw new Error(body?.error ?? 'Could not search for covers right now.')
-        if (!cancelled) setCovers(body?.covers ?? [])
+        if (!canceled) setCovers(body?.covers ?? [])
       })
       .catch((reason) => {
-        if (cancelled) return
+        if (canceled) return
         setProblem(reason instanceof Error ? reason.message : 'Could not search for covers right now.')
         setCovers([])
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [title, author])
 

@@ -27,7 +27,7 @@ function start(): Promise<Worker> {
   return worker
 }
 
-/** An image made small enough to read quickly (2000 px on the long side), in grey. */
+/** An image made small enough to read quickly (2000 px on the long side), in gray. */
 async function prepared(file: Blob): Promise<Blob> {
   try {
     const bitmap = await createImageBitmap(file)

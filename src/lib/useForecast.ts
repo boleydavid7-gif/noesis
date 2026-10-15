@@ -15,16 +15,16 @@ export function useForecast(settings: WeatherSettings) {
 
   useEffect(() => {
     if (!place) return
-    let cancelled = false
+    let canceled = false
     fetchForecast(place, unit)
       .then((forecast) => {
-        if (!cancelled) setResult({ key, forecast })
+        if (!canceled) setResult({ key, forecast })
       })
       .catch((reason) => {
-        if (!cancelled) setResult({ key, error: reason instanceof Error ? reason.message : 'Weather is unavailable.' })
+        if (!canceled) setResult({ key, error: reason instanceof Error ? reason.message : 'Weather is unavailable.' })
       })
     return () => {
-      cancelled = true
+      canceled = true
     }
   }, [key, place, unit])
 

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../public')
 
-/** The tile: a soft diagonal from deep colour (bottom left) to warm light (top right), with two low hills. */
+/** The tile: a soft diagonal from deep color (bottom left) to warm light (top right), with two low hills. */
 export const TILES = {
   navy: { from: '#13263f', mid: '#3d5d78', to: '#f3cf86', hill: '#0d1c30', hillLight: '#5d7488' },
   green: { from: '#1c4842', mid: '#6f9a6c', to: '#f1d48c', hill: '#163a35', hillLight: '#7da27a' },

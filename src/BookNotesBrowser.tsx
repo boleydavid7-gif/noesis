@@ -58,7 +58,7 @@ export function BookNotesBrowser({
         <ul className="book-browser-list">
           {shown.map((note) => {
             const kind = kindOf(note)
-            const colour = HIGHLIGHT_COLORS.find((item) => item.id === note.color)?.css
+            const color = HIGHLIGHT_COLORS.find((item) => item.id === note.color)?.css
             const text = (note.quote || note.body).replace(/\s+/g, ' ').trim()
             return (
               <li key={note.id}>
@@ -66,7 +66,7 @@ export function BookNotesBrowser({
                   {kind === 'bookmarks' ? (
                     <Bookmark size={12} />
                   ) : kind === 'highlights' ? (
-                    <Highlighter size={12} style={colour ? { color: colour } : undefined} />
+                    <Highlighter size={12} style={color ? { color: color } : undefined} />
                   ) : (
                     <StickyNote size={12} />
                   )}
@@ -76,7 +76,7 @@ export function BookNotesBrowser({
                   </span>
                 </div>
                 {kind === 'notes' && note.title ? <strong>{note.title}</strong> : null}
-                <p style={kind === 'highlights' && colour ? { borderLeftColor: colour } : undefined}>
+                <p style={kind === 'highlights' && color ? { borderLeftColor: color } : undefined}>
                   {text.length > 200 ? `${text.slice(0, 200)}…` : text}
                 </p>
                 {kind === 'notes' && note.quote ? <small className="book-browser-quote">“{note.quote}”</small> : null}

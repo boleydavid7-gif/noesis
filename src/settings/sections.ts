@@ -14,7 +14,7 @@ export const SETTINGS_SECTIONS: Array<{
   {
     id: 'reading',
     title: 'Reading',
-    subtitle: 'Text, page colour and how pages turn',
+    subtitle: 'Text, page color and how pages turn',
     icon: BookOpen,
     keywords:
       'font size text theme paper sepia night line spacing wide width paragraphs justify drop cap tap letter dyslexia contrast listen speed chapter',
@@ -22,7 +22,7 @@ export const SETTINGS_SECTIONS: Array<{
   {
     id: 'appearance',
     title: 'Look',
-    subtitle: 'Colours and pictures',
+    subtitle: 'Colors and pictures',
     icon: Palette,
     keywords: 'accent color gold blue green rose scenery background motion compact banner sidebar picture theme',
   },
