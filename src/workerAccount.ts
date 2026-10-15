@@ -27,7 +27,8 @@ function admin(env: AccountEnv) {
       ...init,
       headers: {
         apikey: key,
-        authorization: `Bearer ${key}`,
+        // A newer secret key (sb_secret_…) goes only in apikey; the older service_role key is a JWT and goes in both.
+        ...(key.startsWith('eyJ') ? { authorization: `Bearer ${key}` } : {}),
         'content-type': 'application/json',
         ...(init.headers ?? {}),
       },
