@@ -123,7 +123,9 @@ import { WebdavBrowser } from './WebdavBrowser'
 import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
-import { PathPlanDetail, PathPlanner } from './PathPlanner'
+import { PathPlanDetail } from './PathPlanner'
+import { SubjectStarter, SubjectView } from './Subjects'
+import { emptySubject, subjectCounts, subjectOf } from './lib/subjects'
 import {
   addPicks,
   advanceTopic,
@@ -1860,16 +1862,17 @@ function App() {
     const path: LearningPath = {
       id: `path-${crypto.randomUUID()}`,
       title: pathDraft.title.trim(),
-      description: pathDraft.description.trim() || 'A personal collection for focused study.',
+      description: pathDraft.description.trim() || 'Your own questions, around your reading.',
       bookIds: [],
       createdAt: new Date().toISOString(),
       updated: new Date().toISOString(),
+      subject: emptySubject(),
     }
     const next = [path, ...paths]
     setPaths(next)
     writePaths(next)
     setPathDraft({ title: '', description: '' })
-    showNotice('Learning path created.')
+    showNotice('Subject started.')
   }
   function savePlannedPath(path: LearningPath) {
     const next = [path, ...paths]
@@ -2668,26 +2671,26 @@ function App() {
       <Page title="Learning paths" subtitle="">
         <PathsGuide />
         <FreeCopyContext.Provider value={addResource}>
-          <PathPlanner
+          <SubjectStarter
             onSave={savePlannedPath}
             onNotice={showNotice}
             signedIn={Boolean(authUser)}
             onSignIn={() => goSignIn('sign-in')}
           />
-          <h3 className="paths-own-heading">Or build your own</h3>
+          <h3 className="paths-own-heading">Or start one yourself</h3>
           <form className="create-form panel-card" onSubmit={createPath}>
             <input
               value={pathDraft.title}
               onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })}
-              placeholder="Path name, e.g. Cognitive psychology"
+              placeholder="Subject, e.g. Cognitive psychology"
             />
             <input
               value={pathDraft.description}
               onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })}
-              placeholder="What do you want this path to help you understand?"
+              placeholder="What do you want to understand? (optional)"
             />
             <button className="primary-button" type="submit">
-              <Plus size={15} /> Create path
+              <Plus size={15} /> Start
             </button>
           </form>
           <PathSection
@@ -2711,6 +2714,7 @@ function App() {
               void askNoema(prompt)
             }}
             onNote={openTopicNote}
+            onNotice={showNotice}
             onOpenBook={(id) => {
               const found = books.find((book) => book.id === id)
               if (found) openSavedBook(found)
@@ -4403,24 +4407,23 @@ function PathsGuide() {
   if (!open)
     return (
       <button className="text-button paths-guide-link" onClick={() => setOpen(true)}>
-        How paths work
+        How subjects work
       </button>
     )
   return (
-    <section className="paths-guide panel-card" aria-label="How paths work">
+    <section className="paths-guide panel-card" aria-label="How subjects work">
       <div className="paths-guide-head">
-        <strong>How paths work</strong>
+        <strong>How subjects work</strong>
         <button className="text-button" onClick={close}>
           Got it
         </button>
       </div>
       <ol>
-        <li>Choose a subject</li>
-        <li>Work through it a step at a time</li>
-        <li>Read, think, then try it</li>
-        <li>Put it in your own words</li>
-        <li>Ask Noema when you get stuck</li>
-        <li>Move on when you can explain it</li>
+        <li>Say what you are curious about</li>
+        <li>Pick up to three questions for now</li>
+        <li>Read your books; look at what goes with them</li>
+        <li>Answer in a sentence or two of your own</li>
+        <li>New questions wait under Later</li>
       </ol>
     </section>
   )
@@ -4844,6 +4847,7 @@ function PathSection({
   onAsk,
   onNote,
   onOpenBook,
+  onNotice,
   initialOpen = null,
 }: {
   onOpenBook?: (id: string) => void
@@ -4857,6 +4861,7 @@ function PathSection({
   onUpdate?: (path: LearningPath) => void
   onAsk?: (prompt: string) => void
   onNote?: (title: string, source: string) => void
+  onNotice?: (message: string) => void
 }) {
   const [selected, setSelected] = useState<string | null>(initialOpen)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
@@ -4920,12 +4925,19 @@ function PathSection({
                   </span>
                   <strong>{path.title}</strong>
                   <small>
-                    {path.plan
+                    {path.subject
                       ? (() => {
-                          const stage = currentStage(path, books)
-                          return stage ? `Stage ${stage.index + 1} of ${path.plan.milestones.length}` : 'Finished'
+                          const counts = subjectCounts(path.subject)
+                          return counts.now
+                            ? `${counts.now} ${counts.now === 1 ? 'question' : 'questions'} now`
+                            : `${counts.areas} ${counts.areas === 1 ? 'area' : 'areas'}`
                         })()
-                      : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
+                      : path.plan
+                        ? (() => {
+                            const stage = currentStage(path, books)
+                            return stage ? `Stage ${stage.index + 1} of ${path.plan.milestones.length}` : 'Finished'
+                          })()
+                        : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
                   </small>
                   {(() => {
                     const next = readNextOnPath(path, books)
@@ -4933,9 +4945,11 @@ function PathSection({
                       <small className="path-tile-next">Read next: {next.book.title}</small>
                     ) : null
                   })()}
-                  <span className="path-tile-track">
-                    <span style={{ width: `${percent}%` }} />
-                  </span>
+                  {path.subject ? null : (
+                    <span className="path-tile-track">
+                      <span style={{ width: `${percent}%` }} />
+                    </span>
+                  )}
                 </span>
                 <ArrowRight size={14} className="path-tile-arrow" />
               </button>
@@ -4955,12 +4969,14 @@ function PathSection({
             <div>
               <h3>{active.title}</h3>
               <p>{active.description}</p>
-              <small>
-                {detail.plan
-                  ? `${detail.plan.done} of ${detail.plan.total} topics · ${active.plan?.weeks ?? ''}`
-                  : `${detail.pathBooks.length} ${detail.pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
-                · {detail.percent >= 100 ? 'Complete' : `${detail.percent}%`}
-              </small>
+              {subjectOf(active) ? null : (
+                <small>
+                  {detail.plan
+                    ? `${detail.plan.done} of ${detail.plan.total} topics · ${active.plan?.weeks ?? ''}`
+                    : `${detail.pathBooks.length} ${detail.pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
+                  · {detail.percent >= 100 ? 'Complete' : `${detail.percent}%`}
+                </small>
+              )}
             </div>
             {onDelete ? (
               <div className="path-remove">
@@ -4989,7 +5005,17 @@ function PathSection({
               </div>
             ) : null}
           </div>
-          {active.plan && onUpdate ? (
+          {subjectOf(active) && onUpdate ? (
+            <SubjectView
+              path={active}
+              library={books}
+              onChange={onUpdate}
+              onOpenBook={onOpenBook}
+              onAsk={onAsk}
+              onNote={onNote}
+              onNotice={onNotice ?? (() => undefined)}
+            />
+          ) : active.plan && onUpdate ? (
             <PathPlanDetail
               path={active}
               onChange={onUpdate}
@@ -4999,7 +5025,7 @@ function PathSection({
               onOpenBook={onOpenBook}
             />
           ) : null}
-          {detail.pathBooks.length ? (
+          {detail.pathBooks.length && !subjectOf(active) ? (
             <ul className="path-detail-books">
               {detail.pathBooks.map((book) => (
                 <li key={book.id}>

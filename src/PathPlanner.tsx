@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { newCard, readReviewCards, writeReviewCards } from './lib/review'
 import { FreeCopyContext, findFreeCopies, type FreeCopy } from './lib/freeCopy'
+import { AtYourLibrary } from './PublicLibrary'
 import {
   AuthRequiredError,
   requestClarification,
@@ -64,7 +65,7 @@ function Timeline({ milestones }: { milestones: PlanMilestone[] }) {
 
 // Searches open sources for a free copy of the book, only when asked, and lets the
 // learner open or import it straight into the reader.
-function FreeCopyFinder({ book }: { book: ResolvedBook }) {
+export function FreeCopyFinder({ book }: { book: ResolvedBook }) {
   const open = useContext(FreeCopyContext)
   const [state, setState] = useState<'idle' | 'looking' | 'done' | 'error'>('idle')
   const [copies, setCopies] = useState<FreeCopy[]>([])
@@ -123,6 +124,7 @@ export function BookCard({ book, rank }: { book: ResolvedBook; rank?: number }) 
       ) : null}
       {book.note ? <span className="plan-pill">{book.note}</span> : null}
       {book.unverified ? <span className="plan-unverified">Suggested by AI, not verified</span> : null}
+      <AtYourLibrary title={book.title} author={book.authors[0] ?? ''} isbn={book.isbn} />
       <div className="plan-book-actions">
         <details className="buy-menu">
           <summary>{book.price ? `Buy · e-book ${book.price}` : 'Buy or borrow'}</summary>

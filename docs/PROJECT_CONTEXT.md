@@ -46,14 +46,29 @@ The current app is a working reader-first build:
   steps), a calendar for classes, assignments and exams (repeating events,
   per-day check-off, synced with the account), a real weather forecast (city search or
   Detect, via Open-Meteo) and quick actions.
-- Learning Paths: describe a goal and Noema (via `/api/path`) designs three
-  structured paths with milestones and topics, plus books and free resources.
-  The AI nominates twenty books; each is matched to a real record (`/api/book`:
-  Google Books + Open Library, covers, combined reader ratings, buy links),
-  books with no match are dropped, and the ten best-rated are shown (ranked by
-  rating minus a doubt penalty for few ratings). Goodreads has no public API;
-  Hardcover could be added as a third rating source; free-resource links are
-  checked before showing. A saved plan tracks ticked-off topics and syncs.
+- Learning paths are subjects: a map of questions around the reader's books, not a course (`src/Subjects.tsx`,
+  `lib/subjects.ts`, kept on the path record as `subject`, so it syncs and backs up with paths). "What are you
+  curious about?" (`/api/clarify` for broad subjects, then `/api/subject`) gives four to seven areas, each with a few
+  questions and a hook line; the first question of the first three areas starts in Now (at most three at a time), the
+  rest wait in Later. A subject page leads with Reading (the reader's own books on it, Continue), then From before
+  (an answer from two weeks or more ago, with its follow-up), Now, and Areas (not started / exploring / summed up;
+  Later and Answered folded inside; add, rename, remove with undo). A question page: hook, an optional guess,
+  Noema's short answer (folded), Explore grouped Books, Read, Watch, Listen, Try it (one or two each, with time and
+  a "why" line, Save), In your own words (with the sources used), and What this raised (new questions go to Later).
+  After five answers an area offers "Sum up this area" (`/api/sumup` drafts from the reader's own answers only;
+  they edit it). Saved lists what was saved, by kind. `/api/question` names picks and the Worker keeps only what it
+  can confirm: links checked, Wikipedia by exact title, YouTube through oEmbed (or found by search with the
+  optional secret `YOUTUBE_API_KEY`, with lengths), podcast episodes through Apple's open podcast search; books are
+  matched through `/api/book`. Older planned paths turn into subjects when opened (stages become areas, topics
+  questions, ticked ones answered).
+- Your public library (Settings > Reading, or "Check your library" on a book; `PublicLibrary.tsx`,
+  `lib/publicLibrary.ts`, synced preference `noesis:public-library:v1`): `/api/libraries` finds library systems with
+  a branch within about 50 miles of a typed city or ZIP code, or of the reader's location (turned into a postal code
+  by BigDataCloud, not kept), through Libby's locate service. `/api/library-has` says whether a book is in Libby
+  (e-book, audiobook; available or the wait, OverDrive's public catalog) and, where the library's catalog is on
+  BiblioCommons, whether a printed copy is in. Only what the library has is shown; every book also links to
+  WorldCat, which lists libraries holding it near any place. These services have no published API terms for this
+  use; each lookup fails quietly to the WorldCat link.
 - Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
   AI Companion, Notifications, Privacy, and About. Every setting is stored
   locally (`noesis:settings:v1`) and read by the app: reader text/page/font,

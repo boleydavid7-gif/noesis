@@ -924,3 +924,125 @@ describe('cover search', () => {
     expect(page.status).toBe(502)
   })
 })
+
+describe('things to explore for a question', () => {
+  const reply = {
+    hook: 'Most of it is alive',
+    short: 'Good soil is loose and full of life.',
+    followUp: 'How do worms help?',
+    wiki: 'Soil',
+    books: [{ title: 'Teaming with Microbes', author: 'Jeff Lowenfels', why: 'The soil food web' }],
+    read: [
+      { title: 'Real guide', source: 'RHS', url: 'https://www.rhs.org.uk/soil', minutes: 6, why: 'Plain' },
+      { title: 'Made-up page', source: 'Nowhere', url: 'https://gone.example.org/soil', minutes: 4 },
+    ],
+    watch: [
+      { title: 'Real video', url: 'https://www.youtube.com/watch?v=REALREAL11', search: 'soil', why: 'Shows it' },
+      { title: 'Invented video', url: 'https://www.youtube.com/watch?v=FAKEFAKE11', search: 'soil' },
+    ],
+    listen: [{ search: 'soil health', why: 'An hour with a soil scientist' }],
+    try: [],
+  }
+  const route = (url: string): Response => {
+    if (url.includes('generativelanguage'))
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] }))
+    if (url.includes('gone.example.org')) return new Response('', { status: 404 })
+    if (url.includes('rhs.org.uk')) return new Response('ok')
+    if (url.includes('wikipedia.org'))
+      return new Response(
+        JSON.stringify({
+          type: 'standard',
+          title: 'Soil',
+          content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Soil' } },
+        }),
+      )
+    if (url.includes('oembed') && url.includes('REALREAL11'))
+      return new Response(
+        JSON.stringify({
+          title: 'Soil, explained',
+          author_name: 'A Channel',
+          thumbnail_url: 'https://i.ytimg.com/x.jpg',
+        }),
+      )
+    if (url.includes('oembed')) return new Response('Not Found', { status: 404 })
+    if (url.includes('itunes.apple.com'))
+      return new Response(
+        JSON.stringify({
+          results: [
+            {
+              trackName: 'The living soil',
+              collectionName: 'Gardeners Hour',
+              trackViewUrl: 'https://podcasts.apple.com/ep/1',
+              trackTimeMillis: 2_700_000,
+            },
+          ],
+        }),
+      )
+    return new Response('', { status: 500 })
+  }
+
+  it('keeps only links that were confirmed, with real titles', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => route(String(input instanceof Request ? input.url : input))),
+    )
+    const response = await call(
+      '/api/question',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '8.8.1.1' },
+        body: JSON.stringify({ subject: 'Gardening', area: 'Soil', question: 'What makes soil good?' }),
+      },
+      { GEMINI_API_KEY: 'k' },
+    )
+    const body = (await response.json()) as {
+      followUp: string
+      books: Array<{ title: string }>
+      picks: Array<{ type: string; title: string; source: string; minutes?: number }>
+    }
+    expect(body.followUp).toBe('How do worms help?')
+    expect(body.books.map((book) => book.title)).toEqual(['Teaming with Microbes'])
+    expect(body.picks.map((pick) => `${pick.type}:${pick.title}`)).toEqual([
+      'read:Soil',
+      'read:Real guide',
+      'watch:Soil, explained',
+      'listen:The living soil',
+    ])
+    expect(body.picks.find((pick) => pick.type === 'listen')?.minutes).toBe(45)
+  })
+})
+
+describe('public libraries', () => {
+  const branch = (name: string, id: string, latitude: number, longitude: number) => ({
+    city: name,
+    regionCode: 'WA',
+    latitude,
+    longitude,
+    systems: [{ name: `${name} Library`, fulfillmentId: id, type: 'Public Library', links: [] }],
+  })
+  it('lists only libraries near the place', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input)
+        if (url.includes('locate.libbyapp.com'))
+          return new Response(
+            JSON.stringify({
+              branches: [
+                branch('Seattle', 'seattle', 47.6, -122.33),
+                branch('Tacoma', 'tacoma', 47.25, -122.44),
+                branch('Far', 'far', 31.0, 35.0),
+              ],
+            }),
+          )
+        if (url.includes('thunder.api.overdrive.com')) return new Response(JSON.stringify({ preferredKey: 'short' }))
+        return new Response('', { status: 404 })
+      }),
+    )
+    const response = await call('/api/libraries?q=98116', { headers: { 'cf-connecting-ip': '8.8.2.1' } })
+    const body = (await response.json()) as { systems: Array<{ key: string; libbyKey: string; catalog?: string }> }
+    expect(body.systems.map((system) => system.key)).toEqual(['seattle', 'tacoma'])
+    expect(body.systems[0].libbyKey).toBe('short')
+    expect(body.systems[0].catalog).toBeUndefined()
+  })
+})

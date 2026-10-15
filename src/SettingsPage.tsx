@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { Group, Row, Segmented, Toggle } from './settings/controls'
+import { LibraryChooser } from './PublicLibrary'
 import { clearCustomFont, customFontName, saveCustomFont } from './lib/customFont'
 import { canEmbedOnDevice } from './lib/embeddings'
 import { SETTINGS_SECTIONS, normalizeSection, type SettingsSectionId } from './settings/sections'
@@ -149,6 +150,11 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
             ]}
           />
         </Row>
+      </Group>
+      <Group title="Your public library">
+        <div className="library-settings">
+          <LibraryChooser />
+        </div>
       </Group>
       <Group title="Text">
         <Row title="Text size" detail={`${reading.fontSize}%`}>

@@ -14,6 +14,14 @@ import {
   type RatingSource,
 } from './lib/pathPlan'
 import { handlePasskey, sendReviewReminders } from './workerAccount'
+import {
+  cleanQuestionReply,
+  cleanSubjectReply,
+  isoMinutes,
+  youtubeId,
+  type PickDraft,
+  type PickType,
+} from './lib/subjects'
 
 type Env = {
   ASSETS: { fetch(request: Request): Promise<Response> }
@@ -42,6 +50,9 @@ type Env = {
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY?: string
   VAPID_SUBJECT?: string
+  // Optional: finds videos for a question by search (YouTube Data API). Without it, only links Noema names are
+  // checked and kept.
+  YOUTUBE_API_KEY?: string
 }
 
 const RETRY_PAUSE_MS = 1_500
@@ -1506,6 +1517,627 @@ async function proxyWebdav(request: Request): Promise<Response> {
   })
 }
 
+// ---------- Public libraries (Libby) ----------
+
+export type LibrarySystem = {
+  key: string // OverDrive's id, for e-books and audiobooks in Libby
+  libbyKey: string // the short name Libby's links use
+  name: string
+  place: string
+  miles?: number
+  website?: string
+  catalog?: string // the BiblioCommons id, when the library's catalog is there, for books on the shelf
+}
+
+function milesBetween(a: [number, number], b: [number, number]): number {
+  const rad = (value: number) => (value * Math.PI) / 180
+  const dLat = rad(b[0] - a[0])
+  const dLon = rad(b[1] - a[1])
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2
+  return 3958.8 * 2 * Math.asin(Math.sqrt(h))
+}
+
+type LocateBranch = {
+  city?: string
+  region?: string
+  regionCode?: string
+  latitude?: number
+  longitude?: number
+  systems?: Array<{
+    name?: string
+    fulfillmentId?: string
+    type?: string
+    links?: Array<{ name?: string; url?: string }>
+  }>
+}
+
+// Many public libraries keep their catalog on BiblioCommons, under one of the library's short names.
+async function biblioCommonsId(candidates: string[]): Promise<string | undefined> {
+  for (const id of [...new Set(candidates.filter((item) => /^[a-z0-9-]{2,40}$/.test(item)))]) {
+    try {
+      const response = await fetchWithTimeout(
+        `https://gateway.bibliocommons.com/v2/libraries/${id}/bibs/search?query=library&searchType=smart&limit=1`,
+        { headers: { accept: 'application/json' } },
+        4_000,
+      )
+      void response.body?.cancel()
+      if (response.ok) return id
+    } catch {
+      // Try the next name.
+    }
+  }
+  return undefined
+}
+
+// Library systems near a place the reader typed (a city or ZIP code), or near where they are: their
+// position is turned into a postal code first and is not kept.
+const NEARBY_MILES = 50
+
+export async function findLibraries(request: Request): Promise<Response> {
+  if (rateLimited(request, 'libraries', 20))
+    return json({ ok: false, error: 'Too many searches. Try again in a minute.' }, 429)
+  const params = new URL(request.url).searchParams
+  let place = (params.get('q') ?? '').trim().slice(0, 80)
+  const lat = Number(params.get('lat'))
+  const lon = Number(params.get('lon'))
+  const here: [number, number] | null =
+    Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && params.has('lat')
+      ? [Math.round(lat * 100) / 100, Math.round(lon * 100) / 100]
+      : null
+  try {
+    if (!place && here) {
+      const reverse = await fetchWithTimeout(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${here[0]}&longitude=${here[1]}&localityLanguage=en`,
+        { headers: { accept: 'application/json' } },
+        5_000,
+      )
+      if (reverse.ok) {
+        const body = (await reverse.json()) as { postcode?: string; city?: string; locality?: string }
+        place = (body.postcode || body.city || body.locality || '').trim()
+      }
+    }
+    if (place.length < 2) return json({ ok: false, error: 'Enter a city or ZIP code.' }, 400)
+    const response = await fetchWithTimeout(
+      `https://locate.libbyapp.com/autocomplete/${encodeURIComponent(place)}`,
+      { headers: { accept: 'application/json' } },
+      6_000,
+    )
+    if (!response.ok) return json({ ok: false, error: 'Libraries could not be looked up right now.' }, 502)
+    const body = (await response.json()) as { branches?: LocateBranch[] }
+    const seen = new Map<string, LibrarySystem>()
+    // Only libraries that serve the place: a branch within about 50 miles of the reader, or of the best match
+    // for what they typed.
+    const located = (body.branches ?? []).filter(
+      (branch) => typeof branch.latitude === 'number' && typeof branch.longitude === 'number',
+    )
+    const anchor: [number, number] | null =
+      here ?? (located[0] ? [located[0].latitude as number, located[0].longitude as number] : null)
+    for (const branch of located) {
+      const away = anchor ? milesBetween(anchor, [branch.latitude as number, branch.longitude as number]) : 0
+      if (away > NEARBY_MILES) continue
+      for (const system of branch.systems ?? []) {
+        if (!system.fulfillmentId || !system.name || (system.type && system.type !== 'Public Library')) continue
+        const site = system.links?.find((link) => link.name === 'MainLibraryUrl')?.url?.trim()
+        const website = site
+          ? (/^https?:\/\//i.test(site) ? site : `https://${site}`).replace(/^http:/i, 'https:')
+          : undefined
+        const miles =
+          here && typeof branch.latitude === 'number' && typeof branch.longitude === 'number'
+            ? Math.round(milesBetween(here, [branch.latitude, branch.longitude]))
+            : undefined
+        const known = seen.get(system.fulfillmentId)
+        if (known && (known.miles === undefined || miles === undefined || known.miles <= miles)) continue
+        seen.set(system.fulfillmentId, {
+          key: system.fulfillmentId,
+          libbyKey: system.fulfillmentId,
+          name: system.name.slice(0, 100),
+          place: [branch.city, branch.regionCode || branch.region].filter(Boolean).join(', '),
+          miles,
+          website: website && isPublicHttps(website) ? website : undefined,
+        })
+      }
+    }
+    const systems = [...seen.values()].sort((a, b) => (a.miles ?? 0) - (b.miles ?? 0)).slice(0, 8)
+    // Libby's own links use the library's short name; the shelf catalog is looked for under the same names.
+    await Promise.all(
+      systems.map(async (system) => {
+        try {
+          const info = await fetchWithTimeout(
+            `https://thunder.api.overdrive.com/v2/libraries/${encodeURIComponent(system.key)}`,
+            { headers: { accept: 'application/json' } },
+            4_000,
+          )
+          if (info.ok) {
+            const detail = (await info.json()) as { preferredKey?: string }
+            if (detail.preferredKey && /^[\w-]{1,40}$/.test(detail.preferredKey)) system.libbyKey = detail.preferredKey
+          }
+        } catch {
+          // The longer key still works in Libby's search.
+        }
+        try {
+          const host = system.website ? new URL(system.website).hostname.replace(/^www\./, '').split('.')[0] : ''
+          system.catalog = await biblioCommonsId([system.libbyKey, system.key, host].map((item) => item.toLowerCase()))
+        } catch {
+          // No shelf catalog found; the library's website is offered instead.
+        }
+      }),
+    )
+    return json({ ok: true, place, systems })
+  } catch {
+    return json({ ok: false, error: 'Libraries could not be looked up right now.' }, 502)
+  }
+}
+
+// A printed copy in the library's BiblioCommons catalog, and how many are in.
+async function onTheShelf(catalog: string, query: string, title: string, author: string): Promise<LibraryCopy | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://gateway.bibliocommons.com/v2/libraries/${catalog}/bibs/search?query=${encodeURIComponent(query)}&searchType=smart&limit=10`,
+      { headers: { accept: 'application/json' } },
+      6_000,
+    )
+    if (!response.ok) return null
+    const body = (await response.json()) as {
+      entities?: {
+        bibs?: Record<
+          string,
+          {
+            briefInfo?: { title?: string; authors?: string[]; format?: string }
+            availability?: { bibType?: string; availableCopies?: number; totalCopies?: number; heldCopies?: number }
+          }
+        >
+      }
+    }
+    const wanted = sameWords(title)
+    const surname =
+      sameWords(author.split(',')[0] ?? '')
+        .split(' ')
+        .pop() ?? ''
+    for (const [id, bib] of Object.entries(body.entities?.bibs ?? {})) {
+      const info = bib.briefInfo
+      if (!info?.title || sameWords(info.title) !== wanted) continue
+      if (!['BK', 'LPRINT', 'PAPERBACK'].includes(info.format ?? '') || bib.availability?.bibType !== 'PHYSICAL')
+        continue
+      if (surname && !(info.authors ?? []).some((name) => sameWords(name).includes(surname))) continue
+      const copies = bib.availability?.totalCopies ?? 0
+      if (copies < 1) continue
+      const available = bib.availability?.availableCopies ?? 0
+      return {
+        format: 'print',
+        available: available > 0,
+        copies,
+        held: bib.availability?.heldCopies,
+        url: `https://${catalog}.bibliocommons.com/v2/record/${encodeURIComponent(id)}`,
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const sameWords = (value: string) =>
+  value
+    .toLowerCase()
+    .split(':')[0]
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+export type LibraryCopy = {
+  format: 'ebook' | 'audiobook' | 'print'
+  held?: number
+  available: boolean
+  copies?: number
+  waitDays?: number
+  url: string
+}
+
+// Whether the reader's library has a book in Libby, as an e-book or audiobook, and if it is free now.
+export async function libraryHas(request: Request): Promise<Response> {
+  if (rateLimited(request, 'library-has', 60))
+    return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
+  const params = new URL(request.url).searchParams
+  const key = (params.get('library') ?? '').trim()
+  const libbyKey = (params.get('libby') ?? key).trim()
+  const catalog = (params.get('catalog') ?? '').trim()
+  const title = (params.get('title') ?? '').trim().slice(0, 160)
+  const author = (params.get('author') ?? '').trim().slice(0, 100)
+  if (!/^[\w-]{1,60}$/.test(key) || !/^[\w-]{1,60}$/.test(libbyKey) || title.length < 2)
+    return json({ ok: false, error: 'Choose a library and a book.' }, 400)
+  try {
+    const query = `${title} ${author.split(',')[0] ?? ''}`.trim()
+    const shelf = /^[a-z0-9-]{2,40}$/.test(catalog) ? onTheShelf(catalog, query, title, author) : Promise.resolve(null)
+    const response = await fetchWithTimeout(
+      `https://thunder.api.overdrive.com/v2/libraries/${encodeURIComponent(key)}/media?query=${encodeURIComponent(query)}&perPage=12`,
+      { headers: { accept: 'application/json' } },
+      6_000,
+    )
+    if (!response.ok) return json({ ok: false, error: 'Your library could not be checked right now.' }, 502)
+    const body = (await response.json()) as {
+      items?: Array<{
+        id?: string
+        title?: string
+        firstCreatorName?: string
+        type?: { id?: string }
+        isAvailable?: boolean
+        ownedCopies?: number
+        estimatedWaitDays?: number
+      }>
+    }
+    const wanted = sameWords(title)
+    const surname =
+      sameWords(author.split(',')[0] ?? '')
+        .split(' ')
+        .pop() ?? ''
+    const copies: LibraryCopy[] = []
+    for (const item of body.items ?? []) {
+      const format = item.type?.id === 'audiobook' ? 'audiobook' : item.type?.id === 'ebook' ? 'ebook' : null
+      if (!format || !item.id || !item.title || sameWords(item.title) !== wanted) continue
+      if (surname && !sameWords(item.firstCreatorName ?? '').includes(surname)) continue
+      if (copies.some((copy) => copy.format === format)) continue
+      copies.push({
+        format,
+        available: Boolean(item.isAvailable),
+        copies: item.ownedCopies,
+        waitDays: item.isAvailable ? undefined : item.estimatedWaitDays,
+        url: `https://share.libbyapp.com/title/${encodeURIComponent(item.id)}`,
+      })
+    }
+    const print = await shelf
+    if (print) copies.unshift(print)
+    return json({
+      ok: true,
+      copies,
+      searchUrl: `https://libbyapp.com/search/${libbyKey}/search/query-${encodeURIComponent(query)}/page-1`,
+    })
+  } catch {
+    return json({ ok: false, error: 'Your library could not be checked right now.' }, 502)
+  }
+}
+
+// ---------- Subjects: a map of questions around the reading ----------
+
+async function readJson<T>(request: Request): Promise<T | null> {
+  try {
+    return (await request.json()) as T
+  } catch {
+    return null
+  }
+}
+const textOf = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
+
+// A new subject: four to seven areas from the usual start onward, each with a few open questions.
+async function startSubject(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'subject',
+    6,
+    'Too many requests. Try again in a few minutes.',
+    'Sign in to start a subject.',
+  )
+  if (refused) return refused
+  const input = await readJson<{ goal?: unknown; focus?: unknown; level?: unknown }>(request)
+  if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  const goal = textOf(input.goal, 400)
+  if (goal.length < 3) return json({ ok: false, error: 'Tell Noema what you are curious about.' }, 400)
+  const focus = textOf(input.focus, 80)
+  const level = textOf(input.level, 40)
+  const result = await generate(env, {
+    system: [
+      'You help a reader explore a subject they are curious about, alongside the books they read. This is not a course: no lessons, tests, or schedules.',
+      'Reply with JSON only, in exactly this shape: {"title":"","summary":"","areas":[{"title":"","blurb":"","questions":[{"text":"","hook":""}]}]}.',
+      '"title" names the subject in two to five words. "summary" is one plain sentence on what exploring it covers.',
+      'Give four to seven "areas", ordered from where most people start to more specialised ground. "title" is two to four words; "blurb" is one short sentence.',
+      'Each area has three to five "questions": real questions a curious person would ask, specific and answerable by reading, in plain words, most concrete first. Mix practical questions (how do I…, why does…) with ones about how it works.',
+      '"hook" is one short line on what makes the question interesting: a surprise, a common mistake, or what knowing it lets you do. No exclamation marks.',
+      level ? `The reader describes their level as: ${level}.` : '',
+      'Use American English.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    prompt: `What the reader is curious about: ${goal}${focus ? `\nFocus: ${focus}` : ''}`,
+    maxOutputTokens: 3_000,
+    temperature: 0.5,
+    json: true,
+    timeoutMs: 30_000,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.text)
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+  const draft = cleanSubjectReply(parsed)
+  if (!draft) return json({ ok: false, error: 'Noema could not map that subject. Try saying it differently.' }, 502)
+  return json({ ok: true, draft })
+}
+
+type CheckedPick = {
+  type: PickType
+  title: string
+  source: string
+  url?: string
+  minutes?: number
+  why?: string
+  thumb?: string
+  author?: string
+}
+
+// A link Noema named is kept only when the page answers; a YouTube link only when YouTube knows the video,
+// and then with its real title and channel.
+async function checkVideo(draft: PickDraft): Promise<CheckedPick | null> {
+  if (!draft.url || !youtubeId(draft.url)) return null
+  try {
+    const response = await fetchWithTimeout(
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(draft.url)}`,
+      { headers: { accept: 'application/json' } },
+      4_000,
+    )
+    if (!response.ok) return null
+    const body = (await response.json()) as { title?: string; author_name?: string; thumbnail_url?: string }
+    if (!body.title) return null
+    return {
+      type: 'watch',
+      title: body.title.slice(0, 140),
+      source: body.author_name?.slice(0, 80) || 'YouTube',
+      url: draft.url,
+      minutes: draft.minutes,
+      why: draft.why,
+      thumb: body.thumbnail_url,
+    }
+  } catch {
+    return null
+  }
+}
+
+// With a YouTube key, videos are found by search (real results only), with their lengths.
+export async function searchVideos(words: string, why: string | undefined, key: string): Promise<CheckedPick[]> {
+  try {
+    const search = await fetchWithTimeout(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=strict&relevanceLanguage=en&maxResults=3&q=${encodeURIComponent(words)}&key=${encodeURIComponent(key)}`,
+      { headers: { accept: 'application/json' } },
+      5_000,
+    )
+    if (!search.ok) return []
+    const found = (await search.json()) as {
+      items?: Array<{
+        id?: { videoId?: string }
+        snippet?: { title?: string; channelTitle?: string; thumbnails?: { medium?: { url?: string } } }
+      }>
+    }
+    const items = (found.items ?? []).filter((item) => item.id?.videoId && item.snippet?.title)
+    if (!items.length) return []
+    const ids = items.map((item) => item.id!.videoId!).join(',')
+    const details = await fetchWithTimeout(
+      `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${ids}&key=${encodeURIComponent(key)}`,
+      { headers: { accept: 'application/json' } },
+      5_000,
+    )
+    const lengths = new Map<string, number | undefined>()
+    if (details.ok) {
+      const body = (await details.json()) as { items?: Array<{ id?: string; contentDetails?: { duration?: string } }> }
+      for (const item of body.items ?? [])
+        if (item.id) lengths.set(item.id, isoMinutes(item.contentDetails?.duration ?? ''))
+    }
+    return items.slice(0, 2).map((item) => ({
+      type: 'watch' as const,
+      title: decodeEntities(item.snippet!.title!).slice(0, 140),
+      source: decodeEntities(item.snippet?.channelTitle ?? 'YouTube').slice(0, 80),
+      url: `https://www.youtube.com/watch?v=${item.id!.videoId!}`,
+      minutes: lengths.get(item.id!.videoId!),
+      why,
+      thumb: item.snippet?.thumbnails?.medium?.url,
+    }))
+  } catch {
+    return []
+  }
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+}
+
+// Podcast episodes through Apple's open podcast search (no key): only episodes that exist are kept.
+export async function searchEpisodes(words: string, why: string | undefined): Promise<CheckedPick[]> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode&limit=4&term=${encodeURIComponent(words)}`,
+      { headers: { accept: 'application/json' } },
+      5_000,
+    )
+    if (!response.ok) return []
+    const body = (await response.json()) as {
+      results?: Array<{
+        trackName?: string
+        collectionName?: string
+        trackViewUrl?: string
+        trackTimeMillis?: number
+        artworkUrl160?: string
+        artworkUrl600?: string
+      }>
+    }
+    return (body.results ?? [])
+      .filter((item) => item.trackName && item.trackViewUrl && isPublicHttps(item.trackViewUrl))
+      .slice(0, 2)
+      .map((item) => ({
+        type: 'listen' as const,
+        title: item.trackName!.slice(0, 140),
+        source: item.collectionName?.slice(0, 80) || 'Podcast',
+        url: item.trackViewUrl!,
+        minutes: item.trackTimeMillis ? Math.max(1, Math.round(item.trackTimeMillis / 60_000)) : undefined,
+        why,
+        thumb: item.artworkUrl160 ?? item.artworkUrl600,
+      }))
+  } catch {
+    return []
+  }
+}
+
+// One Wikipedia article by its exact title, when it exists and is not a list of meanings.
+export async function wikipediaPick(title: string, why: string | undefined): Promise<CheckedPick | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+      { headers: { accept: 'application/json', 'user-agent': 'Noesis/1.0 (reading app)' } },
+      4_000,
+    )
+    if (!response.ok) return null
+    const body = (await response.json()) as {
+      type?: string
+      title?: string
+      content_urls?: { desktop?: { page?: string } }
+      thumbnail?: { source?: string }
+    }
+    const url = body.content_urls?.desktop?.page
+    if (body.type !== 'standard' || !body.title || !url) return null
+    return { type: 'read', title: body.title, source: 'Wikipedia', url, why }
+  } catch {
+    return null
+  }
+}
+
+// What to explore for one question: Noema names books, articles, videos and episodes; every link is checked or
+// found by a real search, and anything that cannot be confirmed is left out. Books come back as names for the
+// app to look up (with covers and where to get them).
+async function exploreQuestion(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'question',
+    15,
+    'Too many requests. Try again in a minute.',
+    'Sign in to explore questions.',
+  )
+  if (refused) return refused
+  const input = await readJson<{
+    subject?: unknown
+    area?: unknown
+    question?: unknown
+    level?: unknown
+    reading?: unknown
+  }>(request)
+  if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  const subject = textOf(input.subject, 100)
+  const area = textOf(input.area, 80)
+  const question = textOf(input.question, 200)
+  const level = textOf(input.level, 40)
+  const reading = (Array.isArray(input.reading) ? input.reading : [])
+    .map((item) => textOf(item, 140))
+    .filter(Boolean)
+    .slice(0, 8)
+  if (!subject || question.length < 3) return json({ ok: false, error: 'Choose a question to explore.' }, 400)
+  const result = await generate(env, {
+    system: [
+      'You suggest what to read, watch, or listen to for one question, for someone exploring a subject in a reading app. Books come first; the rest goes with the reading.',
+      'Reply with JSON only, in exactly this shape:',
+      '{"hook":"","short":"","followUp":"","wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}]}.',
+      '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.',
+      '"wiki" is the exact title of the English Wikipedia article that best covers it, or "" if none fits.',
+      '"books": one or two real, published books you are confident exist that answer it well, with the author. "read": up to two free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.',
+      '"watch": up to two YouTube videos; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one podcast search phrase for an episode on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].',
+      '"why" is a short line on what this pick adds for the question, never generic praise.',
+      reading.length ? `The reader already has these books: ${reading.join('; ')}. Do not suggest them again.` : '',
+      level ? `The reader describes their level as: ${level}.` : '',
+      'Never invent a book, author, or web address. Use American English.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}\nQuestion: ${question}`,
+    maxOutputTokens: 2_200,
+    temperature: 0.4,
+    json: true,
+    timeoutMs: 30_000,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(result.text) as Record<string, unknown>
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+  const draft = cleanQuestionReply(parsed)
+  const wiki = textOf(parsed.wiki, 120)
+  const books = draft.picks
+    .filter((pick) => pick.type === 'book')
+    .slice(0, 2)
+    .map((pick) => ({ title: pick.title, author: pick.author || pick.source, note: pick.why }))
+  const links = draft.picks.filter((pick) => (pick.type === 'read' || pick.type === 'try') && pick.url)
+  const videos = draft.picks.filter((pick) => pick.type === 'watch')
+  const listen = draft.picks.find((pick) => pick.type === 'listen')
+  const youtubeKey = env.YOUTUBE_API_KEY?.trim()
+  const videoWords = videos.find((pick) => pick.search)?.search ?? `${question} ${subject}`
+  const [checkedLinks, wikiPick, foundVideos, checkedVideos, episodes] = await Promise.all([
+    Promise.all(links.map(async (pick) => ((await linkWorks(pick.url!)) ? pick : null))),
+    wiki ? wikipediaPick(wiki, undefined) : Promise.resolve(null),
+    youtubeKey ? searchVideos(videoWords, videos[0]?.why, youtubeKey) : Promise.resolve([] as CheckedPick[]),
+    youtubeKey ? Promise.resolve([] as Array<CheckedPick | null>) : Promise.all(videos.slice(0, 2).map(checkVideo)),
+    listen ? searchEpisodes(listen.search || listen.title, listen.why) : Promise.resolve([] as CheckedPick[]),
+  ])
+  const kept: CheckedPick[] = []
+  const read = checkedLinks.filter((pick): pick is PickDraft => Boolean(pick && pick.type === 'read')).slice(0, 2)
+  if (wikiPick && !read.some((pick) => pick.url === wikiPick.url)) kept.push(wikiPick)
+  for (const pick of read.slice(0, wikiPick ? 1 : 2))
+    kept.push({
+      type: 'read',
+      title: pick.title,
+      source: pick.source,
+      url: pick.url,
+      minutes: pick.minutes,
+      why: pick.why,
+    })
+  kept.push(...foundVideos, ...checkedVideos.filter((pick): pick is CheckedPick => Boolean(pick)))
+  kept.push(...episodes.slice(0, 1))
+  const tried = checkedLinks.find((pick) => pick?.type === 'try')
+  if (tried) kept.push({ type: 'try', title: tried.title, source: tried.source, url: tried.url, why: tried.why })
+  return json({ ok: true, hook: draft.hook, short: draft.short, followUp: draft.followUp, books, picks: kept })
+}
+
+// A first draft of an area's summary, from the reader's own answers only. They edit it before it is kept.
+async function sumUpArea(request: Request, env: Env): Promise<Response> {
+  const refused = await guardAi(
+    request,
+    env,
+    'sumup',
+    10,
+    'Too many requests. Try again in a minute.',
+    'Sign in to use Noema.',
+  )
+  if (refused) return refused
+  const input = await readJson<{ subject?: unknown; area?: unknown; answers?: unknown }>(request)
+  if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  const subject = textOf(input.subject, 100)
+  const area = textOf(input.area, 80)
+  const answers = (Array.isArray(input.answers) ? input.answers : [])
+    .map((item) => {
+      const row = (item ?? {}) as Record<string, unknown>
+      return { question: textOf(row.question, 200), answer: textOf(row.answer, 600) }
+    })
+    .filter((item) => item.question && item.answer)
+    .slice(0, 30)
+  if (!area || answers.length === 0) return json({ ok: false, error: 'Answer a few questions first.' }, 400)
+  const result = await generate(env, {
+    system: [
+      "Write a short summary of what a reader has worked out about one area of a subject, using only the reader's own answers below.",
+      'Three to five plain sentences in the first person ("I"), joining the answers into one picture. Add nothing the answers do not say.',
+      'Reply with the summary only. Use American English.',
+    ].join(' '),
+    prompt: `Subject: ${subject}\nArea: ${area}\n\n${answers.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n')}`,
+    maxOutputTokens: 500,
+    temperature: 0.3,
+  })
+  return result.ok
+    ? json({ ok: true, text: result.text.slice(0, 1_200) })
+    : json({ ok: false, error: result.error }, result.status)
+}
+
 const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -1613,6 +2245,11 @@ const worker = {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return planPath(request, env)
     }
+    if (url.pathname === '/api/libraries' && request.method === 'GET') return findLibraries(request)
+    if (url.pathname === '/api/library-has' && request.method === 'GET') return libraryHas(request)
+    if (url.pathname === '/api/subject' && request.method === 'POST') return startSubject(request, env)
+    if (url.pathname === '/api/question' && request.method === 'POST') return exploreQuestion(request, env)
+    if (url.pathname === '/api/sumup' && request.method === 'POST') return sumUpArea(request, env)
     if (url.pathname === '/api/materials') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return findMaterials(request, env)

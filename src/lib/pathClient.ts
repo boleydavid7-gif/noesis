@@ -1,4 +1,5 @@
 import { authHeaders } from './auth'
+import type { SubjectDraft } from './subjects'
 import { unverifiedBook, type BookCandidate, type PlanResource, type ResolvedBook, type Suggestion } from './pathPlan'
 
 const CACHE_KEY = 'noesis:book-cache:v1'
@@ -182,4 +183,63 @@ export async function resolveBooks(
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, worker))
   return results.filter((book): book is ResolvedBook => Boolean(book))
+}
+
+// ---------- Subjects ----------
+
+export async function requestSubject(input: { goal: string; focus?: string; level?: string }): Promise<SubjectDraft> {
+  const result = await post<{ draft?: SubjectDraft }>(
+    '/api/subject',
+    input,
+    'Noema could not map that subject right now. Try again in a moment.',
+  )
+  if (!result.draft) throw new Error('Noema could not map that subject right now. Try again in a moment.')
+  return result.draft
+}
+
+export type ExploredPick = {
+  type: 'read' | 'watch' | 'listen' | 'try'
+  title: string
+  source: string
+  url?: string
+  minutes?: number
+  why?: string
+  thumb?: string
+}
+export type Explored = {
+  hook?: string
+  short?: string
+  followUp?: string
+  books: BookCandidate[]
+  picks: ExploredPick[]
+}
+
+export async function exploreQuestion(input: {
+  subject: string
+  area?: string
+  question: string
+  level?: string
+  reading?: string[]
+}): Promise<Explored> {
+  const result = await post<Partial<Explored>>(
+    '/api/question',
+    input,
+    'Noema could not find things to explore right now. Try again in a moment.',
+  )
+  return {
+    hook: result.hook,
+    short: result.short,
+    followUp: result.followUp,
+    books: result.books ?? [],
+    picks: result.picks ?? [],
+  }
+}
+
+export async function requestSumUp(input: {
+  subject: string
+  area: string
+  answers: Array<{ question: string; answer: string }>
+}): Promise<string> {
+  const result = await post<{ text?: string }>('/api/sumup', input, 'Noema could not draft a summary right now.')
+  return result.text ?? ''
 }

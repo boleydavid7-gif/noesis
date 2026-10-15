@@ -1,3 +1,5 @@
+import type { Subject } from './subjects'
+
 // AI-generated learning paths. The model only designs the structure (paths,
 // milestones, topics) and names books and free resources; the app then looks
 // up the real books and checks the links, and drops anything it cannot find.
@@ -77,6 +79,7 @@ export type LearningPath = {
   createdAt: string
   updated?: string
   plan?: PathPlan
+  subject?: Subject // the questions map; older paths get one from their plan when first opened
 }
 
 export const BOOK_NOTES = [
