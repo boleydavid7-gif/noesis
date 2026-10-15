@@ -529,13 +529,8 @@ function SubjectMap({
               ))}
             </div>
           ) : (
-            <p className="subject-empty">Choose up to {NOW_LIMIT} questions from the areas.</p>
+            <p className="subject-empty">Nothing in Now</p>
           )}
-          {guide.tip ? (
-            <p className="subject-empty">
-              Open a question, look at what goes with it, then answer in a sentence or two.
-            </p>
-          ) : null}
           {guide.nextUp ? (
             <div className="subject-next">
               <span>
@@ -725,7 +720,7 @@ function AreaCard({
                 </ul>
               </div>
             ) : null}
-            <label htmlFor={`sum-${areaId}`}>Sum up this area (a draft from your answers; change anything)</label>
+            <label htmlFor={`sum-${areaId}`}>Sum up this area</label>
             <textarea id={`sum-${areaId}`} rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} />
             <div className="subject-actions">
               <button className="primary-button" type="submit" disabled={!summary.trim()}>
@@ -1344,7 +1339,7 @@ function SubjectShelf({
   onSave: (next: Subject, undo?: string) => void
 }) {
   const groups = shelf(subject)
-  if (!groups.length) return <p className="subject-empty">Things you save on a question show here, by kind.</p>
+  if (!groups.length) return <p className="subject-empty">Nothing saved yet</p>
   return (
     <div className="subject-shelf">
       {groups.map((group) => (

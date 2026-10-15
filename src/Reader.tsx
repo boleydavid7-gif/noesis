@@ -1717,9 +1717,7 @@ export function Reader({
         <div className="reader-define" role="status">
           {translated.state === 'working' ? <span>Translating…</span> : null}
           {translated.state === 'same' ? <span>That passage is already in {languageName(myLanguage())}.</span> : null}
-          {translated.state === 'none' ? (
-            <span>Select a passage first. Translation works on this device for the languages the browser has.</span>
-          ) : null}
+          {translated.state === 'none' ? <span>Select a passage first.</span> : null}
           {translated.state === 'done' ? (
             <>
               <strong>

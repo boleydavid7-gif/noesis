@@ -316,7 +316,7 @@ export function SecondBrainPage({
           <div>
             <strong>From your computer’s browser</strong>
             <p>
-              Drag this button to your bookmarks bar. On any page, select some text and press it.
+              Drag to your bookmarks bar.
               <br />
               <a
                 ref={bookmarkletLink}
@@ -330,10 +330,7 @@ export function SecondBrainPage({
           </div>
           <div>
             <strong>From a Kindle</strong>
-            <p>
-              Connect it to a computer, find “My Clippings.txt”, and import it here. Highlights and notes come in under
-              their books.
-            </p>
+            <p>Choose “My Clippings.txt” from the Kindle.</p>
             <button className="secondary-button" onClick={() => clippingsInput.current?.click()}>
               Import Kindle highlights
             </button>
@@ -348,10 +345,6 @@ export function SecondBrainPage({
                 event.target.value = ''
               }}
             />
-          </div>
-          <div>
-            <strong>Anything else</strong>
-            <p>Press Add note and paste text. If the source is a web address, it stays a link you can click.</p>
           </div>
         </section>
       ) : null}
@@ -781,7 +774,7 @@ export function SecondBrainPage({
             ) : (
               <div className="brain-page-placeholder">
                 <BookOpen size={22} />
-                <p>Pick a note to read or edit it, or add a new one.</p>
+                <p>Select a note</p>
               </div>
             )}
           </section>

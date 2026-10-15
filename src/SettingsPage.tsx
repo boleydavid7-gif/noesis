@@ -88,7 +88,6 @@ export function SettingsPage(props: Props) {
               <item.icon size={20} />
               <span>
                 <strong>{item.title}</strong>
-                <small>{item.subtitle}</small>
               </span>
             </button>
           ))}
@@ -98,7 +97,6 @@ export function SettingsPage(props: Props) {
             <active.icon size={26} />
             <div>
               <h3>{active.title}</h3>
-              <p>{active.subtitle}</p>
             </div>
           </header>
           {section === 'account' ? (
@@ -137,10 +135,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
   return (
     <>
       <Group title="How you use Noesis">
-        <Row
-          title="Mode"
-          detail="Reading keeps things plain. Reading and learning adds rabbit holes, a study side panel, and searching inside your books."
-        >
+        <Row title="Mode" detail="Reading and learning adds rabbit holes and a study panel.">
           <Segmented
             label="Mode"
             value={learner ? 'learner' : 'reader'}
@@ -169,7 +164,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
             aria-label="Text size"
           />
         </Row>
-        <Row title="Font" detail="Use each book’s own font, or pick one.">
+        <Row title="Font">
           <Segmented
             label="Font"
             value={reading.font}
@@ -183,13 +178,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
             ]}
           />
         </Row>
-        <Row
-          title="Your own font"
-          detail={
-            fontNote ||
-            (fontName ? `${fontName}. Used the next time you open a book.` : 'Add a .ttf, .otf or .woff2 file.')
-          }
-        >
+        <Row title="Your own font" detail={fontNote || (fontName ? fontName : 'TTF, OTF or WOFF2')}>
           <div className="image-picker-options">
             <label className="image-option">
               {fontName ? 'Change' : 'Add a font'}
@@ -253,7 +242,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
             ]}
           />
         </Row>
-        <Row title="Listening speed" detail="For read-aloud in the reader.">
+        <Row title="Listening speed">
           <Segmented
             label="Listening speed"
             value={String(reading.speechRate)}
@@ -267,7 +256,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
         </Row>
         <details className="settings-more">
           <summary>More page options</summary>
-          <Row title="Letter spacing" detail="Wider spacing can make words easier to tell apart.">
+          <Row title="Letter spacing">
             <Segmented
               label="Letter spacing"
               value={reading.letterSpacing}
@@ -278,38 +267,35 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
               ]}
             />
           </Row>
-          <Row
-            title="Pause at the end of a chapter"
-            detail="A quiet card offers to keep a thought or recap. It never quizzes you."
-          >
+          <Row title="Pause at the end of a chapter">
             <Toggle
               checked={reading.chapterEnd}
               onChange={(value) => set('reading', 'chapterEnd', value)}
               label="Pause at the end of a chapter"
             />
           </Row>
-          <Row title="Keep the screen on" detail="The screen does not dim while a book is open.">
+          <Row title="Keep the screen on">
             <Toggle
               checked={reading.keepAwake}
               onChange={(value) => set('reading', 'keepAwake', value)}
               label="Keep the screen on"
             />
           </Row>
-          <Row title="Tap to turn pages" detail="Tap near the top or bottom of the page to move a screen.">
+          <Row title="Tap to turn pages">
             <Toggle
               checked={reading.tapZones}
               onChange={(value) => set('reading', 'tapZones', value)}
               label="Tap to turn pages"
             />
           </Row>
-          <Row title="Open books expanded" detail="Shows the reading tools beside the page.">
+          <Row title="Open books with tools showing">
             <Toggle
               checked={reading.startWide}
               onChange={(value) => set('reading', 'startWide', value)}
               label="Open books expanded"
             />
           </Row>
-          <Row title="Page width" detail="A narrower column is easier to follow in a novel.">
+          <Row title="Page width">
             <Segmented
               label="Page width"
               value={reading.lineWidth}
@@ -321,7 +307,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
               ]}
             />
           </Row>
-          <Row title="Paragraphs" detail="Indented, spaced, or as the book has them.">
+          <Row title="Paragraphs">
             <Segmented
               label="Paragraphs"
               value={reading.paragraphs}
@@ -340,7 +326,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
               label="Justified text"
             />
           </Row>
-          <Row title="Drop caps" detail="A large first letter at the start of a chapter.">
+          <Row title="Drop caps">
             <Toggle
               checked={reading.dropCap}
               onChange={(value) => set('reading', 'dropCap', value)}
@@ -369,7 +355,7 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
   const appearance = settings.appearance
   return (
     <Group title="Look and feel">
-      <Row title="Accent color" detail="Used for buttons, highlights, and the logo mark.">
+      <Row title="Accent color">
         <div className="swatches" role="radiogroup" aria-label="Accent color">
           {(Object.keys(ACCENTS) as AccentName[]).map((name) => (
             <button
@@ -386,7 +372,7 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
           ))}
         </div>
       </Row>
-      <Row title="App colors" detail="The dark color behind every page.">
+      <Row title="Background">
         <div className="swatches" role="radiogroup" aria-label="App colors">
           {(Object.keys(SURFACES) as SurfaceName[]).map((name) => (
             <button
@@ -407,21 +393,21 @@ function AppearanceSection({ settings, set }: { settings: Settings; set: SetFn }
       <ImagePicker slot="sidebar" title="Sidebar picture" />
       <details className="settings-more">
         <summary>More</summary>
-        <Row title="Scenery backgrounds" detail="Turn off the photo backgrounds.">
+        <Row title="Scenery">
           <Toggle
             checked={appearance.scenery}
             onChange={(value) => set('appearance', 'scenery', value)}
             label="Scenery backgrounds"
           />
         </Row>
-        <Row title="Reduce motion" detail="Stops animations and transitions.">
+        <Row title="Reduce motion">
           <Toggle
             checked={appearance.reduceMotion}
             onChange={(value) => set('appearance', 'reduceMotion', value)}
             label="Reduce motion"
           />
         </Row>
-        <Row title="Compact layout" detail="Tighter spacing so more fits on screen.">
+        <Row title="Compact layout">
           <Toggle
             checked={appearance.compact}
             onChange={(value) => set('appearance', 'compact', value)}
@@ -446,7 +432,7 @@ function ImagePicker({ slot, title }: { slot: ImageSlot; title: string }) {
     applyImages()
   }
   return (
-    <Row title={title} detail="Pick a look, or use your own picture.">
+    <Row title={title}>
       <div className="image-picker">
         <div className="image-picker-options">
           <button
@@ -551,7 +537,7 @@ function LibrarySection({
   return (
     <>
       <Group title="Library">
-        <Row title="Default sort" detail="How your library is ordered when you open it.">
+        <Row title="Sort library by">
           <Segmented
             label="Default sort"
             value={settings.library.defaultSort}
@@ -563,21 +549,21 @@ function LibrarySection({
             ]}
           />
         </Row>
-        <Row title="Index book text" detail="Lets search and Noema read your books.">
+        <Row title="Search inside books">
           <Toggle
             checked={settings.library.indexText}
             onChange={(value) => set('library', 'indexText', value)}
             label="Index book text"
           />
         </Row>
-        <Row title="Notes on Home" detail="Show one of your saved notes now and then.">
+        <Row title="Notes on Home">
           <Toggle
             checked={settings.library.resurface}
             onChange={(value) => set('library', 'resurface', value)}
             label="Show a saved note on Home"
           />
         </Row>
-        <Row title="Reading goal" detail="Your own target. Nothing is shown unless you turn it on.">
+        <Row title="Reading goal">
           <Toggle
             checked={settings.library.goal.enabled}
             onChange={(value) => set('library', 'goal', { ...settings.library.goal, enabled: value })}
@@ -633,7 +619,7 @@ function LibrarySection({
             {books.length} {books.length === 1 ? 'book' : 'books'}
           </span>
         </Row>
-        <Row title="Rebuild search index" detail="Re-read your books so search and Noema can use their text.">
+        <Row title="Rebuild search index">
           <button
             className="secondary-button"
             onClick={() => void rebuild()}
@@ -683,7 +669,7 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
             {status === 'ready' ? 'Ready' : status === 'checking' ? '…' : 'Unavailable'}
           </span>
         </Row>
-        <Row title="Enable Noema" detail="When off, Noesis never sends anything to the AI.">
+        <Row title="Noema" detail="When off, nothing is sent to the AI.">
           <Toggle checked={ai.enabled} onChange={(value) => set('ai', 'enabled', value)} label="Enable Noema" />
         </Row>
         <Row title="Answer length">
@@ -700,10 +686,7 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
         </Row>
       </Group>
       <Group title="What Noema can see">
-        <Row
-          title="The page I'm reading"
-          detail="Visible text and any passage you select, plus relevant parts of the book."
-        >
+        <Row title="The page I'm reading">
           <Toggle
             checked={ai.useReadingText}
             onChange={(value) => set('ai', 'useReadingText', value)}
@@ -711,10 +694,7 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
           />
         </Row>
         {canEmbedOnDevice() ? (
-          <Row
-            title="Search by meaning"
-            detail="Finds passages and notes that mean the same thing, even in different words. Downloads a small model (about 25 MB) once, then runs on this device."
-          >
+          <Row title="Search by meaning" detail="Downloads 25 MB once; runs on this device.">
             <Toggle
               checked={ai.onDevice}
               onChange={(value) => set('ai', 'onDevice', value)}
@@ -722,14 +702,14 @@ function AiSection({ settings, set }: { settings: Settings; set: SetFn }) {
             />
           </Row>
         ) : null}
-        <Row title="Avoid spoilers" detail="Answers only use the part of the book you've read.">
+        <Row title="Avoid spoilers">
           <Toggle
             checked={ai.avoidSpoilers}
             onChange={(value) => set('ai', 'avoidSpoilers', value)}
             label="Avoid spoilers"
           />
         </Row>
-        <Row title="My notes" detail="Your Second Brain notes, so answers can connect to what you've saved.">
+        <Row title="My notes">
           <Toggle checked={ai.useNotes} onChange={(value) => set('ai', 'useNotes', value)} label="Share my notes" />
         </Row>
       </Group>
@@ -774,8 +754,8 @@ function NotificationsSection({
           !supported
             ? 'Not supported in this browser.'
             : permission === 'denied'
-              ? 'Blocked by your browser. Allow notifications for this site to turn this on.'
-              : 'A notification when review cards are due, at most once a day. With Noesis closed too, once you are signed in.'
+              ? 'Blocked in browser settings.'
+              : 'Once a day at most.'
         }
       >
         <Toggle
@@ -799,7 +779,6 @@ function NotificationsSection({
           Test
         </button>
       </Row>
-      <p className="setting-note">Reminders only appear while Noesis is open or installed.</p>
     </Group>
   )
 }
@@ -820,15 +799,12 @@ function PrivacySection({
   return (
     <>
       <Group title="Your data">
-        <Row
-          title="Where it lives"
-          detail="Stored in this browser. If you sign in, it also syncs to your account and any cloud you connect."
-        >
+        <Row title="Privacy policy">
           <a className="secondary-button" href="/privacy" target="_blank" rel="noreferrer">
-            Privacy policy
+            Open
           </a>
         </Row>
-        <Row title="Download my data" detail="A ZIP with your books, notes, and learning paths.">
+        <Row title="Download my data">
           <button className="secondary-button" onClick={onExport}>
             Export
           </button>
@@ -840,15 +816,12 @@ function PrivacySection({
         </Row>
       </Group>
       <Group title="Remove data">
-        <Row
-          title="Delete data on this device"
-          detail="Removes your books, notes, settings, and review cards from this browser. Anything synced to your account or a cloud provider is kept."
-        >
+        <Row title="Delete data on this device" detail="Synced copies are kept.">
           <button className="secondary-button setting-danger" onClick={onClearLocal}>
             Delete
           </button>
         </Row>
-        <Row title="Delete my account" detail="Email us and we'll remove your account and everything stored with it.">
+        <Row title="Delete my account">
           <a
             className="secondary-button setting-danger"
             href={`mailto:boleydavid7@gmail.com?subject=${subject}&body=${body}`}
@@ -883,7 +856,7 @@ function AboutSection({ onIntro }: { onIntro?: () => void }) {
         <span className="setting-pill">{__APP_VERSION__}</span>
       </Row>
       {onIntro ? (
-        <Row title="Introduction" detail="The first pages, from the start.">
+        <Row title="Introduction">
           <button className="secondary-button" onClick={onIntro}>
             Show
           </button>

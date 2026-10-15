@@ -111,11 +111,7 @@ export function LibraryChooser({ onDone }: { onDone?: () => void }) {
           ))}
         </ul>
       ) : null}
-      <p className="library-note">
-        Your place is used once to find libraries and is not kept. E-books and audiobooks come from Libby, in many
-        countries. Shelf copies show where the library's catalog is on BiblioCommons; anywhere else, WorldCat lists the
-        libraries near you that hold a book.
-      </p>
+      <p className="library-note">Your location isn't stored.</p>
     </div>
   )
 }

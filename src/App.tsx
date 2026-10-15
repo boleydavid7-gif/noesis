@@ -1985,7 +1985,7 @@ function App() {
     try {
       await connectCloudProvider(id, authUser.id)
       setCloudConnections(readCloudConnections())
-      showNotice('Cloud provider connected. Noesis will sync your library automatically.')
+      showNotice('Connected.')
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : 'Cloud connection failed.')
     }
@@ -2797,7 +2797,6 @@ function App() {
   function pathsPage() {
     return (
       <Page title="Rabbit holes" subtitle="">
-        <PathsGuide />
         <FreeCopyContext.Provider value={addResource}>
           <SubjectStarter
             onSave={savePlannedPath}
@@ -2896,7 +2895,7 @@ function App() {
         <div className="progress-list panel-card">
           <h3>Reading progress</h3>
           {books.length === 0 ? (
-            <div className="empty-state">Add a book to track your progress.</div>
+            <div className="empty-state">No books yet</div>
           ) : (
             books.map((book) => (
               <div className="progress-book" key={book.id}>
@@ -2921,7 +2920,7 @@ function App() {
       ? books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(resourceQuery.toLowerCase()))
       : []
     return (
-      <Page title="Explore" subtitle="Free books, articles and papers.">
+      <Page title="Explore" subtitle="">
         <form className="explore-search panel-card" onSubmit={searchResources}>
           <Search size={18} />
           <input
@@ -3149,13 +3148,7 @@ function App() {
             })()
           ) : libraryFolder ? (
             <>
-              <Row
-                title={libraryFolder.name}
-                detail={
-                  folderSaid ||
-                  `In ${cloudLabel(libraryFolder.provider)}. New books there come into Noesis on every device.`
-                }
-              >
+              <Row title={libraryFolder.name} detail={folderSaid || cloudLabel(libraryFolder.provider)}>
                 <button
                   className="secondary-button"
                   onClick={() => void lookAtFolder()}
@@ -3183,9 +3176,6 @@ function App() {
             </>
           ) : (
             <>
-              <p className="setting-note">
-                Keep your books in one folder of your storage; Noesis brings in what is there, each book once.
-              </p>
               {cloudConnections
                 .filter((item) => item.ownerUserId === authUserId && cloudConnectionUsable(item) && item.readsFolders)
                 .map((connection) => (
@@ -3199,39 +3189,28 @@ function App() {
           )}
         </Group>
         <Group title="Options" icon={<RotateCcw size={18} />}>
-          <Row title="Automatic sync" detail="In the background when something changes.">
+          <Row title="Automatic sync">
             <Toggle
               checked={settings.backup.autoSync}
               onChange={(value) => updateSettings({ ...settings, backup: { ...settings.backup, autoSync: value } })}
               label="Automatic sync"
             />
           </Row>
-          <Row title="Export a ZIP" detail="Books, notes and rabbit holes in one file.">
+          <Row title="Export a ZIP">
             <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
               <Download size={15} /> Export
             </button>
           </Row>
-          <Row title="Restore from a ZIP" detail="A file you exported earlier.">
+          <Row title="Restore from a ZIP">
             <button className="secondary-button" onClick={() => backupInput.current?.click()}>
               <Upload size={15} /> Restore
             </button>
           </Row>
-          <Row
-            title="Clear the library"
-            detail={
-              libraryFolder
-                ? 'Remove every book, then read the library folder again.'
-                : 'Remove every book. Notes stay.'
-            }
-          >
+          <Row title="Clear the library" detail={libraryFolder ? 'Notes stay.' : 'Notes stay.'}>
             <button className="secondary-button" onClick={clearLibrary} disabled={!books.length}>
               Clear
             </button>
           </Row>
-          <p className="setting-note">
-            Synced: books, notes, progress, paths, calendar, focus steps and review cards. The timer stays on this
-            device.
-          </p>
         </Group>
       </>
     )
@@ -3249,14 +3228,14 @@ function App() {
             : undefined
           const usable = Boolean(connection && cloudConnectionUsable(connection))
           const detail = !provider.configured
-            ? 'Not set up on this site yet.'
+            ? 'Not available yet'
             : !connection
-              ? 'Backs up your library and finds books you keep there.'
+              ? ''
               : !usable
-                ? 'The connection ended. Connect again.'
+                ? 'Disconnected'
                 : connection.readsFolders
-                  ? 'Connected on this device. Books not here come from it.'
-                  : 'Connected. Connect again to let Noesis read your folders.'
+                  ? 'Connected'
+                  : 'Connect again to use folders'
           return (
             <Row key={provider.id} title={provider.label} detail={detail}>
               {connection && usable && connection.readsFolders ? (
@@ -3275,7 +3254,7 @@ function App() {
             </Row>
           )
         })}
-        {!signedIn ? <p className="setting-note">Sign in first; each device connects its storage once.</p> : null}
+        {!signedIn ? <p className="setting-note">Sign in to connect.</p> : null}
       </Group>
     )
   }
@@ -3299,11 +3278,6 @@ function App() {
             Create account
           </button>
         </div>
-        {anonymous ? (
-          <div className="auth-callout">
-            Create an account to keep your notes and use your library on another device.
-          </div>
-        ) : null}
         {authMode === 'sign-up' ? (
           <label>
             Name
@@ -3354,8 +3328,8 @@ function App() {
         ) : null}
         <p className="auth-footnote">
           {authMode === 'sign-in' && books.length + notes.length + paths.length > 0
-            ? 'Your books, notes and rabbit holes on this device will be added to your account when you sign in. Anything already in the account stays too.'
-            : 'Your library stays on this device. Sign in to sync notes and books.'}
+            ? 'What is on this device is added to your account.'
+            : ''}
         </p>
       </form>
     )
@@ -3367,7 +3341,6 @@ function App() {
         <section className="profile-settings panel-card">
           <div>
             <h3>Your name</h3>
-            <p>Shown in the greeting on Home. Leave blank to use your account name.</p>
           </div>
           <form className="profile-name-form" onSubmit={saveFirstName}>
             <label>
@@ -4586,51 +4559,6 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
     </article>
   )
 }
-const GUIDE_KEY = 'noesis:paths-guide:v1'
-
-// A short guide for someone new to rabbit holes: what one is and the best way to use one.
-function PathsGuide() {
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(GUIDE_KEY) !== 'seen'
-    } catch {
-      return true
-    }
-  })
-  const close = () => {
-    setOpen(false)
-    try {
-      localStorage.setItem(GUIDE_KEY, 'seen')
-    } catch {
-      // The guide simply shows again next time.
-    }
-  }
-  if (!open)
-    return (
-      <button className="text-button paths-guide-link" onClick={() => setOpen(true)}>
-        How rabbit holes work
-      </button>
-    )
-  return (
-    <section className="paths-guide panel-card" aria-label="How rabbit holes work">
-      <div className="paths-guide-head">
-        <strong>How rabbit holes work</strong>
-        <button className="text-button" onClick={close}>
-          Got it
-        </button>
-      </div>
-      <ol>
-        <li>Say what you are curious about</li>
-        <li>Pick up to three questions for now</li>
-        <li>Go deeper from any question; the trail shows the way back up</li>
-        <li>Read your books; look at what goes with them</li>
-        <li>Answer in a sentence or two of your own</li>
-        <li>New questions wait under Later</li>
-      </ol>
-    </section>
-  )
-}
-
 function ReadNextCard({
   books,
   notes,
@@ -4661,7 +4589,7 @@ function ReadNextCard({
           ))}
         </ul>
       ) : (
-        <p className="brain-rail-empty">Nothing unread in your library matches your notes yet.</p>
+        <p className="brain-rail-empty">Nothing yet</p>
       )}
       <button className="text-button" onClick={() => onFind(query)}>
         Find free books about {query}
@@ -5144,7 +5072,7 @@ function NotesSection({
         </div>
       </div>
       {notes.length === 0 ? (
-        <div className="empty-state">No notes yet. Highlight text while reading, or add one.</div>
+        <div className="empty-state">No notes yet</div>
       ) : (
         <div className="notes-grid">
           {notes.slice(0, expanded ? 100 : 6).map((note) => (
