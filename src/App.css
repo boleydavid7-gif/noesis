@@ -11343,8 +11343,9 @@ button.loan-title {
 }
 .loan-form {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 12px;
+  padding: 18px;
 }
 .loan-form label {
   display: grid;
@@ -11536,4 +11537,33 @@ button.loan-title {
 }
 .dupes-what small {
   overflow-wrap: anywhere;
+}
+
+/* Defaults for anything without its own styling: fields match the app, and a card's content never touches its edge.
+   :where keeps them at zero specificity, so every component's own rule still wins. */
+:where(.app-shell, .intro)
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']),
+    select,
+    textarea
+  ) {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  outline: 0;
+  color: inherit;
+  background: rgba(2, 15, 27, 0.58);
+  font: inherit;
+  font-size: 0.95rem;
+}
+:where(.app-shell, .intro) :where(input, select, textarea):focus-visible {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.65);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 220, 194, 142), 0.12);
+}
+:where(.app-shell) :where(input[type='date']) {
+  color-scheme: dark;
 }
