@@ -19,6 +19,8 @@ export type CloudConnection = {
    * found wherever it is. Connections made before this ask once more, from Settings.
    */
   readsFolders?: boolean
+  /** Renewed through the Worker, which holds the client secret (Google Drive, and OneDrive when its secret is set). */
+  viaServer?: boolean
 }
 
 export type CloudProviderInfo = {
@@ -62,6 +64,8 @@ const configs: Record<CloudProviderId, { clientId: string; scopes: string; authU
  * so its renewal runs through the Worker, and only when that secret is set there.
  */
 let googleRenews = false
+/** OneDrive renews for 90 days through the Worker when its secret is set; in the browser alone, only for 24 hours. */
+let oneDriveRenews = false
 
 /**
  * Cloudflare can expose these public OAuth identifiers at runtime. This keeps
@@ -75,6 +79,7 @@ export async function loadCloudProviderConfig(): Promise<CloudProviderInfo[]> {
     if (response.ok) {
       const body = (await response.json()) as {
         googleRenews?: unknown
+        oneDriveRenews?: unknown
         googleDriveClientId?: unknown
         oneDriveClientId?: unknown
         dropboxAppKey?: unknown
@@ -85,6 +90,7 @@ export async function loadCloudProviderConfig(): Promise<CloudProviderInfo[]> {
         dropbox: body.dropboxAppKey,
       }
       googleRenews = body.googleRenews === true
+      oneDriveRenews = body.oneDriveRenews === true
       for (const id of Object.keys(configs) as CloudProviderId[]) {
         const value = runtimeValues[id]
         if (typeof value === 'string' && value.trim()) configs[id].clientId = value.trim()
@@ -265,11 +271,12 @@ async function finishInThisWindow(
         connectedAt: new Date().toISOString(),
         ownerUserId: pending.ownerUserId,
         readsFolders: true,
+        viaServer: Boolean(code) && viaServerNow(provider),
       },
     ])
     return `${label} connected. Noesis will sync your library automatically.`
   } catch (reason) {
-    if (code) rememberRenewalBroke(provider)
+    if (code) rememberRenewalBroke(provider, reason)
     return reason instanceof Error
       ? `${label} could not be connected: ${reason.message}`
       : `${label} could not be connected.`
@@ -396,11 +403,12 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
               connectedAt: new Date().toISOString(),
               ownerUserId,
               readsFolders: true,
+              viaServer: viaServerNow(provider),
             })
           },
-          () => {
-            // Next time connects the one-hour way, which always works.
-            rememberRenewalBroke(provider)
+          (reason) => {
+            // After a refusal, the next few days connect the one-hour way, which always works.
+            rememberRenewalBroke(provider, reason)
             finish(() =>
               reject(
                 new Error(
@@ -432,21 +440,31 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
   })
 }
 
-const BROKE_KEY = 'noesis:cloud-renewal-broke:v1'
+// After the provider refuses the renewing way, connections use the one-hour way for a few days, then try again.
+// (The first version remembered this for good, after any failure, so a single network hiccup left a provider on
+// one-hour connections from then on; that record is dropped.)
+const BROKE_KEY = 'noesis:cloud-renewal-broke:v2'
+const BROKE_FOR = 3 * 24 * 60 * 60 * 1000
 
-function renewalBroke(provider: CloudProviderId): boolean {
+function brokeTimes(): Record<string, number> {
   try {
-    return (JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[]).includes(provider)
+    localStorage.removeItem('noesis:cloud-renewal-broke:v1')
+    const value = JSON.parse(localStorage.getItem(BROKE_KEY) ?? '{}') as unknown
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, number>) : {}
   } catch {
-    return false
+    return {}
   }
 }
 
-function rememberRenewalBroke(provider: CloudProviderId): void {
+function renewalBroke(provider: CloudProviderId): boolean {
+  const at = brokeTimes()[provider]
+  return typeof at === 'number' && Date.now() - at < BROKE_FOR
+}
+
+function rememberRenewalBroke(provider: CloudProviderId, reason: unknown): void {
+  if (!(reason as { rejected?: boolean } | null)?.rejected) return
   try {
-    const now = new Set(JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[])
-    now.add(provider)
-    localStorage.setItem(BROKE_KEY, JSON.stringify([...now]))
+    localStorage.setItem(BROKE_KEY, JSON.stringify({ ...brokeTimes(), [provider]: Date.now() }))
   } catch {
     // Nothing to remember it with; the renewing way is tried again.
   }
@@ -454,9 +472,9 @@ function rememberRenewalBroke(provider: CloudProviderId): void {
 
 function rememberRenewalWorked(provider: CloudProviderId): void {
   try {
-    const now = new Set(JSON.parse(localStorage.getItem(BROKE_KEY) ?? '[]') as string[])
-    now.delete(provider)
-    localStorage.setItem(BROKE_KEY, JSON.stringify([...now]))
+    const times = brokeTimes()
+    delete times[provider]
+    localStorage.setItem(BROKE_KEY, JSON.stringify(times))
   } catch {
     // Same as above.
   }
@@ -476,26 +494,33 @@ async function challengeFor(verifier: string): Promise<string> {
 
 type Tokens = { accessToken: string; refreshToken?: string; expiresIn: number }
 
-async function tokenRequest(provider: CloudProviderId, fields: Record<string, string>): Promise<Tokens> {
+const viaServerNow = (provider: CloudProviderId) =>
+  provider === 'google-drive' || (provider === 'onedrive' && oneDriveRenews)
+
+async function tokenRequest(
+  provider: CloudProviderId,
+  fields: Record<string, string>,
+  viaServer = viaServerNow(provider),
+): Promise<Tokens> {
   const config = configs[provider]
-  // Google's token call needs the client secret, which only the Worker holds.
-  const response =
-    provider === 'google-drive'
-      ? await fetch('/api/cloud-token', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ provider, ...fields }),
-        })
-      : await fetch(config.tokenUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ client_id: config.clientId, ...fields }),
-        })
+  // Google's token call needs the client secret, which only the Worker holds; OneDrive's too when it is set.
+  const response = viaServer
+    ? await fetch('/api/cloud-token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider, ...fields }),
+      })
+    : await fetch(config.tokenUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: config.clientId, ...fields }),
+      })
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>
   const accessToken = (body.access_token ?? body.accessToken) as string | undefined
   if (!response.ok || !accessToken) {
     const error = new Error(String(body.error ?? `Token request failed (${response.status}).`))
-    ;(error as Error & { rejected?: boolean }).rejected = response.status >= 400 && response.status < 500
+    // Only a plain refusal (a used-up or withdrawn grant) counts; a busy or rate-limited provider is tried again later.
+    ;(error as Error & { rejected?: boolean }).rejected = response.status === 400 || response.status === 401
     throw error
   }
   const refreshToken = (body.refresh_token ?? body.refreshToken) as string | undefined
@@ -536,10 +561,11 @@ export async function freshCloudConnection(connection: CloudConnection): Promise
   if (running) return running
   const job = (async () => {
     try {
-      const tokens = await tokenRequest(current.provider, {
-        grant_type: 'refresh_token',
-        refresh_token: current.refreshToken as string,
-      })
+      const tokens = await tokenRequest(
+        current.provider,
+        { grant_type: 'refresh_token', refresh_token: current.refreshToken as string },
+        current.provider === 'google-drive' || Boolean(current.viaServer),
+      )
       const next: CloudConnection = {
         ...current,
         accessToken: tokens.accessToken,

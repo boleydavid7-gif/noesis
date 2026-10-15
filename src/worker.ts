@@ -39,6 +39,8 @@ type Env = {
   DROPBOX_APP_KEY?: string
   // Optional: lets Google Drive connections renew themselves (Google needs the secret for that).
   GOOGLE_DRIVE_CLIENT_SECRET?: string
+  // Optional: OneDrive connections renew for 90 days instead of 24 hours (the redirect must be a Web platform one).
+  ONEDRIVE_CLIENT_SECRET?: string
   // Secret: passkey sign-in and review reminders read and write their tables with it (never sent to the app).
   SUPABASE_SERVICE_ROLE_KEY?: string
   // Review reminders with Noesis closed (Web Push). The public key is shown to the app; the private one is a secret.
@@ -2034,6 +2036,7 @@ const worker = {
       return json({
         ok: true,
         googleRenews: Boolean(env.GOOGLE_DRIVE_CLIENT_SECRET?.trim()),
+        oneDriveRenews: Boolean(env.ONEDRIVE_CLIENT_SECRET?.trim()),
         googleDriveClientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim() || '',
         oneDriveClientId: env.VITE_ONEDRIVE_CLIENT_ID?.trim() || env.ONEDRIVE_CLIENT_ID?.trim() || '',
         dropboxAppKey: env.VITE_DROPBOX_APP_KEY?.trim() || env.DROPBOX_APP_KEY?.trim() || '',
@@ -2042,16 +2045,21 @@ const worker = {
       })
     }
     if (url.pathname === '/api/cloud-token' && request.method === 'POST') {
-      const secret = env.GOOGLE_DRIVE_CLIENT_SECRET?.trim()
-      const clientId = env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim()
-      if (!secret || !clientId) return json({ error: 'Not set up.' }, 503)
       let input: Record<string, unknown>
       try {
         input = (await request.json()) as Record<string, unknown>
       } catch {
         return json({ error: 'Bad request.' }, 400)
       }
+      // Google always needs its secret for renewing; OneDrive renews for 90 days with one (24 hours without).
+      const onedrive = input.provider === 'onedrive'
+      const secret = (onedrive ? env.ONEDRIVE_CLIENT_SECRET : env.GOOGLE_DRIVE_CLIENT_SECRET)?.trim()
+      const clientId = onedrive
+        ? env.VITE_ONEDRIVE_CLIENT_ID?.trim() || env.ONEDRIVE_CLIENT_ID?.trim()
+        : env.VITE_GOOGLE_DRIVE_CLIENT_ID?.trim() || env.GOOGLE_DRIVE_CLIENT_ID?.trim()
+      if (!secret || !clientId) return json({ error: 'Not set up.' }, 503)
       const fields = new URLSearchParams({ client_id: clientId, client_secret: secret })
+      if (onedrive) fields.set('scope', 'Files.ReadWrite.AppFolder Files.Read User.Read offline_access')
       if (input.grant_type === 'refresh_token' && typeof input.refresh_token === 'string') {
         fields.set('grant_type', 'refresh_token')
         fields.set('refresh_token', input.refresh_token)
@@ -2070,20 +2078,25 @@ const worker = {
         return json({ error: 'Bad request.' }, 400)
       }
       try {
-        const upstream = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
-          body: fields,
-        })
+        const upstream = await fetchWithTimeout(
+          onedrive
+            ? 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+            : 'https://oauth2.googleapis.com/token',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: fields,
+          },
+        )
         const body = (await upstream.json().catch(() => ({}))) as Record<string, unknown>
         return json(
           upstream.ok
             ? { access_token: body.access_token, refresh_token: body.refresh_token, expires_in: body.expires_in }
-            : { error: String(body.error ?? 'Google refused the request.') },
+            : { error: String(body.error ?? (onedrive ? 'Microsoft' : 'Google') + ' refused the request.') },
           upstream.ok ? 200 : upstream.status,
         )
       } catch {
-        return json({ error: 'Could not reach Google.' }, 502)
+        return json({ error: onedrive ? 'Could not reach Microsoft.' : 'Could not reach Google.' }, 502)
       }
     }
     if (url.pathname === '/api/health' && request.method === 'GET') {

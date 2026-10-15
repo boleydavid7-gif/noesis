@@ -1024,3 +1024,38 @@ describe('going deeper from a question', () => {
     expect(JSON.stringify(sent.contents)).toContain('How do plants grow?')
   })
 })
+
+describe('cloud token renewal', () => {
+  it('renews OneDrive through Microsoft with the secret when it is set', async () => {
+    const mock = vi.fn(
+      async () => new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r2', expires_in: 3600 })),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await call(
+      '/api/cloud-token',
+      {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'onedrive', grant_type: 'refresh_token', refresh_token: 'r1' }),
+      },
+      { ONEDRIVE_CLIENT_SECRET: 's', VITE_ONEDRIVE_CLIENT_ID: 'id' },
+    )
+    expect(await response.json()).toEqual({ access_token: 'a', refresh_token: 'r2', expires_in: 3600 })
+    const [address, init] = mock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(address).toBe('https://login.microsoftonline.com/common/oauth2/v2.0/token')
+    const sent = new URLSearchParams(String(init.body))
+    expect(sent.get('client_secret')).toBe('s')
+    expect(sent.get('scope')).toContain('offline_access')
+  })
+
+  it('says OneDrive is not set up without its secret', async () => {
+    const response = await call(
+      '/api/cloud-token',
+      {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'onedrive', grant_type: 'refresh_token', refresh_token: 'r1' }),
+      },
+      { VITE_ONEDRIVE_CLIENT_ID: 'id' },
+    )
+    expect(response.status).toBe(503)
+  })
+})

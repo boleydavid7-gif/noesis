@@ -180,3 +180,9 @@ and a Wrangler dry run. The live health endpoint is
   asks Noema for three narrower questions (`goDeeperFrom`, 300 tokens, 15 s). The question page shows the trail at
   the top and a "Go deeper" list with "Go deeper" / "Find more" and "Your own question"; Home offers "Back down the
   rabbit hole" with the deepest open question (`deepestOpen`).
+- Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
+  days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
+  hiccup left a provider on one-hour connections). Only 400/401 on renewal drops the renewal token; 429 and 5xx are
+  tried again. OneDrive renews through the Worker's `/api/cloud-token` when the secret `ONEDRIVE_CLIENT_SECRET` is set
+  (`oneDriveRenews` in `/api/config`; Microsoft gives a browser-only registration 24-hour renewals, a Web one 90 days);
+  each connection records `viaServer` so older ones keep renewing the way they were made.
