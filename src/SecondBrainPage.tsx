@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Download, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
+import { BookOpen, Download, ExternalLink, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
 import { diaryDays, type DiaryEntry } from './lib/diary'
 import { formatHours, readingStats } from './lib/stats'
 import { renderYearCard } from './lib/yearCard'
@@ -243,6 +243,13 @@ export function SecondBrainPage({
 
   return (
     <div className="brain-page">
+      <a className="brain-notes-link" href="/notes/">
+        <span>
+          <strong>Noesis Notes</strong>
+          <small>Notebooks for every book, paper or digital</small>
+        </span>
+        <ExternalLink size={14} aria-hidden="true" />
+      </a>
       <div className="brain-page-bar">
         <div className="brain-page-tabs" role="tablist" aria-label="Note types">
           {TABS.filter(

@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
@@ -44,6 +45,15 @@ const ocrFiles = () => ({
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), ocrFiles()],
+  // Two pages: Noesis, and Noesis Notes at /notes/.
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        notes: fileURLToPath(new URL('./notes/index.html', import.meta.url)),
+      },
+    },
+  },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),

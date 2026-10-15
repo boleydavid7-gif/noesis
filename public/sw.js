@@ -1,6 +1,6 @@
 // Lets Noesis open without a connection. The app's own files are kept after the first visit; anything
 // that talks to a server (sign-in, AI, search, sync) always goes to the network.
-const CACHE = 'noesis-app-v4'
+const CACHE = 'noesis-app-v5'
 const KEEP = 250
 
 self.addEventListener('install', () => self.skipWaiting())
@@ -70,12 +70,15 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE)
         try {
           const fresh = await fetch(request)
-          if (fresh.ok && fresh.headers.get('content-type')?.includes('text/html') && url.pathname === '/') {
-            await cache.put('/', fresh.clone())
+          // Noesis and Noesis Notes are two pages; each keeps its own copy for offline.
+          const page = url.pathname.startsWith('/notes') ? '/notes/' : url.pathname === '/' ? '/' : ''
+          if (page && fresh.ok && fresh.headers.get('content-type')?.includes('text/html')) {
+            await cache.put(page, fresh.clone())
           }
           return fresh
         } catch {
-          return (await cache.match(request)) || (await cache.match('/')) || Response.error()
+          const page = url.pathname.startsWith('/notes') ? '/notes/' : '/'
+          return (await cache.match(request)) || (await cache.match(page)) || Response.error()
         }
       })(),
     )

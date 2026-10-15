@@ -146,3 +146,16 @@ and a Wrangler dry run. The live health endpoint is
   before they are opened (Now, then Next up; one at a time, each tried once per visit; `questionsToPrepare`), through
   `editSubject`, which changes the latest saved subject. The subject map no longer asks for hook lines (2,000 tokens,
   30 s); a question's hook arrives with its answer part.
+- Noesis Notes by Proairetos (`/notes/`, `notes/index.html` -> `src/notes/`; its own manifest `public/notes/manifest.json`,
+  scope `/notes/`, installable on its own; built beside Noesis as a second Vite input; `sw.js` keeps each page for
+  offline). It shows the same notes as Second Brain (`lib/knowledge.ts`, now up to 2,000 on the device and from the
+  account, with `onNotesChanged` so either app sees the other's changes) grouped as notebooks (`lib/notesBooks.ts`):
+  books kept outside Noesis (synced preference `noesis:notes-books:v1`: title, author, cover, paper / e-book / library
+  loan / audiobook, where I am, pages, and a link to where it is read), books in the Noesis library ("Open in Noesis"
+  opens `/?book=ID`), books named only by title, named notebooks, and the inbox. A book's page has chapters as
+  sections (reading order, notes by page) and a filter (Quotes, Notes, Questions, Ideas); a note has a kind, a quote,
+  page, chapter, title, words and tags. Edit book: cover from cover search, a photo, or an address, Remove cover; the
+  link (Remove link); tapping the cover opens the link. Search finds every word across all notes. Second Brain links
+  to it. Notes reach a connected Google Drive, OneDrive or Dropbox through Noesis's Backup & Sync the next time Noesis
+  syncs. Next: notes in IndexedDB with the person's own storage holding the full set (beyond 2,000), photo of a page
+  to text, Kindle and Readwise imports, links to subjects, review cards, Markdown export, three panes on computers.

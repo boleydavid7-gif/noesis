@@ -83,8 +83,32 @@ export function readLocalNotes(): BrainNote[] {
   }
 }
 
+// Noesis Notes keeps whole notebooks here, so the device holds many notes (well within browser storage).
+export const NOTES_LIMIT = 2_000
+
 export function writeLocalNotes(notes: BrainNote[]): void {
-  getStorage()?.setItem(STORAGE_KEY, JSON.stringify(sortNotes(notes).slice(0, 300)))
+  try {
+    getStorage()?.setItem(STORAGE_KEY, JSON.stringify(sortNotes(notes).slice(0, NOTES_LIMIT)))
+  } catch {
+    // Storage is full: keep the newest half rather than losing the change entirely.
+    getStorage()?.setItem(STORAGE_KEY, JSON.stringify(sortNotes(notes).slice(0, NOTES_LIMIT / 2)))
+  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(NOTES_CHANGED))
+}
+
+export const NOTES_CHANGED = 'noesis-notes-changed'
+// Another tab or app (Noesis and Noesis Notes share these notes) changed them.
+export function onNotesChanged(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined
+  const storage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) listener()
+  }
+  window.addEventListener(NOTES_CHANGED, listener)
+  window.addEventListener('storage', storage)
+  return () => {
+    window.removeEventListener(NOTES_CHANGED, listener)
+    window.removeEventListener('storage', storage)
+  }
 }
 
 function getSupabase(): SupabaseClient | null {
@@ -157,15 +181,24 @@ function fromRemote(row: Record<string, unknown>): BrainNote {
 export async function hydrateRemoteNotes(local: BrainNote[]): Promise<BrainNote[]> {
   const client = await getAuthenticatedSupabase()
   if (!client) return sortNotes(local)
-  const result = await client
-    .from('knowledge_items')
-    .select('id, kind, title, notes, content, source_url, created_at')
-    .in('kind', ['note', 'highlight', 'idea', 'question', 'connection'])
-    .order('created_at', { ascending: false })
-    .limit(300)
-  if (result.error || !result.data) return sortNotes(local)
+  // The server hands back at most a thousand rows at a time.
+  const rows: Record<string, unknown>[] = []
+  for (let from = 0; from < NOTES_LIMIT; from += 1_000) {
+    const result = await client
+      .from('knowledge_items')
+      .select('id, kind, title, notes, content, source_url, created_at')
+      .in('kind', ['note', 'highlight', 'idea', 'question', 'connection'])
+      .order('created_at', { ascending: false })
+      .range(from, from + 999)
+    if (result.error || !result.data) {
+      if (from === 0) return sortNotes(local)
+      break
+    }
+    rows.push(...(result.data as Record<string, unknown>[]))
+    if (result.data.length < 1_000) break
+  }
 
-  const remote = result.data.map((row) => fromRemote(row as Record<string, unknown>))
+  const remote = rows.map((row) => fromRemote(row))
   const remoteIds = new Set(remote.map((note) => note.id))
   const pendingLocal = local.filter((note) => !note.synced && !remoteIds.has(note.id))
   const merged = sortNotes([...remote, ...pendingLocal])

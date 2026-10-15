@@ -11238,3 +11238,28 @@ input[type='radio'] {
     border-radius: 8px;
   }
 }
+
+/* Second Brain's way into Noesis Notes */
+.brain-notes-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: inherit;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.07);
+  text-decoration: none;
+}
+.brain-notes-link span {
+  display: grid;
+  gap: 2px;
+}
+.brain-notes-link small {
+  color: var(--muted);
+}
+.brain-notes-link svg {
+  color: var(--gold-soft, #ead4a2);
+}
