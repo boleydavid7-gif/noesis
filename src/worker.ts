@@ -100,6 +100,9 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
+// Room for thinking when a model will not turn it off.
+const THINKING_ROOM = 4_096
+
 type Generated = { ok: true; text: string; model: string } | { ok: false; error: string; status: number }
 
 // One Gemini call with model fallback. Shared by the tutor and review routes.
@@ -136,9 +139,12 @@ async function generate(
   for (let round = 0; round < 2; round += 1) {
     let sawBusy = false
     for (const model of models) {
-      let response: Response
-      try {
-        response = await fetchWithTimeout(
+      // Gemini's thinking is spent from the same allowance as the answer, which cut answers off partway.
+      // Thinking is turned off (Pro models cannot turn it off, so they get a small budget). A model that
+      // refuses the setting is asked again without it and with room for its thinking, and an answer that
+      // still stops at the limit is asked for once more with twice the room.
+      const call = (thinking: boolean, room: number) =>
+        fetchWithTimeout(
           `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`,
           {
             method: 'POST',
@@ -148,27 +154,55 @@ async function generate(
               contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
               generationConfig: {
                 temperature: options.temperature,
-                maxOutputTokens: options.maxOutputTokens,
+                maxOutputTokens: room,
+                ...(thinking ? { thinkingConfig: { thinkingBudget: /pro/i.test(model) ? 128 : 0 } } : {}),
                 ...(options.json ? { responseMimeType: 'application/json' } : {}),
               },
             }),
           },
           options.timeoutMs ?? 25_000,
         )
-      } catch {
-        return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
-      }
-
-      if (response.ok) {
-        const body = (await response.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      const read = async (reply: Response) => {
+        const body = (await reply.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string; thought?: boolean }> }
+            finishReason?: string
+          }>
         }
+        const candidate = body.candidates?.[0]
         const text =
-          body.candidates?.[0]?.content?.parts
-            ?.map((part) => part.text ?? '')
+          candidate?.content?.parts
+            ?.filter((part) => !part.thought)
+            .map((part) => part.text ?? '')
             .join('')
             .trim() ?? ''
-        return text ? { ok: true, text, model } : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
+        return { text, cutOff: candidate?.finishReason === 'MAX_TOKENS' }
+      }
+      let response: Response
+      let room = options.maxOutputTokens
+      let thinking = true
+      try {
+        response = await call(thinking, room)
+        if (response.status === 400) {
+          thinking = false
+          room = options.maxOutputTokens + THINKING_ROOM
+          response = await call(thinking, room)
+        }
+        if (response.ok) {
+          let answer = await read(response)
+          if (answer.cutOff) {
+            const again = await call(thinking, room * 2 + THINKING_ROOM)
+            if (again.ok) {
+              const longer = await read(again)
+              if (longer.text) answer = longer
+            }
+          }
+          return answer.text
+            ? { ok: true, text: answer.text, model }
+            : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
+        }
+      } catch {
+        return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
       }
 
       lastStatus = response.status

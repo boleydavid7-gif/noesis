@@ -2483,6 +2483,7 @@ body.reading-focus {
   width: min(100%, 440px);
   height: max-content;
   max-height: calc(100vh - 44px);
+  max-height: calc(100dvh - 44px);
   flex-direction: column;
   gap: 17px;
   overflow-y: auto;

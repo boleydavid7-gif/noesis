@@ -178,6 +178,67 @@ describe('tutor answer length', () => {
   })
 })
 
+describe('whole answers from Gemini', () => {
+  const answer = (text: string, finishReason = 'STOP') =>
+    new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason }] }))
+  const ask = (ip: string) =>
+    call(
+      '/api/tutor',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify({ question: 'What is this?' }) },
+      { GEMINI_API_KEY: 'k' },
+    )
+  const body = (mock: ReturnType<typeof vi.fn>, index: number) =>
+    JSON.parse(String((mock.mock.calls[index] as unknown as [string, RequestInit])[1].body))
+
+  it('turns thinking off so the allowance goes to the answer', async () => {
+    const mock = vi.fn(async () => answer('A whole answer.'))
+    vi.stubGlobal('fetch', mock)
+    const result = (await (await ask('7.7.7.1')).json()) as { text: string }
+    expect(result.text).toBe('A whole answer.')
+    expect(body(mock, 0).generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+  })
+
+  it('asks again with more room when an answer stops at the limit', async () => {
+    const mock = vi
+      .fn()
+      .mockResolvedValueOnce(answer('A half', 'MAX_TOKENS'))
+      .mockResolvedValueOnce(answer('A half, then the rest.'))
+    vi.stubGlobal('fetch', mock)
+    const result = (await (await ask('7.7.7.2')).json()) as { text: string }
+    expect(result.text).toBe('A half, then the rest.')
+    expect(body(mock, 1).generationConfig.maxOutputTokens).toBeGreaterThan(
+      body(mock, 0).generationConfig.maxOutputTokens,
+    )
+  })
+
+  it('asks without the thinking setting, with room for thinking, when a model refuses it', async () => {
+    const mock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: 'thinking not supported' } }), { status: 400 }),
+      )
+      .mockResolvedValueOnce(answer('Answered anyway.'))
+    vi.stubGlobal('fetch', mock)
+    const result = (await (await ask('7.7.7.3')).json()) as { text: string }
+    expect(result.text).toBe('Answered anyway.')
+    expect(body(mock, 1).generationConfig.thinkingConfig).toBeUndefined()
+    expect(body(mock, 1).generationConfig.maxOutputTokens).toBeGreaterThan(4000)
+  })
+
+  it('leaves thought parts out of the answer', async () => {
+    const mock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: 'thinking…', thought: true }, { text: 'The answer.' }] } }],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', mock)
+    expect(((await (await ask('7.7.7.4')).json()) as { text: string }).text).toBe('The answer.')
+  })
+})
+
 describe('learning path routes', () => {
   const plan = {
     paths: [
