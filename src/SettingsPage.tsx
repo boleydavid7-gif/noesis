@@ -43,6 +43,7 @@ type Props = {
   onExport: () => void
   onClearLocal: () => void
   onNotice: (message: string) => void
+  onIntro?: () => void
 }
 
 export function SettingsPage(props: Props) {
@@ -108,7 +109,7 @@ export function SettingsPage(props: Props) {
               <h4 className="settings-subhead">Privacy</h4>
               <PrivacySection email={props.signedInEmail} onExport={props.onExport} onClearLocal={props.onClearLocal} />
               <h4 className="settings-subhead">About</h4>
-              <AboutSection />
+              <AboutSection onIntro={props.onIntro} />
             </>
           ) : null}
           {section === 'reading' ? <ReadingSection settings={settings} set={set} learner={props.learner} /> : null}
@@ -862,7 +863,7 @@ function PrivacySection({
 
 type SoundCredit = { name: string; title: string; author: string; license: string; url: string }
 
-function AboutSection() {
+function AboutSection({ onIntro }: { onIntro?: () => void }) {
   const [credits, setCredits] = useState<SoundCredit[]>([])
   useEffect(() => {
     let canceled = false
@@ -881,6 +882,13 @@ function AboutSection() {
       <Row title="Version" detail={`Built ${__BUILD_DATE__}`}>
         <span className="setting-pill">{__APP_VERSION__}</span>
       </Row>
+      {onIntro ? (
+        <Row title="Introduction" detail="The first pages, from the start.">
+          <button className="secondary-button" onClick={onIntro}>
+            Show
+          </button>
+        </Row>
+      ) : null}
       <Row title="Made by" detail="Proairetos">
         <a className="secondary-button" href="mailto:boleydavid7@gmail.com">
           Contact

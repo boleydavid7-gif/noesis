@@ -166,3 +166,9 @@ and a Wrangler dry run. The live health endpoint is
   with a due date ("Due in 3 days", "Was due Oct 10"). Renew opens `renewLink` (the loan's own link, else the Libby
   shelf for digital copies, else the chosen library's BiblioCommons "checked out" page or website) and asks for the
   new date; Returned with undo. Home shows loans due within three days.
+- Introduction (`src/Onboarding.tsx`, `onboarding.css`): new people (nothing in the library, notes or paths) see
+  seven full-screen pages in the iOS manner: Welcome; Read what you own; Keep what you read; Learn by asking; Yours,
+  and private; Create your account (the Settings sign-in form, opening on Create account; "Not now"); Your own storage
+  (the Settings storage rows, optional; "Start reading"). Skip, back, swipe and arrow keys; the step is kept in
+  `noesis:intro:v1` (or `done`) so a storage sign-in that leaves the page returns to it. Settings > Account and data >
+  Introduction shows it again.

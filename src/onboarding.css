@@ -1,0 +1,275 @@
+/* The first visit: full-screen pages in the iOS manner (large title, grouped inset rows with tinted tiles, one pill
+   button at the foot), on Noesis's own surface. */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(var(--accent-rgb, 220, 194, 142), 0.16), transparent 60%), var(--bg);
+  color: #edf4ff;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.intro-bar {
+  display: grid;
+  grid-template-columns: 64px 1fr 64px;
+  align-items: center;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 10px 12px 0;
+}
+.intro-back,
+.intro-skip {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: var(--gold-warm, #d5ab61);
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.intro-back {
+  display: grid;
+  place-items: center;
+  justify-self: start;
+}
+.intro-skip {
+  justify-self: end;
+}
+.intro-dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.intro-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(237, 244, 255, 0.24);
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+.intro-dot-on {
+  width: 20px;
+  background: var(--gold-warm, #d5ab61);
+}
+.intro-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+.intro-page {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 28px 20px 24px;
+  animation: intro-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.intro-page-back {
+  animation-name: intro-back;
+}
+@keyframes intro-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes intro-back {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+.reduce-motion .intro-page,
+.reduce-motion .intro-dot {
+  animation: none;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-page {
+    animation: none;
+  }
+}
+.intro-mark {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  margin: 8vh auto 28px;
+  border-radius: 28px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.12);
+  color: var(--gold-warm, #d5ab61);
+}
+.intro-title {
+  margin: 0 0 10px;
+  font-family: var(--display);
+  font-size: clamp(1.75rem, 7vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.intro-title-big {
+  text-align: center;
+  font-size: clamp(2rem, 8.5vw, 2.6rem);
+}
+.intro-title-big + .intro-lead {
+  text-align: center;
+  margin-inline: auto;
+}
+.intro-lead {
+  max-width: 34em;
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.intro-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.intro-rows li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 14px 16px;
+}
+.intro-rows li + li::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 66px;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+.intro-tile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: #fff;
+}
+.intro-tile-big {
+  width: 64px;
+  height: 64px;
+  margin: 4vh 0 20px;
+  border-radius: 18px;
+}
+.intro-tile-blue {
+  background: #2f7bf6;
+}
+.intro-tile-teal {
+  background: #1a9aa8;
+}
+.intro-tile-orange {
+  background: #e07b28;
+}
+.intro-tile-yellow {
+  background: #c99512;
+}
+.intro-tile-indigo {
+  background: #5a5ce0;
+}
+.intro-tile-green {
+  background: #2e9b55;
+}
+.intro-tile-pink {
+  background: #d4467a;
+}
+.intro-row-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.intro-row-text strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.intro-row-text span {
+  color: var(--muted);
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+.intro-foot {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 12px 20px 20px;
+}
+.intro-primary,
+.intro-secondary {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.intro-primary {
+  border: 0;
+  background: var(--gold-warm, #d5ab61);
+  color: #15120c;
+}
+.intro-secondary {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: inherit;
+}
+.intro-primary:active,
+.intro-secondary:active {
+  transform: scale(0.98);
+}
+.intro-done {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+.intro-done svg {
+  flex: none;
+  color: #4cc47a;
+}
+/* The account form and storage rows come from Settings; here they sit flat in the page. */
+.intro-account .auth-form,
+.intro-storage .setting-group {
+  margin: 0;
+  border-radius: 18px;
+}
+.intro-account .profile-settings {
+  display: none;
+}
+.intro-storage .setting-group > h3 {
+  display: none;
+}
+.intro-storage .setting-group > h3 + .setting-row,
+.intro-storage .setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.intro-storage .setting-control {
+  margin: 0;
+}
+.intro-storage button:disabled,
+.intro-account button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

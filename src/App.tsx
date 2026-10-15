@@ -114,6 +114,7 @@ import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
 import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
+import { Onboarding, readIntroStep, saveIntroStep } from './Onboarding'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
@@ -343,6 +344,17 @@ function App() {
   const [books, setBooks] = useState<LibraryBook[]>(() => readLibraryBooks())
   const [notes, setNotes] = useState<Note[]>(() => readLocalNotes())
   const [paths, setPaths] = useState<LearningPath[]>(() => readPaths())
+  // The first visit's introduction: new people only; someone with books or notes already has it marked done.
+  const [introStep, setIntroStep] = useState<number | null>(() => {
+    const saved = readIntroStep()
+    if (saved === 'done') return null
+    if (saved !== null) return saved
+    if (readLibraryBooks().length + readLocalNotes().length + readPaths().length > 0) {
+      saveIntroStep('done')
+      return null
+    }
+    return 0
+  })
   const [now, setNow] = useState(() => new Date())
   const [settings, setSettings] = useState<AppSettings>(() => readSettings())
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('account')
@@ -379,7 +391,9 @@ function App() {
   const [profileFirstName, setProfileFirstName] = useState(() => readProfileName())
   const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
-  const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>('sign-in')
+  const [authMode, setAuthMode] = useState<'sign-in' | 'sign-up'>(() =>
+    readIntroStep() === 'done' ? 'sign-in' : 'sign-up',
+  )
   const [recovering, setRecovering] = useState(false)
   const [shelfFilter, setShelfFilter] = useState('')
   const [commandOpen, setCommandOpen] = useState(false)
@@ -3044,44 +3058,7 @@ function App() {
             <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
           </button>
         </section>
-        <Group title="Your storage" icon={<Cloud size={18} />}>
-          {cloudProviders.map((provider) => {
-            const connection = signedIn
-              ? cloudConnectionForUser(
-                  cloudConnections.filter((item) => item.provider === provider.id),
-                  authUser?.id,
-                )
-              : undefined
-            const usable = Boolean(connection && cloudConnectionUsable(connection))
-            const detail = !provider.configured
-              ? 'Not set up on this site yet.'
-              : !connection
-                ? 'Backs up your library and finds books you keep there.'
-                : !usable
-                  ? 'The connection ended. Connect again.'
-                  : connection.readsFolders
-                    ? 'Connected on this device. Books not here come from it.'
-                    : 'Connected. Connect again to let Noesis read your folders.'
-            return (
-              <Row key={provider.id} title={provider.label} detail={detail}>
-                {connection && usable && connection.readsFolders ? (
-                  <button className="secondary-button" onClick={() => disconnectCloud(provider.id)}>
-                    Disconnect
-                  </button>
-                ) : (
-                  <button
-                    className="primary-button"
-                    onClick={() => void connectCloud(provider.id)}
-                    disabled={!signedIn || !provider.configured || !online}
-                  >
-                    {connection ? 'Connect again' : 'Connect'}
-                  </button>
-                )}
-              </Row>
-            )
-          })}
-          {!signedIn ? <p className="setting-note">Sign in first; each device connects its storage once.</p> : null}
-        </Group>
+        {storageGroup()}
         <Group title="Library folder" icon={<FolderOpen size={18} />}>
           {pickingFolder ? (
             (() => {
@@ -3194,6 +3171,130 @@ function App() {
       </>
     )
   }
+  function storageGroup() {
+    const signedIn = Boolean(authUser && !isAnonymousUser(authUser))
+    return (
+      <Group title="Your storage" icon={<Cloud size={18} />}>
+        {cloudProviders.map((provider) => {
+          const connection = signedIn
+            ? cloudConnectionForUser(
+                cloudConnections.filter((item) => item.provider === provider.id),
+                authUser?.id,
+              )
+            : undefined
+          const usable = Boolean(connection && cloudConnectionUsable(connection))
+          const detail = !provider.configured
+            ? 'Not set up on this site yet.'
+            : !connection
+              ? 'Backs up your library and finds books you keep there.'
+              : !usable
+                ? 'The connection ended. Connect again.'
+                : connection.readsFolders
+                  ? 'Connected on this device. Books not here come from it.'
+                  : 'Connected. Connect again to let Noesis read your folders.'
+          return (
+            <Row key={provider.id} title={provider.label} detail={detail}>
+              {connection && usable && connection.readsFolders ? (
+                <button className="secondary-button" onClick={() => disconnectCloud(provider.id)}>
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  className="primary-button"
+                  onClick={() => void connectCloud(provider.id)}
+                  disabled={!signedIn || !provider.configured || !online}
+                >
+                  {connection ? 'Connect again' : 'Connect'}
+                </button>
+              )}
+            </Row>
+          )
+        })}
+        {!signedIn ? <p className="setting-note">Sign in first; each device connects its storage once.</p> : null}
+      </Group>
+    )
+  }
+  function authForm() {
+    const anonymous = isAnonymousUser(authUser)
+    return (
+      <form className="auth-form panel-card" onSubmit={handleAuth}>
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={authMode === 'sign-in' ? 'auth-tab-active' : ''}
+            onClick={() => setAuthMode('sign-in')}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={authMode === 'sign-up' ? 'auth-tab-active' : ''}
+            onClick={() => setAuthMode('sign-up')}
+          >
+            Create account
+          </button>
+        </div>
+        {anonymous ? (
+          <div className="auth-callout">
+            Create an account to keep your notes and use your library on another device.
+          </div>
+        ) : null}
+        {authMode === 'sign-up' ? (
+          <label>
+            Name
+            <input
+              autoComplete="name"
+              value={authName}
+              onChange={(event) => setAuthName(event.target.value)}
+              placeholder="Your name"
+            />
+          </label>
+        ) : null}
+        <label>
+          Email
+          <input
+            type="email"
+            autoComplete={authMode === 'sign-in' ? 'email webauthn' : 'email'}
+            value={authEmail}
+            onChange={(event) => setAuthEmail(event.target.value)}
+            placeholder="you@example.com"
+          />
+        </label>
+        <label>
+          Password
+          <input
+            type="password"
+            autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'}
+            value={authPassword}
+            onChange={(event) => setAuthPassword(event.target.value)}
+            placeholder="At least 6 characters"
+          />
+        </label>
+        <button className="primary-button" type="submit" disabled={authBusy}>
+          {authBusy
+            ? 'Working…'
+            : authMode === 'sign-in'
+              ? 'Sign in'
+              : anonymous
+                ? 'Save this account'
+                : 'Create account'}
+        </button>
+        {authMode === 'sign-in' ? (
+          <button type="button" className="text-button auth-reset" onClick={() => void handleResetPassword()}>
+            Forgot password?
+          </button>
+        ) : null}
+        {authMode === 'sign-in' ? (
+          <PasskeySignIn onSignedIn={() => showNotice('Signed in.')} onNotice={showNotice} />
+        ) : null}
+        <p className="auth-footnote">
+          {authMode === 'sign-in' && books.length + notes.length + paths.length > 0
+            ? 'Your books, notes and paths on this device will be added to your account when you sign in. Anything already in the account stays too.'
+            : 'Your library stays on this device. Sign in to sync notes and books.'}
+        </p>
+      </form>
+    )
+  }
   function accountSection() {
     const anonymous = isAnonymousUser(authUser)
     return (
@@ -3243,86 +3344,7 @@ function App() {
             </div>
           </section>
         ) : null}
-        {authUser && !anonymous ? (
-          <PasskeysPanel onNotice={showNotice} />
-        ) : (
-          <form className="auth-form panel-card" onSubmit={handleAuth}>
-            <div className="auth-tabs">
-              <button
-                type="button"
-                className={authMode === 'sign-in' ? 'auth-tab-active' : ''}
-                onClick={() => setAuthMode('sign-in')}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                className={authMode === 'sign-up' ? 'auth-tab-active' : ''}
-                onClick={() => setAuthMode('sign-up')}
-              >
-                Create account
-              </button>
-            </div>
-            {anonymous ? (
-              <div className="auth-callout">
-                Create an account to keep your notes and use your library on another device.
-              </div>
-            ) : null}
-            {authMode === 'sign-up' ? (
-              <label>
-                Name
-                <input
-                  autoComplete="name"
-                  value={authName}
-                  onChange={(event) => setAuthName(event.target.value)}
-                  placeholder="Your name"
-                />
-              </label>
-            ) : null}
-            <label>
-              Email
-              <input
-                type="email"
-                autoComplete={authMode === 'sign-in' ? 'email webauthn' : 'email'}
-                value={authEmail}
-                onChange={(event) => setAuthEmail(event.target.value)}
-                placeholder="you@example.com"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'}
-                value={authPassword}
-                onChange={(event) => setAuthPassword(event.target.value)}
-                placeholder="At least 6 characters"
-              />
-            </label>
-            <button className="primary-button" type="submit" disabled={authBusy}>
-              {authBusy
-                ? 'Working…'
-                : authMode === 'sign-in'
-                  ? 'Sign in'
-                  : anonymous
-                    ? 'Save this account'
-                    : 'Create account'}
-            </button>
-            {authMode === 'sign-in' ? (
-              <button type="button" className="text-button auth-reset" onClick={() => void handleResetPassword()}>
-                Forgot password?
-              </button>
-            ) : null}
-            {authMode === 'sign-in' ? (
-              <PasskeySignIn onSignedIn={() => showNotice('Signed in.')} onNotice={showNotice} />
-            ) : null}
-            <p className="auth-footnote">
-              {authMode === 'sign-in' && books.length + notes.length + paths.length > 0
-                ? 'Your books, notes and paths on this device will be added to your account when you sign in. Anything already in the account stays too.'
-                : 'Your library stays on this device. Sign in to sync notes and books.'}
-            </p>
-          </form>
-        )}
+        {authUser && !anonymous ? <PasskeysPanel onNotice={showNotice} /> : authForm()}
       </>
     )
   }
@@ -3445,6 +3467,7 @@ function App() {
         signedInEmail={authUser && !isAnonymousUser(authUser) ? (authUser.email ?? undefined) : undefined}
         onExport={() => void downloadBackupFile(books, notes, paths)}
         onClearLocal={clearLocalData}
+        onIntro={() => setIntroStep(0)}
         onNotice={showNotice}
       />
     ) : (
@@ -4025,6 +4048,17 @@ function App() {
           onOpenWeather={() => setUtilityOverlay('weather')}
           onAddNote={() => openNotePanel()}
           onAskNoema={() => openNoemaPanel()}
+        />
+      ) : null}
+      {introStep !== null ? (
+        <Onboarding
+          start={introStep}
+          mark={<NoesisMark size={68} color="currentColor" />}
+          signedIn={Boolean(authUser && !isAnonymousUser(authUser))}
+          email={authUser?.email ?? undefined}
+          account={authForm()}
+          storage={storageGroup()}
+          onDone={() => setIntroStep(null)}
         />
       ) : null}
     </div>
