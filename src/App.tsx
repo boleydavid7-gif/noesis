@@ -3158,9 +3158,19 @@ function App() {
                 </button>
               </Row>
               <div className="setting-actions">
-                <button className="text-button" onClick={() => setPickingFolder(libraryFolder.provider)}>
-                  Choose another folder
-                </button>
+                {(() => {
+                  const here = cloudConnections
+                    .filter(
+                      (item) => item.ownerUserId === authUserId && cloudConnectionUsable(item) && item.readsFolders,
+                    )
+                    .map((item) => item.provider)
+                  const target = here.includes(libraryFolder.provider) ? libraryFolder.provider : here[0]
+                  return target ? (
+                    <button className="text-button" onClick={() => setPickingFolder(target)}>
+                      Choose another folder
+                    </button>
+                  ) : null
+                })()}
                 <button
                   className="text-button"
                   onClick={() => {
@@ -3239,9 +3249,23 @@ function App() {
           return (
             <Row key={provider.id} title={provider.label} detail={detail}>
               {connection && usable && connection.readsFolders ? (
-                <button className="secondary-button" onClick={() => disconnectCloud(provider.id)}>
-                  Disconnect
-                </button>
+                <span className="setting-buttons">
+                  <button
+                    className="primary-button"
+                    onClick={() =>
+                      void (async () => {
+                        await syncEverything()
+                        if (chosenLibraryFolder()?.provider === provider.id) await lookAtFolder()
+                      })()
+                    }
+                    disabled={cloudSyncing || folderBusy || !online}
+                  >
+                    <RotateCcw size={14} /> {cloudSyncing || folderBusy ? 'Syncing…' : 'Sync'}
+                  </button>
+                  <button className="text-button" onClick={() => disconnectCloud(provider.id)}>
+                    Disconnect
+                  </button>
+                </span>
               ) : (
                 <button
                   className="primary-button"

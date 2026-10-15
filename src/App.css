@@ -11517,3 +11517,10 @@ button.loan-title {
 .home-down > svg:last-child {
   color: var(--muted);
 }
+.setting-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
