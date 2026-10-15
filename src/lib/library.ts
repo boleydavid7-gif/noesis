@@ -1,5 +1,6 @@
 import { markDeleted, markRestored } from './tombstones'
-export type BookFormat = 'epub' | 'pdf' | 'resource' | 'web'
+// 'external': an e-book read in another app or store (Kindle, Libby…); Noesis keeps its details and a link to it.
+export type BookFormat = 'epub' | 'pdf' | 'resource' | 'web' | 'external'
 
 export type LibraryBook = {
   id: string
@@ -26,6 +27,8 @@ export type LibraryBook = {
   description?: string
   accessType?: 'public' | 'borrow'
   fileName?: string
+  externalUrl?: string // where an external e-book is read; its cover opens it
+  store?: string // the app or store it is read in
   fileSize?: number
   cfi?: string
   currentHref?: string

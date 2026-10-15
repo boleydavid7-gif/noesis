@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="notes-tile" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#1c4842"/><stop offset="0.55" stop-color="#6f9a6c"/><stop offset="1" stop-color="#f1d48c"/></linearGradient>
+    <radialGradient id="notes-light" cx="78%" cy="18%" r="60%"><stop offset="0" stop-color="#fff6dc" stop-opacity=".45"/><stop offset="1" stop-color="#fff6dc" stop-opacity="0"/></radialGradient>
+    <clipPath id="notes-clip"><rect width="1024" height="1024" rx="229"/></clipPath>
+    <filter id="notes-lift" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".25"/></filter>
+  </defs>
+  <g clip-path="url(#notes-clip)">
+    <rect width="1024" height="1024" fill="url(#notes-tile)"/>
+    <rect width="1024" height="1024" fill="url(#notes-light)"/>
+    <path d="M0 560 C220 520 420 600 600 700 C760 790 900 800 1024 760 V1024 H0 Z" fill="#163a35" opacity=".35"/>
+  </g>
+  <g filter="url(#notes-lift)"><g transform="translate(512 512) scale(0.88) translate(-500 -446)">
+  <path d="M300 300 H640 L740 400 V800 C740 822 722 840 700 840 H300 C278 840 260 822 260 800 V340 C260 318 278 300 300 300 Z" fill="#f6eedb"/>
+  <path d="M640 300 V372 C640 388 652 400 668 400 H740 Z" fill="#e6d8bb"/>
+  <path d="M330 520 H668 M330 616 H668 M330 712 H560" stroke="#6f9a6c" stroke-width="26" stroke-linecap="round"/>
+  <path d="M420 318 C410 250 430 196 470 150" fill="none" stroke="#f6eedb" stroke-width="20" stroke-linecap="round"/>
+  <path d="M470 160 C470 90 540 52 640 52 C632 140 568 186 470 160 Z" fill="#f6eedb"/>
+  <path d="M432 214 C380 216 320 190 296 128 C356 122 420 150 432 214 Z" fill="#f6eedb"/>
+  <path d="M486 150 C530 120 568 100 610 82" fill="none" stroke="#6f9a6c" stroke-width="10" stroke-linecap="round"/></g></g>
+</svg>

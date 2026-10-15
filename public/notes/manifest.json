@@ -7,12 +7,38 @@
   "scope": "/notes/",
   "display": "standalone",
   "orientation": "any",
-  "theme_color": "#06172a",
-  "background_color": "#06172a",
+  "theme_color": "#0f2a26",
+  "background_color": "#0f2a26",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/notes/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/notes/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/notes/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/notes/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ],
-  "shortcuts": [{ "name": "New note", "url": "/notes/?open=new" }]
+  "shortcuts": [
+    {
+      "name": "New note",
+      "url": "/notes/?open=new"
+    }
+  ]
 }

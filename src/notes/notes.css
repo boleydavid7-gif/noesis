@@ -594,3 +594,23 @@ body {
 .notes-book-head a {
   text-decoration: none;
 }
+/* Notebooks: an icon tile per kind, no covers */
+.notes-kind-book,
+.notes-kind-noesis {
+  background: #b98b3e;
+}
+.notes-kind-folder {
+  background: #5a7fa8;
+}
+.notes-kind-inbox {
+  background: #4f8f86;
+}
+.notes-book-head {
+  display: grid;
+  grid-template-columns: none;
+  justify-items: start;
+  gap: 6px;
+}
+.notes-book-head p {
+  margin: 0;
+}

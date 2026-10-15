@@ -124,6 +124,9 @@ import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
+import { AddExternalBook, Borrowed } from './Borrowed'
+import { newLoan, readLoans, writeLoans } from './lib/loans'
+import { cleanLink, linkLabel } from './lib/notesBooks'
 import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
 import { exploreInto, isExploring, questionsToPrepare, type EditSubject } from './lib/subjectExplore'
 import type { LearningPath } from './lib/pathPlan'
@@ -387,7 +390,9 @@ function App() {
     author: string
     cover?: string
     coverCleared: boolean
+    link?: string
   } | null>(null)
+  const [addingExternal, setAddingExternal] = useState(false)
   const [finishPrompt, setFinishPrompt] = useState<string | null>(null)
   const [finishStars, setFinishStars] = useState(0)
   const [finishLine, setFinishLine] = useState('')
@@ -1760,6 +1765,15 @@ function App() {
     showNotice(`${resource.title} was saved as a source link.`)
   }
   function openSavedBook(book: LibraryBook) {
+    // An external e-book is read where it lives: its cover opens the link.
+    if (book.format === 'external') {
+      if (book.externalUrl) window.open(book.externalUrl, '_blank', 'noopener')
+      else {
+        setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false, link: '' })
+        showNotice('Add a link to where you read it.')
+      }
+      return
+    }
     setReaderJump(null)
     setSelectedBookId(book.id)
     setActiveNav('Read')
@@ -1877,6 +1891,16 @@ function App() {
     } catch (reason) {
       showNotice(reason instanceof Error ? reason.message : 'Could not update your password.')
     }
+  }
+  function editBook(book: LibraryBook) {
+    setEditing({
+      book,
+      title: book.title,
+      author: book.author,
+      cover: undefined,
+      coverCleared: false,
+      link: book.externalUrl ?? '',
+    })
   }
   function deleteBook(book: LibraryBook) {
     if (settings.library.confirmDelete && !window.confirm(`Remove ${book.title} from your library?`)) return
@@ -2439,6 +2463,7 @@ function App() {
                 }}
               />
             ) : null}
+            <Borrowed books={books} onOpenBook={openSavedBook} compact />
             <ReadingShelfSection books={books} onOpen={openSavedBook} onImport={() => fileInput.current?.click()} />
             {learner ? (
               <FreeCopyContext.Provider value={addResource}>
@@ -2613,16 +2638,16 @@ function App() {
                 ) : null
               })()
             : null}
+          <Borrowed books={books} onOpenBook={openSavedBook} />
           <BookSection
-            books={filteredBooks}
+            title="On this device"
+            books={filteredBooks.filter((book) => book.format !== 'external')}
             onOpen={openSavedBook}
             onDelete={deleteBook}
             shelves={allShelves}
             onShelves={setBookShelves}
             onSeries={setBookSeries}
-            onEdit={(book) =>
-              setEditing({ book, title: book.title, author: book.author, cover: undefined, coverCleared: false })
-            }
+            onEdit={editBook}
             detailPane
             onFavorite={toggleFavorite}
             onRead={setBookRead}
@@ -2634,6 +2659,57 @@ function App() {
                     )
                 : undefined
             }
+          />
+          {addingExternal ? (
+            <AddExternalBook
+              onCancel={() => setAddingExternal(false)}
+              onSave={(details) => {
+                const stamp = new Date().toISOString()
+                const book: LibraryBook = {
+                  id: `external-${crypto.randomUUID()}`,
+                  title: details.title,
+                  author: details.author || 'Unknown author',
+                  progress: 0,
+                  chapter: details.store ?? 'External e-book',
+                  updated: stamp,
+                  added: stamp,
+                  cover: details.title,
+                  format: 'external',
+                  externalUrl: details.link,
+                  store: details.store,
+                }
+                setBooks(upsertLibraryBook(book))
+                if (details.due)
+                  writeLoans([
+                    ...readLoans(),
+                    newLoan({
+                      title: book.title,
+                      author: details.author || undefined,
+                      kind: 'ebook',
+                      due: details.due,
+                      lender: details.store === 'Libby' ? 'Libby' : details.store,
+                      bookId: book.id,
+                    }),
+                  ])
+                setAddingExternal(false)
+                showNotice(`${book.title} was added.`)
+              }}
+            />
+          ) : null}
+          <BookSection
+            title="External e-books"
+            books={filteredBooks.filter((book) => book.format === 'external')}
+            onOpen={openSavedBook}
+            onDelete={deleteBook}
+            onEdit={editBook}
+            shelves={allShelves}
+            onShelves={setBookShelves}
+            onSeries={setBookSeries}
+            onFavorite={toggleFavorite}
+            onRead={setBookRead}
+            onImport={() => setAddingExternal(true)}
+            importLabel="Add an external e-book"
+            emptyText="E-books you read in Kindle, Libby, Apple Books or anywhere else. Add one to keep it with your library."
           />
         </div>
       </Page>
@@ -3628,7 +3704,12 @@ function App() {
                   onMouseDown={(event) => event.stopPropagation()}
                   onSubmit={(event) => {
                     event.preventDefault()
-                    const { book, title, author, cover, coverCleared } = editing
+                    const { book, title, author, cover, coverCleared, link } = editing
+                    const externalUrl = link?.trim() ? cleanLink(link) : undefined
+                    if (link?.trim() && !externalUrl) {
+                      showNotice("That link doesn't look like a web address.")
+                      return
+                    }
                     try {
                       setBooks(
                         upsertLibraryBook({
@@ -3637,6 +3718,7 @@ function App() {
                           author: author.trim() || book.author,
                           coverDataUrl: coverCleared ? undefined : (cover ?? book.coverDataUrl),
                           coverUrl: coverCleared || cover ? undefined : book.coverUrl,
+                          externalUrl,
                           updated: new Date().toISOString(),
                         }),
                       )
@@ -3708,6 +3790,29 @@ function App() {
                       </button>
                     </span>
                   </div>
+                  {editing.book.format === 'external' || editing.link ? (
+                    <label>
+                      Where you read it
+                      <span className="edit-link-row">
+                        <input
+                          type="url"
+                          inputMode="url"
+                          value={editing.link ?? ''}
+                          onChange={(event) => setEditing({ ...editing, link: event.target.value })}
+                          placeholder="The book's page in Kindle, Libby or a store"
+                        />
+                        {editing.link ? (
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => setEditing({ ...editing, link: '' })}
+                          >
+                            Remove link
+                          </button>
+                        ) : null}
+                      </span>
+                    </label>
+                  ) : null}
                   <div className="recovery-actions">
                     <button className="primary-button" type="submit">
                       Save
@@ -4179,7 +4284,13 @@ function BookSection({
   onIntent,
   onFavorite,
   onRead,
+  title = 'My library',
+  importLabel = 'Import',
+  emptyText = 'No books yet. Import a book file, or look in Explore.',
 }: {
+  title?: string
+  importLabel?: string
+  emptyText?: string
   detailPane?: boolean
   onFavorite?: (book: LibraryBook) => void
   onRead?: (book: LibraryBook, read: boolean) => void
@@ -4202,25 +4313,33 @@ function BookSection({
     <section className={'section-block library-section' + (split ? ' library-split' : '')}>
       <div className="section-heading">
         <div>
-          <h2>My library</h2>
+          <h2>{title}</h2>
         </div>
         {onImport ? (
           <button className="text-button" onClick={onImport}>
-            Import <Upload size={14} />
+            {importLabel} {importLabel === 'Import' ? <Upload size={14} /> : <Plus size={14} />}
           </button>
         ) : null}
       </div>
       {books.length === 0 ? (
-        <div className="empty-state">No books yet. Import a book file, or look in Explore.</div>
+        <div className="empty-state">{emptyText}</div>
       ) : (
         <div className="library-split-body">
           <div className="book-grid">
             {books.map((book) => (
               <div className={'book-card-wrap' + (preview?.id === book.id ? ' book-card-selected' : '')} key={book.id}>
-                <button className="book-card" onClick={() => (split ? setPreviewId(book.id) : onOpen(book))}>
+                <button
+                  className="book-card"
+                  onClick={() => (split && book.format !== 'external' ? setPreviewId(book.id) : onOpen(book))}
+                  title={
+                    book.format === 'external' && book.externalUrl
+                      ? `Open at ${linkLabel(book.externalUrl)}`
+                      : undefined
+                  }
+                >
                   <div className="book-card-cover">
                     <BookCover book={book} compact />
-                    <ProgressRing value={book.progress} />
+                    {book.format === 'external' ? null : <ProgressRing value={book.progress} />}
                     {book.cloudAt ? (
                       <span className="book-cloud-mark" title="Synced to your cloud" aria-label="Synced to your cloud">
                         <Cloud size={12} />
@@ -4231,7 +4350,11 @@ function BookSection({
                         <Check size={13} />
                       </span>
                     ) : null}
-                    {book.accessType === 'borrow' ? (
+                    {book.format === 'external' ? (
+                      <span className="book-card-badge">
+                        {book.store ?? 'External'} <ExternalLink size={10} />
+                      </span>
+                    ) : book.accessType === 'borrow' ? (
                       <span className="book-card-badge">Borrowed</span>
                     ) : book.format === 'resource' ? (
                       <span className="book-card-badge">Source</span>
@@ -4325,7 +4448,11 @@ function BookSection({
                   </button>
                 ) : null}
                 <button className="primary-button" onClick={() => onOpen(preview)}>
-                  {preview.progress > 0 ? 'Continue reading' : 'Start reading'}
+                  {preview.format === 'external' && preview.externalUrl
+                    ? `Open at ${linkLabel(preview.externalUrl)}`
+                    : preview.progress > 0
+                      ? 'Continue reading'
+                      : 'Start reading'}
                 </button>
                 {onEdit ? (
                   <button className="secondary-button" onClick={() => onEdit(preview)}>

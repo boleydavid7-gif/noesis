@@ -150,12 +150,19 @@ and a Wrangler dry run. The live health endpoint is
   scope `/notes/`, installable on its own; built beside Noesis as a second Vite input; `sw.js` keeps each page for
   offline). It shows the same notes as Second Brain (`lib/knowledge.ts`, now up to 2,000 on the device and from the
   account, with `onNotesChanged` so either app sees the other's changes) grouped as notebooks (`lib/notesBooks.ts`):
-  books kept outside Noesis (synced preference `noesis:notes-books:v1`: title, author, cover, paper / e-book / library
-  loan / audiobook, where I am, pages, and a link to where it is read), books in the Noesis library ("Open in Noesis"
-  opens `/?book=ID`), books named only by title, named notebooks, and the inbox. A book's page has chapters as
+  notebooks named after a book (synced preference `noesis:notes-books:v1`, title and author only; a Noesis library
+  book is picked from a list), books in the Noesis library ("Open in Noesis" opens `/?book=ID`), books named only by
+  title, named notebooks, and the inbox. Notes is notes only: no covers or book details; notebooks show a kind icon.
+  Its own icon (`scripts/icons/notes.mjs`: a ruled page with a sprout). A book's page has chapters as
   sections (reading order, notes by page) and a filter (Quotes, Notes, Questions, Ideas); a note has a kind, a quote,
-  page, chapter, title, words and tags. Edit book: cover from cover search, a photo, or an address, Remove cover; the
-  link (Remove link); tapping the cover opens the link. Search finds every word across all notes. Second Brain links
+  page, chapter, title, words and tags. Search finds every word across all notes. Second Brain links
   to it. Notes reach a connected Google Drive, OneDrive or Dropbox through Noesis's Backup & Sync the next time Noesis
   syncs. Next: notes in IndexedDB with the person's own storage holding the full set (beyond 2,000), photo of a page
   to text, Kindle and Readwise imports, links to subjects, review cards, Markdown export, three panes on computers.
+- Library sections: Borrowed, On this device, External e-books. An external e-book (`format: 'external'`,
+  `externalUrl`, `store`) has no file; its cover opens the link (Kindle, Libby, Apple Books…), and Edit details,
+  shelves, favorite and Remove work as for books on the device; with no link, opening asks for one.
+- Borrowed (`lib/loans.ts`, `Borrowed.tsx`, synced preference `noesis:loans:v1`): e-book, audiobook or paper loans
+  with a due date ("Due in 3 days", "Was due Oct 10"). Renew opens `renewLink` (the loan's own link, else the Libby
+  shelf for digital copies, else the chosen library's BiblioCommons "checked out" page or website) and asks for the
+  new date; Returned with undo. Home shows loans due within three days.

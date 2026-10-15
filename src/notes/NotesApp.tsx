@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   BookOpen,
   ExternalLink,
-  Pencil,
   ChevronRight,
   FolderClosed,
   HelpCircle,
@@ -31,10 +30,7 @@ import {
 } from '../lib/knowledge'
 import { onLibraryChanged, readLibraryBooks, type LibraryBook } from '../lib/library'
 import {
-  BOOK_FORMATS,
   NOTE_KINDS,
-  cleanLink,
-  linkLabel,
   newNotesBook,
   noteFor,
   noteHeadline,
@@ -43,13 +39,10 @@ import {
   searchNotes,
   sectionsOf,
   writeNotesBooks,
-  type BookFormat,
   type Notebook,
   type NotesBook,
 } from '../lib/notesBooks'
 import { markDeleted } from '../lib/tombstones'
-import { resizeCover } from '../lib/libraryTools'
-import { CoverFinder } from '../CoverFinder'
 
 type View =
   | { kind: 'home' }
@@ -205,7 +198,6 @@ export function NotesApp() {
           onBack={back}
           onOpenNote={(id) => go({ kind: 'note', id, from: current.key })}
           onNew={() => go({ kind: 'new', notebook: current.key })}
-          onBook={(book) => saveOutside(outside.map((item) => (item.id === book.id ? book : item)))}
           onRemoveBook={(book) => {
             const before = outside
             saveOutside(outside.filter((item) => item.id !== book.id))
@@ -255,15 +247,16 @@ export function NotesApp() {
         </div>
       ) : null}
       {adding ? (
-        <AddBook
+        <BookPicker
           library={library}
           onClose={() => setAdding(false)}
-          onAdd={(book) => {
+          onTitle={(title, author) => {
+            const book = newNotesBook({ title, author, format: 'paper' })
             saveOutside([book, ...outside])
             setAdding(false)
             go({ kind: 'notebook', key: book.id })
           }}
-          onOpenNoesis={(book) => {
+          onPickNoesis={(book) => {
             setAdding(false)
             go({ kind: 'notebook', key: `noesis-${book.id}` })
           }}
@@ -303,13 +296,12 @@ function TopBar({ onBack, title, children }: { onBack?: () => void; title: strin
   )
 }
 
-function Cover({ notebook, size = 'small' }: { notebook: Notebook; size?: 'small' | 'large' }) {
+// Notebooks are told apart by a small icon: a book, a folder, or the inbox. No covers here; books live in Noesis.
+function NotebookIcon({ notebook }: { notebook: Notebook }) {
   const Icon = notebook.kind === 'folder' ? FolderClosed : notebook.kind === 'inbox' ? Inbox : BookOpen
-  return notebook.coverUrl ? (
-    <img className={`notes-cover notes-cover-${size}`} src={notebook.coverUrl} alt="" referrerPolicy="no-referrer" />
-  ) : (
-    <span className={`notes-cover notes-cover-${size} notes-cover-blank`} aria-hidden="true">
-      {notebook.kind === 'book' || notebook.kind === 'noesis' ? notebook.title.slice(0, 1) : <Icon size={18} />}
+  return (
+    <span className={`notes-kind notes-kind-${notebook.kind}`} aria-hidden="true">
+      <Icon size={16} />
     </span>
   )
 }
@@ -391,24 +383,17 @@ function Home({
             <div className="notes-section-head">
               <h2>Books</h2>
               <button className="notes-link" onClick={onAdd}>
-                <Plus size={14} /> Add a book
+                <Plus size={14} /> Notes for a book
               </button>
             </div>
             {books.length ? (
-              <div className="notes-shelf">
+              <div className="notes-list">
                 {books.map((book) => (
-                  <button key={book.key} className="notes-book" onClick={() => onOpen(book.key)}>
-                    <Cover notebook={book} size="large" />
-                    <strong>{book.title}</strong>
-                    <small>
-                      {book.notes.length} {book.notes.length === 1 ? 'note' : 'notes'}
-                      {book.kind === 'noesis' ? ' · in Noesis' : ''}
-                    </small>
-                  </button>
+                  <NotebookRow key={book.key} notebook={book} onOpen={() => onOpen(book.key)} />
                 ))}
               </div>
             ) : (
-              <p className="notes-empty">No books yet.</p>
+              <p className="notes-empty">No book notebooks yet.</p>
             )}
           </section>
           <section className="notes-section">
@@ -463,7 +448,7 @@ function Home({
 function NotebookRow({ notebook, onOpen }: { notebook: Notebook; onOpen: () => void }) {
   return (
     <button className="notes-row" onClick={onOpen}>
-      <Cover notebook={notebook} />
+      <NotebookIcon notebook={notebook} />
       <span className="notes-row-text">
         <strong>{notebook.title}</strong>
         <small>
@@ -509,18 +494,15 @@ function NotebookPage({
   onBack,
   onOpenNote,
   onNew,
-  onBook,
   onRemoveBook,
 }: {
   notebook: Notebook
   onBack: () => void
   onOpenNote: (id: string) => void
   onNew: () => void
-  onBook: (book: NotesBook) => void
   onRemoveBook: (book: NotesBook) => void
 }) {
   const [kind, setKind] = useState<BrainNoteKind | 'all'>('all')
-  const [editing, setEditing] = useState(false)
   const kinds = NOTE_KINDS.filter((item) => notebook.notes.some((note) => note.kind === item.id))
   const shown = notebook.notes.filter((note) => kind === 'all' || note.kind === kind)
   const sections = sectionsOf(shown)
@@ -528,67 +510,18 @@ function NotebookPage({
   return (
     <div className="notes-page">
       <TopBar onBack={onBack} title="Notes">
-        {book ? (
-          <button className="notes-link" onClick={() => setEditing(true)}>
-            <Pencil size={14} /> Edit
-          </button>
-        ) : null}
         <button className="notes-primary notes-small" onClick={onNew}>
           <Plus size={15} /> Note
         </button>
       </TopBar>
       <header className="notes-book-head">
-        {book?.link ? (
-          <a
-            href={book.link}
-            target="_blank"
-            rel="noreferrer noopener"
-            aria-label={`Open ${notebook.title} at ${linkLabel(book.link)}`}
-          >
-            <Cover notebook={notebook} size="large" />
+        <h1>{notebook.title}</h1>
+        {notebook.author ? <p>{notebook.author}</p> : null}
+        {notebook.kind === 'noesis' && notebook.libraryBook ? (
+          <a className="notes-chip notes-chip-link" href={`/?book=${encodeURIComponent(notebook.libraryBook.id)}`}>
+            Open in Noesis <ExternalLink size={11} aria-hidden="true" />
           </a>
-        ) : (
-          <Cover notebook={notebook} size="large" />
-        )}
-        <div>
-          <h1>{notebook.title}</h1>
-          {notebook.author ? <p>{notebook.author}</p> : null}
-          <div className="notes-chips">
-            {book ? (
-              <span className="notes-chip">{BOOK_FORMATS.find((item) => item.id === book.format)?.label}</span>
-            ) : null}
-            {book?.link ? (
-              <a className="notes-chip notes-chip-link" href={book.link} target="_blank" rel="noreferrer noopener">
-                Open at {linkLabel(book.link)} <ExternalLink size={11} aria-hidden="true" />
-              </a>
-            ) : null}
-            {notebook.kind === 'noesis' && notebook.libraryBook ? (
-              <a className="notes-chip notes-chip-link" href={`/?book=${encodeURIComponent(notebook.libraryBook.id)}`}>
-                Open in Noesis
-              </a>
-            ) : null}
-          </div>
-          {book ? (
-            <label className="notes-place">
-              Where I am: p.
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={book.page ?? ''}
-                onChange={(event) =>
-                  onBook({
-                    ...book,
-                    page: event.target.value ? Math.max(0, Math.round(Number(event.target.value))) : undefined,
-                    updated: new Date().toISOString(),
-                  })
-                }
-                aria-label="Page you are on"
-              />
-              {book.pages ? <span>of {book.pages}</span> : null}
-            </label>
-          ) : null}
-        </div>
+        ) : null}
       </header>
       {kinds.length > 1 ? (
         <div className="notes-filter" role="tablist" aria-label="Show">
@@ -622,19 +555,9 @@ function NotebookPage({
           </button>
         </section>
       )}
-      {book && editing ? (
-        <EditBook
-          book={book}
-          onClose={() => setEditing(false)}
-          onSave={(next) => {
-            onBook({ ...next, updated: new Date().toISOString() })
-            setEditing(false)
-          }}
-        />
-      ) : null}
       {book ? (
         <button className="notes-link notes-danger" onClick={() => onRemoveBook(book)}>
-          <Trash2 size={14} /> Remove this book (its notes stay)
+          <Trash2 size={14} /> Remove this notebook (its notes stay)
         </button>
       ) : null}
     </div>
@@ -775,29 +698,20 @@ function NoteEditor({
   )
 }
 
-type Found = { id: string; title: string; author: string; year?: number; coverUrl?: string; source: string }
-
-function AddBook({
+// Notes for a book: one from the Noesis library (where covers, links and loans are kept), or any title typed in.
+function BookPicker({
   library,
   onClose,
-  onAdd,
-  onOpenNoesis,
+  onTitle,
+  onPickNoesis,
 }: {
   library: LibraryBook[]
   onClose: () => void
-  onAdd: (book: NotesBook) => void
-  onOpenNoesis: (book: LibraryBook) => void
+  onTitle: (title: string, author: string) => void
+  onPickNoesis: (book: LibraryBook) => void
 }) {
   const [query, setQuery] = useState('')
-  const [found, setFound] = useState<Found[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [picked, setPicked] = useState<Found | null>(null)
-  const [format, setFormat] = useState<BookFormat>('paper')
-  const [manual, setManual] = useState(false)
-  const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
-
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -805,355 +719,74 @@ function AddBook({
     window.addEventListener('keydown', close)
     return () => window.removeEventListener('keydown', close)
   }, [onClose])
-
-  async function look(event: React.FormEvent) {
-    event.preventDefault()
-    if (query.trim().length < 2) return
-    setBusy(true)
-    setError('')
-    try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
-      const body = (await response.json()) as { ok?: boolean; error?: string; results?: Array<Record<string, unknown>> }
-      if (!response.ok || !body.ok) throw new Error(body.error || 'Books could not be looked up right now.')
-      const seen = new Set<string>()
-      setFound(
-        (body.results ?? [])
-          .filter((row) => typeof row.title === 'string')
-          .map((row) => ({
-            id: String(row.id ?? row.title),
-            title: String(row.title),
-            author: typeof row.author === 'string' && row.author !== 'Unknown author' ? row.author : '',
-            year: typeof row.year === 'number' ? row.year : undefined,
-            coverUrl: typeof row.coverUrl === 'string' ? row.coverUrl : undefined,
-            source: String(row.source ?? ''),
-          }))
-          .filter((row) => {
-            const key = `${row.title}|${row.author}`.toLowerCase()
-            return !seen.has(key) && Boolean(seen.add(key))
-          })
-          .slice(0, 12),
-      )
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Books could not be looked up right now.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const inLibrary = library.filter(
-    (book) => !query.trim() || `${book.title} ${book.author}`.toLowerCase().includes(query.trim().toLowerCase()),
-  )
-
+  const words = query.trim().toLowerCase()
+  const matches = library.filter((book) => !words || `${book.title} ${book.author}`.toLowerCase().includes(words))
   return (
     <div className="notes-sheet-backdrop" onClick={onClose}>
       <div
         className="notes-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="Add a book"
+        aria-label="Notes for a book"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="notes-topbar">
           <button className="notes-back" onClick={onClose}>
             Cancel
           </button>
-          <span className="notes-editor-where">Add a book</span>
+          <span className="notes-editor-where">Notes for a book</span>
           <span />
         </header>
-        {picked || manual ? (
-          <div className="notes-fields">
-            {picked ? (
-              <div className="notes-picked">
-                {picked.coverUrl ? <img src={picked.coverUrl} alt="" referrerPolicy="no-referrer" /> : null}
-                <div>
-                  <strong>{picked.title}</strong>
-                  <small>{[picked.author, picked.year].filter(Boolean).join(' · ')}</small>
-                </div>
-              </div>
-            ) : (
-              <>
-                <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" autoFocus />
-                <input
-                  value={author}
-                  onChange={(event) => setAuthor(event.target.value)}
-                  placeholder="Author (optional)"
-                />
-              </>
-            )}
-            <div className="notes-segmented" role="radiogroup" aria-label="Kind of copy">
-              {BOOK_FORMATS.map((item) => (
-                <button key={item.id} role="radio" aria-checked={format === item.id} onClick={() => setFormat(item.id)}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="notes-primary"
-              disabled={!picked && !title.trim()}
-              onClick={() =>
-                onAdd(
-                  newNotesBook({
-                    title: picked?.title ?? title,
-                    author: picked?.author ?? author,
-                    coverUrl: picked?.coverUrl,
-                    year: picked?.year,
-                    format,
-                  }),
-                )
-              }
-            >
-              Add
-            </button>
-            <button
-              className="notes-link"
-              onClick={() => {
-                setPicked(null)
-                setManual(false)
-              }}
-            >
-              Back to search
-            </button>
-          </div>
-        ) : (
-          <>
-            <form className="notes-search" onSubmit={look}>
-              <Search size={16} aria-hidden="true" />
-              <input
-                type="search"
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Title or author"
-                aria-label="Title or author"
-              />
-            </form>
-            {busy ? <p className="notes-empty">Looking…</p> : null}
-            {error ? <p className="notes-empty">{error}</p> : null}
-            {found?.length ? (
-              <div className="notes-list">
-                {found.map((row) => (
-                  <button key={row.id} className="notes-row" onClick={() => setPicked(row)}>
-                    {row.coverUrl ? (
-                      <img
-                        className="notes-cover notes-cover-small"
-                        src={row.coverUrl}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="notes-cover notes-cover-small notes-cover-blank">{row.title.slice(0, 1)}</span>
-                    )}
-                    <span className="notes-row-text">
-                      <strong>{row.title}</strong>
-                      <small>{[row.author, row.year].filter(Boolean).join(' · ')}</small>
-                    </span>
-                    <ChevronRight size={16} className="notes-chevron" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            ) : found ? (
-              <p className="notes-empty">No books found. Type it in instead.</p>
-            ) : null}
-            <button className="notes-link" onClick={() => setManual(true)}>
-              Type it in instead
-            </button>
-            {inLibrary.length ? (
-              <section className="notes-section">
-                <h2>In your Noesis library</h2>
-                <div className="notes-list">
-                  {inLibrary.slice(0, 20).map((book) => (
-                    <button key={book.id} className="notes-row" onClick={() => onOpenNoesis(book)}>
-                      {book.coverDataUrl || book.coverUrl ? (
-                        <img
-                          className="notes-cover notes-cover-small"
-                          src={book.coverDataUrl || book.coverUrl}
-                          alt=""
-                        />
-                      ) : (
-                        <span className="notes-cover notes-cover-small notes-cover-blank">
-                          {book.title.slice(0, 1)}
-                        </span>
-                      )}
-                      <span className="notes-row-text">
-                        <strong>{book.title}</strong>
-                        <small>{book.author}</small>
-                      </span>
-                      <ChevronRight size={16} className="notes-chevron" aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// A book kept outside Noesis: its details, its cover (found online, a photo, or an address), and where to read it.
-function EditBook({
-  book,
-  onClose,
-  onSave,
-}: {
-  book: NotesBook
-  onClose: () => void
-  onSave: (book: NotesBook) => void
-}) {
-  const [draft, setDraft] = useState(book)
-  const [link, setLink] = useState(book.link ?? '')
-  const [coverAddress, setCoverAddress] = useState('')
-  const [finding, setFinding] = useState(false)
-  const [problem, setProblem] = useState('')
-  const set = (change: Partial<NotesBook>) => setDraft((current) => ({ ...current, ...change }))
-  const linkOk = !link.trim() || Boolean(cleanLink(link))
-  return (
-    <div className="notes-sheet-backdrop" onClick={onClose}>
-      <div
-        className="notes-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Edit book"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="notes-topbar">
-          <button className="notes-back" onClick={onClose}>
-            Cancel
-          </button>
-          <span className="notes-editor-where">Edit book</span>
-          <button
-            className="notes-primary notes-small"
-            disabled={!draft.title.trim() || !linkOk}
-            onClick={() =>
-              onSave({ ...draft, title: draft.title.trim(), author: draft.author.trim(), link: cleanLink(link) })
-            }
-          >
-            Done
-          </button>
-        </header>
-        <div className="notes-edit-cover">
-          {draft.coverUrl ? (
-            <img src={draft.coverUrl} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="notes-cover notes-cover-large notes-cover-blank">{draft.title.slice(0, 1)}</span>
-          )}
-          <div className="notes-edit-cover-actions">
-            <button className="notes-link" onClick={() => setFinding(true)}>
-              Find a cover
-            </button>
-            <label className="notes-link">
-              Choose a photo
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (!file) return
-                  resizeCover(file).then(
-                    (dataUrl) => set({ coverUrl: dataUrl }),
-                    () => setProblem('That picture could not be read.'),
-                  )
-                }}
-              />
-            </label>
-            {draft.coverUrl ? (
-              <button className="notes-link notes-danger" onClick={() => set({ coverUrl: undefined })}>
-                Remove cover
-              </button>
-            ) : null}
-          </div>
-        </div>
-        <div className="notes-inline-form">
+        <label className="notes-search">
+          <Search size={16} aria-hidden="true" />
           <input
-            value={coverAddress}
-            onChange={(event) => setCoverAddress(event.target.value)}
-            placeholder="Or paste a picture's address"
-            aria-label="Cover picture address"
-          />
-          <button
-            className="notes-link"
-            disabled={!cleanLink(coverAddress)}
-            onClick={() => {
-              set({ coverUrl: cleanLink(coverAddress) })
-              setCoverAddress('')
-            }}
-          >
-            Use
-          </button>
-        </div>
-        {problem ? <p className="notes-empty">{problem}</p> : null}
-        <div className="notes-fields">
-          <input
-            value={draft.title}
-            onChange={(event) => set({ title: event.target.value })}
+            type="search"
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder="Title"
             aria-label="Title"
           />
-          <input
-            value={draft.author}
-            onChange={(event) => set({ author: event.target.value })}
-            placeholder="Author (optional)"
-            aria-label="Author"
-          />
-          <div className="notes-segmented" role="radiogroup" aria-label="Kind of copy">
-            {BOOK_FORMATS.map((item) => (
-              <button
-                key={item.id}
-                role="radio"
-                aria-checked={draft.format === item.id}
-                onClick={() => set({ format: item.id })}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <label className="notes-field-label">
-            Where you read it (optional)
-            <input
-              type="url"
-              inputMode="url"
-              value={link}
-              onChange={(event) => setLink(event.target.value)}
-              placeholder="e.g. a Kindle, Libby, store or library page"
-              aria-invalid={!linkOk}
-            />
-          </label>
-          {!linkOk ? <p className="notes-empty">That doesn't look like a web address.</p> : null}
-          {link.trim() ? (
-            <button className="notes-link notes-danger" onClick={() => setLink('')}>
-              Remove link
-            </button>
-          ) : null}
-          <label className="notes-field-label">
-            Pages (optional)
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={draft.pages ?? ''}
-              onChange={(event) =>
-                set({ pages: event.target.value ? Math.max(1, Math.round(Number(event.target.value))) : undefined })
-              }
-            />
-          </label>
-        </div>
-      </div>
-      {finding ? (
-        <div onClick={(event) => event.stopPropagation()}>
-          <CoverFinder
-            title={draft.title}
-            author={draft.author}
-            onClose={() => setFinding(false)}
-            onPick={(cover) => {
-              set({ coverUrl: cover })
-              setFinding(false)
+        </label>
+        {query.trim() ? (
+          <form
+            className="notes-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              onTitle(query.trim(), author.trim())
             }}
-          />
-        </div>
-      ) : null}
+          >
+            <input
+              value={author}
+              onChange={(event) => setAuthor(event.target.value)}
+              placeholder="Author (optional)"
+              aria-label="Author"
+            />
+            <button className="notes-primary" type="submit">
+              Start “{query.trim().slice(0, 40)}”
+            </button>
+          </form>
+        ) : null}
+        {matches.length ? (
+          <section className="notes-section">
+            <h2>In your Noesis library</h2>
+            <div className="notes-list">
+              {matches.slice(0, 30).map((book) => (
+                <button key={book.id} className="notes-row" onClick={() => onPickNoesis(book)}>
+                  <span className="notes-kind notes-kind-noesis" aria-hidden="true">
+                    <BookOpen size={16} />
+                  </span>
+                  <span className="notes-row-text">
+                    <strong>{book.title}</strong>
+                    <small>{book.author}</small>
+                  </span>
+                  <ChevronRight size={16} className="notes-chevron" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
     </div>
   )
 }

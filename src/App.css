@@ -11263,3 +11263,165 @@ input[type='radio'] {
 .brain-notes-link svg {
   color: var(--gold-soft, #ead4a2);
 }
+
+/* Borrowed: due dates for loans, on the library page and (when due soon) on Home. */
+.borrowed .loan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.loan-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+}
+.loan-row + .loan-row {
+  border-top: 1px solid var(--line);
+}
+.loan-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.14);
+  color: rgb(var(--accent-rgb, 220, 194, 142));
+}
+.loan-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.loan-title {
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+button.loan-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.loan-body small {
+  color: var(--muted);
+}
+.loan-due {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.loan-row-soon .loan-due {
+  color: rgb(var(--accent-rgb, 220, 194, 142));
+  font-weight: 600;
+}
+.loan-actions,
+.loan-renew-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+.loan-actions .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.loan-renew-form input {
+  min-width: 0;
+}
+.loan-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.loan-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.loan-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.loan-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.loan-kinds button {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.loan-kinds button[aria-checked='true'] {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.6);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
+}
+.loan-form label.loan-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.loan-past {
+  margin-top: 10px;
+  color: var(--muted);
+}
+.loan-past summary {
+  cursor: pointer;
+}
+.loan-past ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.loan-past li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.loan-undo {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.borrowed-compact .loan-row {
+  padding: 10px 12px;
+}
+.edit-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.edit-link-row input {
+  flex: 1;
+  min-width: 0;
+}
+.book-card-badge svg {
+  vertical-align: -1px;
+}
