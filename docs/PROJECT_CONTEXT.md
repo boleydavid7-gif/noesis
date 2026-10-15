@@ -186,3 +186,9 @@ and a Wrangler dry run. The live health endpoint is
   tried again. OneDrive renews through the Worker's `/api/cloud-token` when the secret `ONEDRIVE_CLIENT_SECRET` is set
   (`oneDriveRenews` in `/api/config`; Microsoft gives a browser-only registration 24-hour renewals, a Web one 90 days);
   each connection records `viaServer` so older ones keep renewing the way they were made.
+- One book, one record (`lib/duplicates.ts`, effect in App): copies of the same file (format, file name ignoring
+  case, size) under different ids, from adding a book on two devices or from the library folder on each, are folded
+  after any sync. The earliest added (then smallest id) is kept so every device agrees; it takes the furthest reading
+  place and anything set on either copy. Notes, review cards, loans, reading diary, rabbit holes' books and the
+  folder map move to it, a copy's file moves over when the kept one has none here, and the copy is tombstoned so no
+  sync brings it back.

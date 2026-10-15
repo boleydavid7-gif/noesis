@@ -69,6 +69,8 @@ import {
   removeLibraryBook,
   saveBookText,
   saveEpubFile,
+  loadEpubFile,
+  deleteEpubFile,
   onLibraryChanged,
   shrinkStoredCovers,
   upsertLibraryBook,
@@ -97,7 +99,8 @@ import { discoverQuery, interestTerms, libraryPicks } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
-import { readDiary } from './lib/diary'
+import { readDiary, writeDiary } from './lib/diary'
+import { foldDuplicates } from './lib/duplicates'
 import { dueNotes, revisitDate } from './lib/noteLinks'
 import { BOOKMARK_TAG, isBookmark } from './lib/bookmarks'
 import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
@@ -2083,6 +2086,62 @@ function App() {
     }
   }
   const syncLibraryFolderRef = useLatest(syncLibraryFolder)
+  // One book added on two devices (or brought in from the library folder on each before they synced) has two ids;
+  // after any sync the copies are folded into one, and everything that pointed at a copy points at the one kept.
+  const folding = useRef(false)
+  useEffect(() => {
+    if (folding.current) return
+    const { books: folded, moved } = foldDuplicates(readLibraryBooks())
+    const drops = Object.keys(moved)
+    if (!drops.length) return
+    folding.current = true
+    void (async () => {
+      try {
+        // A copy's file goes to the one kept when that one has none on this device.
+        for (const [drop, keep] of Object.entries(moved)) {
+          const kept = await loadEpubFile(keep).catch(() => null)
+          const bytes = kept ? null : await loadEpubFile(drop).catch(() => null)
+          if (bytes) await saveEpubFile(keep, bytes)
+          if (kept || bytes) await deleteEpubFile(drop).catch(() => undefined)
+        }
+        const to = (id?: string) => (id && moved[id]) || id
+        const stamp = new Date().toISOString()
+        writeLibraryBooks(folded)
+        for (const drop of drops) markDeleted('book', drop)
+        const nextNotes = readLocalNotes().map((note) =>
+          note.bookId && moved[note.bookId] ? { ...note, bookId: to(note.bookId), updated: stamp } : note,
+        )
+        writeLocalNotes(nextNotes)
+        writeReviewCards(
+          readReviewCards().map((card) =>
+            card.bookId && moved[card.bookId] ? { ...card, bookId: to(card.bookId) } : card,
+          ),
+        )
+        writeLoans(
+          readLoans().map((loan) => (loan.bookId && moved[loan.bookId] ? { ...loan, bookId: to(loan.bookId) } : loan)),
+        )
+        writeDiary(
+          readDiary().map((entry) => (moved[entry.bookId] ? { ...entry, bookId: moved[entry.bookId] } : entry)),
+        )
+        const map = folderBooks()
+        for (const path of Object.keys(map))
+          if (moved[map[path].bookId]) map[path] = { ...map[path], bookId: moved[map[path].bookId] }
+        saveFolderBooks(map)
+        const nextPaths = readPaths().map((path) =>
+          path.bookIds.some((id) => moved[id])
+            ? { ...path, bookIds: [...new Set(path.bookIds.map((id) => moved[id] ?? id))], updated: stamp }
+            : path,
+        )
+        writePaths(nextPaths)
+        setBooks(folded)
+        setNotes(nextNotes)
+        setPaths(nextPaths)
+        if (selectedBookId && moved[selectedBookId]) setSelectedBookId(moved[selectedBookId])
+      } finally {
+        folding.current = false
+      }
+    })()
+  }, [books, selectedBookId])
   // The library folder is looked through a moment after opening and on coming back to Noesis (at most once a minute).
   useEffect(() => {
     if (!authUserId) return
