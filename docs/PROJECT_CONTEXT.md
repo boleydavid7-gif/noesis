@@ -66,6 +66,13 @@ The current app is a working reader-first build:
   "Your questions" shows books suggested for the questions in Now (Start, Carry on, or Find a copy) and the questions
   themselves, each opening straight to its page. While reading a book that belongs to a subject, the study panel
   lists the questions to keep in mind (ones that suggested this book first, then Now), each with Write about this.
+  Noesis leads early and steps back (`guidance` in `lib/subjects.ts`): with fewer than three answers it shows a
+  one-line tip at first, offers "Next up" (the first Later question, area by area) whenever Now has room, and looks
+  for picks as soon as a question opens; from three answers it offers Next up only when Now is empty; from twelve it
+  waits to be asked (Find things). Sum up this area also returns pairs of questions that ask the same thing
+  (`cleanMerges`); Combine joins them with Noema's wording, keeping picks and answers from both (`mergeQuestions`,
+  undo). For practical subjects a question can carry "Use it": one small thing to do (from `/api/question`), marked
+  Done or Not yet (`markUsed`).
 - Your public library (Settings > Reading, or "Check your library" on a book; `PublicLibrary.tsx`,
   `lib/publicLibrary.ts`, synced preference `noesis:public-library:v1`): `/api/libraries` finds library systems with
   a branch within about 50 miles of a typed city or ZIP code, or of the reader's location (turned into a postal code

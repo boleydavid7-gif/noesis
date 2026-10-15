@@ -23,6 +23,12 @@ import {
   youtubeId,
   subjectFor,
   booksForNow,
+  cleanMerges,
+  mergeQuestions,
+  markUsed,
+  guidance,
+  GOING_AFTER,
+  OWN_AFTER,
   type Subject,
 } from '../lib/subjects'
 
@@ -253,5 +259,108 @@ describe('while reading', () => {
   })
   it('lists books for questions in Now once each', () => {
     expect(booksForNow([path, { ...path, id: 'p2' }]).map((row) => row.pick.id)).toEqual(['b'])
+  })
+})
+
+describe('combining questions', () => {
+  const base = subjectFromDraft(draft)
+  const area = base.areas[0].id
+  const one = addQuestion(base, area, 'How do I test soil?')
+  const two = addQuestion(one.subject, area, 'How can I check my soil at home?')
+  const a = one.question!
+  const b = two.question!
+  it('keeps only real, distinct pairs from the list sent', () => {
+    const ids = [a.id, b.id, 'x']
+    expect(cleanMerges([{ a: 1, b: 2, text: 'How do I test my soil at home?' }], ids)).toEqual([
+      { keep: a.id, drop: b.id, text: 'How do I test my soil at home?' },
+    ])
+    expect(
+      cleanMerges(
+        [
+          { a: 1, b: 1, text: 'x' },
+          { a: 9, b: 2, text: 'x' },
+          { a: 1, b: 2, text: '' },
+        ],
+        ids,
+      ),
+    ).toEqual([])
+  })
+  it('joins two into one, keeping answers and picks from both', () => {
+    let subject = answerQuestion(two.subject, b.id, 'A kit or a jar test.', ['p'], new Date('2026-10-02'))
+    subject = updatePick(
+      {
+        ...subject,
+        questions: subject.questions.map((q) =>
+          q.id === a.id ? { ...q, picks: [{ id: 'p1', type: 'read' as const, title: 'Soil tests', source: 'S' }] } : q,
+        ),
+      },
+      a.id,
+      'p1',
+      {},
+    )
+    const merged = mergeQuestions(subject, a.id, b.id, 'How do I test my soil at home?')
+    const q = merged.questions.find((item) => item.id === a.id)!
+    expect(merged.questions.some((item) => item.id === b.id)).toBe(false)
+    expect(q.text).toBe('How do I test my soil at home?')
+    expect(q.state).toBe('answered')
+    expect(q.answer?.text).toBe('A kit or a jar test.')
+    expect(q.picks?.map((pick) => pick.id)).toEqual(['p1'])
+  })
+})
+
+describe('use it', () => {
+  it('marks a small task done and back again', () => {
+    const base = subjectFromDraft(draft)
+    const q = base.questions[0]
+    const subject = {
+      ...base,
+      questions: base.questions.map((item) =>
+        item.id === q.id ? { ...item, useIt: { text: 'Squeeze a handful of soil' } } : item,
+      ),
+    }
+    const done = markUsed(subject, q.id, true, new Date('2026-10-05'))
+    expect(done.questions.find((item) => item.id === q.id)?.useIt).toEqual({
+      text: 'Squeeze a handful of soil',
+      doneAt: '2026-10-05T00:00:00.000Z',
+    })
+    expect(markUsed(done, q.id, false).questions.find((item) => item.id === q.id)?.useIt?.doneAt).toBeUndefined()
+  })
+  it('reads the line from the model reply', () => {
+    expect(cleanQuestionReply({ useIt: 'Squeeze a handful of soil' }).useIt).toBe('Squeeze a handful of soil')
+  })
+})
+
+describe('how much Noesis leads', () => {
+  const answerSome = (count: number) => {
+    let subject = subjectFromDraft(draft)
+    for (let i = 0; i < count; i += 1) {
+      const added = addQuestion(subject, subject.areas[0].id, `Extra ${i}?`)
+      subject = answerQuestion(added.subject, added.question!.id, 'Yes.', [])
+    }
+    return subject
+  }
+  it('leads at the start: a tip, a next question when Now has room, and looking things up', () => {
+    const start = answerSome(0)
+    const first = nowQuestions(start)[0]
+    const roomy = answerQuestion(start, first.id, 'Done.', [])
+    const g = guidance(roomy)
+    expect(g.stage).toBe('starting')
+    expect(g.nextUp?.state).toBe('later')
+    expect(g.autoExplore).toBe(true)
+    expect(guidance(start).tip).toBe(true)
+  })
+  it('steps back after a few answers: a next question only when Now is empty', () => {
+    const going = answerSome(GOING_AFTER)
+    expect(guidance(going).stage).toBe('going')
+    expect(guidance(going).nextUp).toBeNull()
+    const empty = {
+      ...going,
+      questions: going.questions.map((q) => (q.state === 'now' ? { ...q, state: 'later' as const } : q)),
+    }
+    expect(guidance(empty).nextUp).not.toBeNull()
+  })
+  it('waits to be asked once the reader is well into it', () => {
+    const own = guidance(answerSome(OWN_AFTER))
+    expect(own).toMatchObject({ stage: 'own', nextUp: null, autoExplore: false, tip: false })
   })
 })

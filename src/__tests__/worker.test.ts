@@ -745,6 +745,7 @@ describe('things to explore for a question', () => {
     ],
     listen: [{ search: 'soil health', why: 'An hour with a soil scientist' }],
     try: [],
+    useIt: 'Squeeze a handful of your soil',
   }
   const route = (url: string): Response => {
     if (url.includes('generativelanguage'))
@@ -804,6 +805,7 @@ describe('things to explore for a question', () => {
       picks: Array<{ type: string; title: string; source: string; minutes?: number }>
     }
     expect(body.followUp).toBe('How do worms help?')
+    expect((body as { useIt?: string }).useIt).toBe('Squeeze a handful of your soil')
     expect(body.books.map((book) => book.title)).toEqual(['Teaming with Microbes'])
     expect(body.picks.map((pick) => `${pick.type}:${pick.title}`)).toEqual([
       'read:Soil',
@@ -847,5 +849,51 @@ describe('public libraries', () => {
     expect(body.systems.map((system) => system.key)).toEqual(['seattle', 'tacoma'])
     expect(body.systems[0].libbyKey).toBe('short')
     expect(body.systems[0].catalog).toBeUndefined()
+  })
+})
+
+describe('summing up an area', () => {
+  it('drafts from the answers and names questions that overlap', async () => {
+    const mock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        summary: 'I learned that soil is alive.',
+                        merges: [{ a: 1, b: 2, text: 'How do I test my soil?' }],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await call(
+      '/api/sumup',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '8.8.3.1' },
+        body: JSON.stringify({
+          subject: 'Gardening',
+          area: 'Soil',
+          answers: [{ question: 'What is soil?', answer: 'Mostly alive.' }],
+          questions: ['How do I test soil?', 'How can I check my soil?'],
+        }),
+      },
+      { GEMINI_API_KEY: 'k' },
+    )
+    const body = (await response.json()) as { text: string; merges: unknown[] }
+    expect(body.text).toBe('I learned that soil is alive.')
+    expect(body.merges).toEqual([{ a: 1, b: 2, text: 'How do I test my soil?' }])
+    const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(sent.contents[0].parts[0].text).toContain('2. How can I check my soil?')
   })
 })

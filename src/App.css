@@ -10986,3 +10986,74 @@ input[type='radio'] {
 .home-questions .subject-list {
   margin-top: 12px;
 }
+
+/* Next up, combining questions, and Use it */
+.subject-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+}
+.subject-next > span {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 220px;
+}
+.subject-next small {
+  color: var(--gold-soft, #ead4a2);
+  font-size: 12px;
+}
+.subject-next .subject-later-text {
+  padding: 2px 0;
+}
+.subject-merges {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.subject-merges h5 {
+  margin: 0;
+}
+.subject-merges ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.subject-merges li {
+  display: grid;
+  gap: 6px;
+}
+.subject-merges li > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+.subject-merges small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+.question-use {
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.3);
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.06);
+}
+.question-use p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.question-use-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #9fd8b0;
+  font-size: 13px;
+}

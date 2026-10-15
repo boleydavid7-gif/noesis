@@ -1762,8 +1762,9 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     system: [
       'You suggest what to read, watch, or listen to for one question, for someone exploring a subject in a reading app. Books come first; the rest goes with the reading.',
       'Reply with JSON only, in exactly this shape:',
-      '{"hook":"","short":"","followUp":"","wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}]}.',
+      '{"hook":"","short":"","followUp":"","wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}],"useIt":""}.',
       '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.',
+      '"useIt" is one small, concrete thing the reader could do in the next few days to use the answer, under 15 words, starting with a verb (for example "Squeeze a handful of your soil and see if it holds together"); give it only when the subject is practical (a skill, craft, garden, kitchen, body, money, tools), otherwise "".',
       '"wiki" is the exact title of the English Wikipedia article that best covers it, or "" if none fits.',
       '"books": one or two real, published books you are confident exist that answer it well, with the author. "read": up to two free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.',
       '"watch": up to two YouTube videos; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one podcast search phrase for an episode on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].',
@@ -1821,7 +1822,15 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
   kept.push(...episodes.slice(0, 1))
   const tried = checkedLinks.find((pick) => pick?.type === 'try')
   if (tried) kept.push({ type: 'try', title: tried.title, source: tried.source, url: tried.url, why: tried.why })
-  return json({ ok: true, hook: draft.hook, short: draft.short, followUp: draft.followUp, books, picks: kept })
+  return json({
+    ok: true,
+    hook: draft.hook,
+    short: draft.short,
+    followUp: draft.followUp,
+    useIt: draft.useIt,
+    books,
+    picks: kept,
+  })
 }
 
 // A first draft of an area's summary, from the reader's own answers only. They edit it before it is kept.
@@ -1835,7 +1844,7 @@ async function sumUpArea(request: Request, env: Env): Promise<Response> {
     'Sign in to use Noema.',
   )
   if (refused) return refused
-  const input = await readJson<{ subject?: unknown; area?: unknown; answers?: unknown }>(request)
+  const input = await readJson<{ subject?: unknown; area?: unknown; answers?: unknown; questions?: unknown }>(request)
   if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
   const subject = textOf(input.subject, 100)
   const area = textOf(input.area, 80)
@@ -1846,20 +1855,40 @@ async function sumUpArea(request: Request, env: Env): Promise<Response> {
     })
     .filter((item) => item.question && item.answer)
     .slice(0, 30)
+  const questions = (Array.isArray(input.questions) ? input.questions : [])
+    .map((item) => textOf(item, 200))
+    .slice(0, 40)
   if (!area || answers.length === 0) return json({ ok: false, error: 'Answer a few questions first.' }, 400)
   const result = await generate(env, {
     system: [
-      "Write a short summary of what a reader has worked out about one area of a subject, using only the reader's own answers below.",
-      'Three to five plain sentences in the first person ("I"), joining the answers into one picture. Add nothing the answers do not say.',
-      'Reply with the summary only. Use American English.',
+      'Reply with JSON only, in exactly this shape: {"summary":"","merges":[{"a":0,"b":0,"text":""}]}.',
+      `"summary": a short summary of what a reader has worked out about one area of a subject, using only the reader's own answers. Three to five plain sentences in the first person ("I"), joining the answers into one picture. Add nothing the answers do not say.`,
+      '"merges": pairs from the numbered list of questions that ask essentially the same thing, by their numbers ("a" is kept, "b" is folded into it), with "text" one clear wording that covers both. At most three pairs; [] when none overlap. Never pair questions that only share a topic.',
+      'Use American English.',
     ].join(' '),
-    prompt: `Subject: ${subject}\nArea: ${area}\n\n${answers.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n')}`,
-    maxOutputTokens: 500,
+    prompt: [
+      `Subject: ${subject}`,
+      `Area: ${area}`,
+      answers.map((item) => `Q: ${item.question}\nA: ${item.answer}`).join('\n\n'),
+      questions.length
+        ? `Questions in this area:\n${questions.map((text, index) => `${index + 1}. ${text}`).join('\n')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    maxOutputTokens: 800,
     temperature: 0.3,
+    json: true,
   })
-  return result.ok
-    ? json({ ok: true, text: result.text.slice(0, 1_200) })
-    : json({ ok: false, error: result.error }, result.status)
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  try {
+    const parsed = JSON.parse(result.text) as { summary?: unknown; merges?: unknown }
+    const text = textOf(parsed.summary, 1_200)
+    if (!text) return json({ ok: false, error: 'Noema could not draft a summary right now.' }, 502)
+    return json({ ok: true, text, merges: Array.isArray(parsed.merges) ? parsed.merges.slice(0, 3) : [] })
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
 }
 
 const worker = {

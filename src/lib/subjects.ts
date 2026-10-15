@@ -45,7 +45,9 @@ export type Question = {
   answer?: Answer
   askedAt: string
   cameBackAt?: string
+  useIt?: UseIt // one small thing to do with it, for practical subjects
 }
+export type UseIt = { text: string; doneAt?: string }
 export type Area = { id: string; title: string; blurb?: string; summary?: { text: string; at: string } }
 export type Subject = {
   why?: string
@@ -290,7 +292,7 @@ export type PickDraft = {
   search?: string // words to look a video or episode up by, when no exact link is known
   author?: string
 }
-export type QuestionDraft = { hook?: string; short?: string; followUp?: string; picks: PickDraft[] }
+export type QuestionDraft = { hook?: string; short?: string; followUp?: string; useIt?: string; picks: PickDraft[] }
 
 export function cleanQuestionReply(raw: unknown): QuestionDraft {
   const root = (raw ?? {}) as Record<string, unknown>
@@ -321,6 +323,7 @@ export function cleanQuestionReply(raw: unknown): QuestionDraft {
     hook: clip(root.hook, 200) || undefined,
     short: typeof root.short === 'string' ? root.short.trim().slice(0, 1_200) || undefined : undefined,
     followUp: clip(root.followUp, 200) || undefined,
+    useIt: clip(root.useIt, 160) || undefined,
     picks,
   }
 }
@@ -503,4 +506,106 @@ export function booksForNow(paths: LearningPath[]): Array<{ path: LearningPath; 
         .map((pick) => ({ path, question, pick })),
     )
   })
+}
+
+// ---------- Use it ----------
+
+export function markUsed(subject: Subject, id: string, done: boolean, now = new Date()): Subject {
+  const question = subject.questions.find((q) => q.id === id)
+  if (!question?.useIt) return subject
+  return withQuestion(subject, {
+    ...question,
+    useIt: { text: question.useIt.text, doneAt: done ? now.toISOString() : undefined },
+  })
+}
+
+// ---------- Two questions that ask the same thing ----------
+
+export type MergeOffer = { keep: string; drop: string; text: string }
+
+// The model names pairs by their place in the list it was sent; only real, distinct pairs in this area are kept.
+export function cleanMerges(raw: unknown, ids: string[], limit = 3): MergeOffer[] {
+  const used = new Set<string>()
+  return (Array.isArray(raw) ? raw : [])
+    .flatMap((item) => {
+      const row = (item ?? {}) as Record<string, unknown>
+      const a = ids[Number(row.a) - 1]
+      const b = ids[Number(row.b) - 1]
+      const text = clip(row.text, 200)
+      if (!a || !b || a === b || !text || used.has(a) || used.has(b)) return []
+      used.add(a)
+      used.add(b)
+      return [{ keep: a, drop: b, text }]
+    })
+    .slice(0, limit)
+}
+
+// Two questions become one: the wording given, every pick from both, both answers kept (joined), the further
+// state of the two (answered, then now, then later), and nothing written is lost.
+export function mergeQuestions(subject: Subject, keepId: string, dropId: string, text: string): Subject {
+  const keep = subject.questions.find((q) => q.id === keepId)
+  const drop = subject.questions.find((q) => q.id === dropId)
+  const words = clip(text, 200)
+  if (!keep || !drop || keep.id === drop.id || !words) return subject
+  const rank: Record<QuestionState, number> = { answered: 2, now: 1, later: 0 }
+  const state = rank[drop.state] > rank[keep.state] ? drop.state : keep.state
+  const seen = new Set((keep.picks ?? []).map((pick) => (pick.url ?? pick.title).toLowerCase()))
+  const picks = [
+    ...(keep.picks ?? []),
+    ...(drop.picks ?? []).filter((pick) => !seen.has((pick.url ?? pick.title).toLowerCase())),
+  ]
+  const answers = [keep.answer, drop.answer].filter((answer): answer is Answer => Boolean(answer))
+  const answer: Answer | undefined = answers.length
+    ? {
+        text: answers
+          .map((item) => item.text)
+          .join(' ')
+          .slice(0, 600),
+        pickIds: [...new Set(answers.flatMap((item) => item.pickIds))],
+        at: answers
+          .map((item) => item.at)
+          .sort()
+          .at(-1)!,
+      }
+    : undefined
+  const merged: Question = {
+    ...keep,
+    text: words,
+    state: state === 'answered' && !answer ? 'now' : state,
+    picks: picks.length ? picks : undefined,
+    answer,
+    guess: keep.guess ?? drop.guess,
+    useIt: keep.useIt ?? drop.useIt,
+    followUp: keep.followUp ?? drop.followUp,
+  }
+  return withQuestion(removeQuestion(subject, dropId), merged)
+}
+
+// ---------- How much Noesis leads ----------
+
+// Early on Noesis leads: it offers the next question and looks for things to explore as soon as a question opens.
+// As the reader answers more, it steps back: after a few answers it offers a next question only when Now is
+// empty, and once the reader is well into the subject it waits to be asked.
+export type Guidance = {
+  stage: 'starting' | 'going' | 'own'
+  nextUp: Question | null
+  autoExplore: boolean
+  tip: boolean
+}
+export const GOING_AFTER = 3
+export const OWN_AFTER = 12
+
+export function guidance(subject: Subject): Guidance {
+  const answered = subject.questions.filter((q) => q.state === 'answered').length
+  const stage = answered >= OWN_AFTER ? 'own' : answered >= GOING_AFTER ? 'going' : 'starting'
+  const now = nowQuestions(subject).length
+  const wantsNext = stage === 'starting' ? now < NOW_LIMIT : stage === 'going' ? now === 0 : false
+  let nextUp: Question | null = null
+  if (wantsNext) {
+    for (const area of subject.areas) {
+      nextUp = subject.questions.find((q) => q.areaId === area.id && q.state === 'later') ?? null
+      if (nextUp) break
+    }
+  }
+  return { stage, nextUp, autoExplore: stage !== 'own', tip: stage === 'starting' && answered === 0 }
 }

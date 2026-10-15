@@ -135,6 +135,7 @@ export type Explored = {
   hook?: string
   short?: string
   followUp?: string
+  useIt?: string
   books: BookCandidate[]
   picks: ExploredPick[]
 }
@@ -155,6 +156,7 @@ export async function exploreQuestion(input: {
     hook: result.hook,
     short: result.short,
     followUp: result.followUp,
+    useIt: result.useIt,
     books: result.books ?? [],
     picks: result.picks ?? [],
   }
@@ -164,7 +166,12 @@ export async function requestSumUp(input: {
   subject: string
   area: string
   answers: Array<{ question: string; answer: string }>
-}): Promise<string> {
-  const result = await post<{ text?: string }>('/api/sumup', input, 'Noema could not draft a summary right now.')
-  return result.text ?? ''
+  questions: string[]
+}): Promise<{ text: string; merges: unknown[] }> {
+  const result = await post<{ text?: string; merges?: unknown[] }>(
+    '/api/sumup',
+    input,
+    'Noema could not draft a summary right now.',
+  )
+  return { text: result.text ?? '', merges: Array.isArray(result.merges) ? result.merges : [] }
 }

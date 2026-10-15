@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bookmark,
   BookOpen,
+  Check,
   ExternalLink,
   Headphones,
   Lightbulb,
@@ -39,7 +40,11 @@ import {
   booksForNow,
   areaState,
   canSumUp,
+  cleanMerges,
   comingBack,
+  guidance,
+  markUsed,
+  mergeQuestions,
   groupPicks,
   markCameBack,
   minutesText,
@@ -57,6 +62,7 @@ import {
   sumUpArea,
   updatePick,
   withQuestion,
+  type MergeOffer,
   type Pick,
   type PickType,
   type Question,
@@ -471,6 +477,7 @@ function SubjectMap({
 }) {
   const now = nowQuestions(subject)
   const back = comingBack(subject)
+  const guide = guidance(subject)
   const [newArea, setNewArea] = useState('')
   const areaName = (id: string) => subject.areas.find((area) => area.id === id)?.title
   return (
@@ -515,6 +522,31 @@ function SubjectMap({
           ) : (
             <p className="subject-empty">Choose up to {NOW_LIMIT} questions from the areas.</p>
           )}
+          {guide.tip ? (
+            <p className="subject-empty">
+              Open a question, look at what goes with it, then answer in a sentence or two.
+            </p>
+          ) : null}
+          {guide.nextUp ? (
+            <div className="subject-next">
+              <span>
+                <small>Next up · {areaName(guide.nextUp.areaId)}</small>
+                <button className="subject-later-text" onClick={() => onOpen(guide.nextUp!.id)}>
+                  {guide.nextUp.text}
+                </button>
+              </span>
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  const moved = moveQuestion(subject, guide.nextUp!.id, 'now')
+                  if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
+                  else onSave(moved.subject)
+                }}
+              >
+                Move to Now
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
       <section className="subject-block subject-map-areas">
@@ -584,17 +616,26 @@ function AreaCard({
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(area.title)
   const [summary, setSummary] = useState<string | null>(null)
+  const [merges, setMerges] = useState<MergeOffer[]>([])
   const [drafting, setDrafting] = useState(false)
 
   async function draftSummary() {
     setDrafting(true)
     try {
-      const text = await requestSumUp({
+      const inArea = questionsIn(subject, areaId)
+      const result = await requestSumUp({
         subject: path.title,
         area: area.title,
         answers: answered.map((q) => ({ question: q.text, answer: q.answer?.text ?? '' })),
+        questions: inArea.map((q) => q.text),
       })
-      setSummary(text)
+      setSummary(result.text)
+      setMerges(
+        cleanMerges(
+          result.merges,
+          inArea.map((q) => q.id),
+        ),
+      )
     } catch (reason) {
       onNotice(reason instanceof Error ? reason.message : 'Noema could not draft a summary right now.')
       setSummary('')
@@ -634,6 +675,47 @@ function AreaCard({
               setSummary(null)
             }}
           >
+            {merges.length ? (
+              <div className="subject-merges">
+                <h5>These ask the same thing</h5>
+                <ul>
+                  {merges.map((offer) => {
+                    const a = subject.questions.find((q) => q.id === offer.keep)
+                    const b = subject.questions.find((q) => q.id === offer.drop)
+                    if (!a || !b) return null
+                    return (
+                      <li key={`${offer.keep}-${offer.drop}`}>
+                        <span>
+                          <small>
+                            {a.text} · {b.text}
+                          </small>
+                          <strong>{offer.text}</strong>
+                        </span>
+                        <span className="subject-actions">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => {
+                              onSave(mergeQuestions(subject, offer.keep, offer.drop, offer.text), 'Combined.')
+                              setMerges((list) => list.filter((item) => item !== offer))
+                            }}
+                          >
+                            Combine
+                          </button>
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => setMerges((list) => list.filter((item) => item !== offer))}
+                          >
+                            Keep both
+                          </button>
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ) : null}
             <label htmlFor={`sum-${areaId}`}>Sum up this area (a draft from your answers; change anything)</label>
             <textarea id={`sum-${areaId}`} rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} />
             <div className="subject-actions">
@@ -914,6 +996,7 @@ function QuestionPage({
           hook: current.question.hook ?? found.hook,
           short: found.short ?? current.question.short,
           followUp: found.followUp ?? current.question.followUp,
+          useIt: current.question.useIt ?? (found.useIt ? { text: found.useIt } : undefined),
           picks: [...kept, ...fresh],
         }),
       )
@@ -933,7 +1016,7 @@ function QuestionPage({
 
   // The first visit to a question looks for things to explore by itself.
   useEffect(() => {
-    if (asked.current || question.picks || question.state === 'answered') return
+    if (asked.current || question.picks || question.state === 'answered' || !guidance(subject).autoExplore) return
     asked.current = true
     void explore()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1124,6 +1207,30 @@ function QuestionPage({
           </form>
         )}
       </section>
+
+      {question.useIt ? (
+        <section className="question-block question-use">
+          <h4>Use it (optional)</h4>
+          <p>{question.useIt.text}</p>
+          {question.useIt.doneAt ? (
+            <div className="subject-actions">
+              <span className="question-use-done">
+                <Check size={14} aria-hidden="true" /> Done{' '}
+                {new Date(question.useIt.doneAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </span>
+              <button className="text-button" onClick={() => onSave(markUsed(subject, question.id, false))}>
+                Not yet
+              </button>
+            </div>
+          ) : (
+            <div className="subject-actions">
+              <button className="secondary-button" onClick={() => onSave(markUsed(subject, question.id, true))}>
+                <Check size={14} /> Done
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="question-block">
         <h4>What this raised</h4>
