@@ -146,6 +146,7 @@ export async function exploreQuestion(input: {
   question: string
   level?: string
   reading?: string[]
+  part?: 'answer' | 'picks'
 }): Promise<Explored> {
   const result = await post<Partial<Explored>>(
     '/api/question',

@@ -609,3 +609,32 @@ export function guidance(subject: Subject): Guidance {
   }
   return { stage, nextUp, autoExplore: stage !== 'own', tip: stage === 'starting' && answered === 0 }
 }
+
+// ---------- Filling a question in, a part at a time ----------
+
+export type FoundAnswer = { hook?: string; short?: string; followUp?: string; useIt?: string }
+
+export function withAnswerPart(subject: Subject, id: string, found: FoundAnswer): Subject {
+  const question = subject.questions.find((q) => q.id === id)
+  if (!question) return subject
+  return withQuestion(subject, {
+    ...question,
+    hook: question.hook ?? found.hook,
+    short: found.short ?? question.short,
+    followUp: found.followUp ?? question.followUp,
+    useIt: question.useIt ?? (found.useIt ? { text: found.useIt } : undefined),
+  })
+}
+
+// Adds picks to a question, leaving out any already there. "fresh" starts over, keeping only saved picks.
+export function withPicks(subject: Subject, id: string, found: Array<Omit<Pick, 'id'>>, fresh = false): Subject {
+  const question = subject.questions.find((q) => q.id === id)
+  if (!question) return subject
+  const kept = (question.picks ?? []).filter((pick) => !fresh || pick.saved)
+  const key = (pick: { url?: string; title: string }) => (pick.url ?? pick.title).toLowerCase()
+  const seen = new Set(kept.map(key))
+  const added = found
+    .filter((pick) => !seen.has(key(pick)) && Boolean(seen.add(key(pick))))
+    .map((pick) => ({ ...pick, id: newId('pick') }))
+  return withQuestion(subject, { ...question, picks: [...kept, ...added] })
+}

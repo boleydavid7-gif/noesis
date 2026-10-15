@@ -951,3 +951,35 @@ describe('a model that does not answer in time', () => {
     expect(((await response.json()) as { error: string }).error).toMatch(/too long/)
   })
 })
+
+describe('a question in two halves', () => {
+  it('asks only for the answer part, quickly, without looking anything up', async () => {
+    const mock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [
+              { content: { parts: [{ text: JSON.stringify({ hook: 'H', short: 'S', followUp: 'F', useIt: '' }) }] } },
+            ],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await call(
+      '/api/question',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '8.8.5.1' },
+        body: JSON.stringify({ subject: 'Gardening', question: 'What makes soil good?', part: 'answer' }),
+      },
+      { GEMINI_API_KEY: 'k' },
+    )
+    const body = (await response.json()) as { short: string; picks: unknown[] }
+    expect(body.short).toBe('S')
+    expect(body.picks).toEqual([])
+    expect(mock).toHaveBeenCalledTimes(1)
+    const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(sent.systemInstruction.parts[0].text).not.toContain('"books"')
+    expect(sent.generationConfig.maxOutputTokens).toBeLessThanOrEqual(1_000)
+  })
+})

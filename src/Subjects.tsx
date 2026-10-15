@@ -1,6 +1,7 @@
 // Subjects: a map of questions around the reader's books. The reading comes first; each question can bring a
 // few things to read, watch or listen to beside it, and the reader's own answer in a sentence or two.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { exploreError, exploreInto, isExploring, subscribeExploring, type EditSubject } from './lib/subjectExplore'
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,11 +25,9 @@ import { AtYourLibrary } from './PublicLibrary'
 import type { LibraryBook } from './lib/library'
 import {
   AuthRequiredError,
-  exploreQuestion,
   requestClarification,
   requestSubject,
   requestSumUp,
-  resolveBooks,
   type Clarification,
 } from './lib/pathClient'
 import type { LearningPath } from './lib/pathPlan'
@@ -49,7 +48,6 @@ import {
   markCameBack,
   minutesText,
   moveQuestion,
-  newId,
   nowQuestions,
   pathFromSubject,
   questionsIn,
@@ -263,7 +261,9 @@ export function SubjectView({
   onNote,
   onNotice,
   initialQuestion,
+  onEdit,
 }: {
+  onEdit?: EditSubject
   path: LearningPath
   initialQuestion?: string
   library: LibraryBook[]
@@ -339,6 +339,7 @@ export function SubjectView({
             onAsk={onAsk}
             onNote={onNote}
             onNotice={onNotice}
+            onEdit={onEdit}
           />
         </div>
       ) : null}
@@ -937,7 +938,9 @@ function QuestionPage({
   onAsk,
   onNote,
   onNotice,
+  onEdit,
 }: {
+  onEdit?: EditSubject
   path: LearningPath
   subject: Subject
   question: Question
@@ -951,8 +954,6 @@ function QuestionPage({
   onNotice: (message: string) => void
 }) {
   const area = subject.areas.find((item) => item.id === question.areaId)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [guess, setGuess] = useState(question.guess ?? '')
   const [answer, setAnswer] = useState(question.answer?.text ?? '')
   const [editing, setEditing] = useState(!question.answer)
@@ -963,63 +964,26 @@ function QuestionPage({
   latest.current = { subject, question }
   const asked = useRef(false)
 
-  async function explore() {
-    setLoading(true)
-    setError('')
-    try {
-      const reading = library.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
-      const found = await exploreQuestion({
-        subject: path.title,
-        area: area?.title,
-        question: question.text,
-        level: subject.level,
-        reading,
-      })
-      const books = await resolveBooks(found.books).catch(() => [])
-      const kept = (latest.current.question.picks ?? []).filter((pick) => pick.saved)
-      const seen = new Set(kept.map((pick) => (pick.url ?? pick.title).toLowerCase()))
-      const fresh: Pick[] = [
-        ...books.map((book) => ({
-          id: newId('pick'),
-          type: 'book' as const,
-          title: book.title,
-          source: book.authors.slice(0, 2).join(', '),
-          url: book.infoUrl,
-          why: book.note,
-          book: { ...book, description: undefined },
-        })),
-        ...found.picks.map((pick) => ({ ...pick, id: newId('pick') })),
-      ].filter((pick) => !seen.has((pick.url ?? pick.title).toLowerCase()))
-      const current = latest.current
-      onSave(
-        withQuestion(current.subject, {
-          ...current.question,
-          hook: current.question.hook ?? found.hook,
-          short: found.short ?? current.question.short,
-          followUp: found.followUp ?? current.question.followUp,
-          useIt: current.question.useIt ?? (found.useIt ? { text: found.useIt } : undefined),
-          picks: [...kept, ...fresh],
-        }),
-      )
-      if (!kept.length && !fresh.length) setError('Nothing could be confirmed this time. Try again later.')
-    } catch (reason) {
-      setError(
-        reason instanceof AuthRequiredError
-          ? 'Sign in to find things to explore.'
-          : reason instanceof Error
-            ? reason.message
-            : 'Noema could not find things right now.',
-      )
-    } finally {
-      setLoading(false)
-    }
+  const loading = useSyncExternalStore(subscribeExploring, () => isExploring(question.id))
+  const failure = useSyncExternalStore(subscribeExploring, () => exploreError(question.id))
+  const error =
+    failure ||
+    (!loading && question.picks && question.picks.length === 0
+      ? 'Nothing could be confirmed this time. Try again later.'
+      : '')
+  function explore(fresh = false) {
+    const reading = library.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
+    void exploreInto(
+      { path, question, area: area?.title, level: subject.level, reading, fresh },
+      onEdit ?? ((_id, change) => onSave(change(latest.current.subject))),
+    )
   }
 
   // The first visit to a question looks for things to explore by itself.
   useEffect(() => {
     if (asked.current || question.picks || question.state === 'answered' || !guidance(subject).autoExplore) return
     asked.current = true
-    void explore()
+    explore()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1103,7 +1067,7 @@ function QuestionPage({
         <div className="question-block-head">
           <h4>Explore</h4>
           {!loading ? (
-            <button className="text-button" onClick={() => void explore()}>
+            <button className="text-button" onClick={() => explore(Boolean(question.picks?.length))}>
               <Search size={13} /> {picks.length ? 'Find others' : 'Find things'}
             </button>
           ) : null}

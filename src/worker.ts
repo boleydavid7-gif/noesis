@@ -1569,21 +1569,20 @@ async function startSubject(request: Request, env: Env): Promise<Response> {
   const result = await generate(env, {
     system: [
       'You help a reader explore a subject they are curious about, alongside the books they read. This is not a course: no lessons, tests, or schedules.',
-      'Reply with JSON only, in exactly this shape: {"title":"","summary":"","areas":[{"title":"","blurb":"","questions":[{"text":"","hook":""}]}]}.',
+      'Reply with JSON only, in exactly this shape: {"title":"","summary":"","areas":[{"title":"","blurb":"","questions":[""]}]}.',
       '"title" names the subject in two to five words. "summary" is one plain sentence on what exploring it covers.',
       'Give four to six "areas", ordered from where most people start to more specialized ground. "title" is two to four words; "blurb" is one short sentence.',
       'Each area has three or four "questions": real questions a curious person would ask, specific and answerable by reading, in plain words, most concrete first. Mix practical questions (how do I…, why does…) with ones about how it works.',
-      '"hook" is one short line (at most 14 words) on what makes the question interesting: a surprise, a common mistake, or what knowing it lets you do. No exclamation marks.',
       level ? `The reader describes their level as: ${level}.` : '',
       'Use American English.',
     ]
       .filter(Boolean)
       .join(' '),
     prompt: `What the reader is curious about: ${goal}${focus ? `\nFocus: ${focus}` : ''}`,
-    maxOutputTokens: 5_000,
+    maxOutputTokens: 2_000,
     temperature: 0.5,
     json: true,
-    timeoutMs: 45_000,
+    timeoutMs: 30_000,
   })
   if (!result.ok) return json({ ok: false, error: result.error }, result.status)
   let parsed: unknown
@@ -1789,8 +1788,12 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     question?: unknown
     level?: unknown
     reading?: unknown
+    part?: unknown
   }>(request)
   if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  // The app asks for the two halves at once, so each is a short answer that comes back quickly:
+  // "answer" (hook, short answer, follow-up, use it) and "picks" (what to read, watch and listen to).
+  const part = input.part === 'answer' || input.part === 'picks' ? input.part : 'both'
   const subject = textOf(input.subject, 100)
   const area = textOf(input.area, 80)
   const question = textOf(input.question, 200)
@@ -1800,28 +1803,55 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     .filter(Boolean)
     .slice(0, 8)
   if (!subject || question.length < 3) return json({ ok: false, error: 'Choose a question to explore.' }, 400)
+  const asksAnswer = part !== 'picks'
+  const asksPicks = part !== 'answer'
+  const shape = [
+    asksAnswer ? '"hook":"","short":"","followUp":"","useIt":""' : '',
+    asksPicks
+      ? '"wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}]'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(',')
+  // Wikipedia's search needs nothing from Noema, so it runs while Noema writes.
+  const relatedSoon = asksPicks ? wikipediaSearch(`${question} ${subject}`) : Promise.resolve([] as CheckedPick[])
   const result = await generate(env, {
     system: [
-      'You suggest what to read, watch, or listen to for one question, for someone exploring a subject in a reading app. Books come first; the rest goes with the reading.',
-      'Reply with JSON only, in exactly this shape:',
-      '{"hook":"","short":"","followUp":"","wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}],"useIt":""}.',
-      '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.',
-      '"useIt" is one small, concrete thing the reader could do in the next few days to use the answer, under 15 words, starting with a verb (for example "Squeeze a handful of your soil and see if it holds together"); give it only when the subject is practical (a skill, craft, garden, kitchen, body, money, tools), otherwise "".',
-      '"wiki" is the exact title of the English Wikipedia article that best covers it, or "" if none fits.',
-      '"books": two to four real, published books you are confident exist that answer it well, with the author, best first. "read": three or four free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.',
-      '"watch": two or three YouTube videos (talks, lectures, explainers, demonstrations), from well-known channels where you can; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one or two podcast search phrases for episodes on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].',
-      '"why" is a short line on what this pick adds for the question, never generic praise.',
-      reading.length ? `The reader already has these books: ${reading.join('; ')}. Do not suggest them again.` : '',
+      asksPicks
+        ? 'You suggest what to read, watch, or listen to for one question, for someone exploring a subject in a reading app. Books come first; the rest goes with the reading.'
+        : 'You help someone exploring a subject in a reading app with one question.',
+      `Reply with JSON only, in exactly this shape: {${shape}}.`,
+      asksAnswer
+        ? '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.'
+        : '',
+      asksAnswer
+        ? '"useIt" is one small, concrete thing the reader could do in the next few days to use the answer, under 15 words, starting with a verb (for example "Squeeze a handful of your soil and see if it holds together"); give it only when the subject is practical (a skill, craft, garden, kitchen, body, money, tools), otherwise "".'
+        : '',
+      asksPicks
+        ? '"wiki" is the exact title of the English Wikipedia article that best covers it, or "" if none fits.'
+        : '',
+      asksPicks
+        ? '"books": two to four real, published books you are confident exist that answer it well, with the author, best first. "read": three or four free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.'
+        : '',
+      asksPicks
+        ? '"watch": two or three YouTube videos (talks, lectures, explainers, demonstrations), from well-known channels where you can; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one or two podcast search phrases for episodes on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].'
+        : '',
+      asksPicks
+        ? '"why" is a short line (at most 12 words) on what this pick adds for the question, never generic praise.'
+        : '',
+      reading.length && asksPicks
+        ? `The reader already has these books: ${reading.join('; ')}. Do not suggest them again.`
+        : '',
       level ? `The reader describes their level as: ${level}.` : '',
       'Never invent a book, author, or web address. Use American English.',
     ]
       .filter(Boolean)
       .join(' '),
     prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}\nQuestion: ${question}`,
-    maxOutputTokens: 3_500,
+    maxOutputTokens: part === 'answer' ? 700 : part === 'picks' ? 1_800 : 3_500,
     temperature: 0.4,
     json: true,
-    timeoutMs: 40_000,
+    timeoutMs: part === 'answer' ? 20_000 : part === 'picks' ? 25_000 : 40_000,
   })
   if (!result.ok) return json({ ok: false, error: result.error }, result.status)
   let parsed: Record<string, unknown>
@@ -1831,6 +1861,16 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
   }
   const draft = cleanQuestionReply(parsed)
+  if (!asksPicks)
+    return json({
+      ok: true,
+      hook: draft.hook,
+      short: draft.short,
+      followUp: draft.followUp,
+      useIt: draft.useIt,
+      books: [],
+      picks: [],
+    })
   const wiki = textOf(parsed.wiki, 120)
   const books = draft.picks
     .filter((pick) => pick.type === 'book')
@@ -1847,7 +1887,7 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     youtubeKey ? searchVideos(videoWords, videos[0]?.why, youtubeKey) : Promise.resolve([] as CheckedPick[]),
     youtubeKey ? Promise.resolve([] as Array<CheckedPick | null>) : Promise.all(videos.slice(0, 3).map(checkVideo)),
     Promise.all(listens.map((pick) => searchEpisodes(pick.search || pick.title, pick.why))),
-    wikipediaSearch(`${question} ${subject}`),
+    relatedSoon,
   ])
   const episodes = episodeLists.flat()
   const kept: CheckedPick[] = []

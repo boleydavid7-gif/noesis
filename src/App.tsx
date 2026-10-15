@@ -124,7 +124,8 @@ import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
-import { emptySubject, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
+import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
+import { exploreInto, isExploring, questionsToPrepare, type EditSubject } from './lib/subjectExplore'
 import type { LearningPath } from './lib/pathPlan'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
@@ -1779,6 +1780,47 @@ function App() {
     setOverlay(null)
     setUtilityOverlay(null)
   }
+  // Changes one subject from its latest saved state, so work finishing in the background never undoes an edit.
+  const editSubject: EditSubject = useCallback((pathId, change) => {
+    setPaths((current) => {
+      const next = current.map((path) =>
+        path.id === pathId ? { ...path, subject: change(subjectOf(path)), updated: new Date().toISOString() } : path,
+      )
+      writePaths(next)
+      return next
+    })
+  }, [])
+  // Before a question is opened, its picks are found in the background: the questions in Now and the next one
+  // suggested, one at a time, each tried once per visit.
+  const prepared = useRef(new Set<string>())
+  const [prepareTick, setPrepareTick] = useState(0)
+  useEffect(() => {
+    if (!learner || !authUser) return
+    const timer = window.setTimeout(() => {
+      for (const path of paths) {
+        const subject = subjectOf(path)
+        const guide = guidance(subject)
+        if (!guide.autoExplore) continue
+        const question = questionsToPrepare(subject, guide.nextUp).find((q) => !prepared.current.has(q.id))
+        if (!question) continue
+        if (isExploring(question.id)) return
+        prepared.current.add(question.id)
+        const reading = books.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
+        void exploreInto(
+          {
+            path,
+            question,
+            area: subject.areas.find((area) => area.id === question.areaId)?.title,
+            level: subject.level,
+            reading,
+          },
+          editSubject,
+        ).finally(() => setPrepareTick((value) => value + 1))
+        return
+      }
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [paths, learner, authUser, books, editSubject, prepareTick])
   function deletePath(id: string) {
     const next = paths.filter((path) => path.id !== id)
     markDeleted('path', id)
@@ -2640,6 +2682,7 @@ function App() {
             }}
             onNote={openTopicNote}
             onNotice={showNotice}
+            onEdit={editSubject}
             onOpenBook={(id) => {
               const found = books.find((book) => book.id === id)
               if (found) openSavedBook(found)
@@ -4672,7 +4715,9 @@ function PathSection({
   onNotice,
   initialOpen = null,
   initialQuestion = null,
+  onEdit,
 }: {
+  onEdit?: EditSubject
   initialQuestion?: { pathId: string; questionId: string } | null
   onOpenBook?: (id: string) => void
   paths: LearningPath[]
@@ -4801,6 +4846,7 @@ function PathSection({
             <SubjectView
               path={active}
               initialQuestion={initialQuestion?.pathId === active.id ? initialQuestion.questionId : undefined}
+              onEdit={onEdit}
               library={books}
               onChange={onUpdate}
               onOpenBook={onOpenBook}

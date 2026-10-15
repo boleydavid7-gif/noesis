@@ -139,3 +139,10 @@ and a Wrangler dry run. The live health endpoint is
 - Question page look (iOS style): pill actions under the title; Explore has a row of filter chips (All, Books, Read,
   Watch, Listen with counts) over one inset grouped list per kind (leading cover or icon, hairlines after it);
   "where you found it" offers only picks that were opened or saved. Wikipedia calls send `WIKI_AGENT` as asked.
+- Speed: `/api/question` takes `part`: "answer" (hook, short answer, follow-up, use it; 700 tokens, 20 s) or "picks"
+  (books, read, watch, listen, try; 1,800 tokens, 25 s; Wikipedia's search runs while Noema writes). The app asks for
+  both at once and saves each as it arrives; books are matched afterwards and added (`lib/subjectExplore.ts`
+  `exploreInto`, never two requests for one question at once). Signed in, App prepares questions in the background
+  before they are opened (Now, then Next up; one at a time, each tried once per visit; `questionsToPrepare`), through
+  `editSubject`, which changes the latest saved subject. The subject map no longer asks for hook lines (2,000 tokens,
+  30 s); a question's hook arrives with its answer part.
