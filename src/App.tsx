@@ -99,6 +99,7 @@ import { discoverQuery, interestTerms, libraryPicks } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
+import { parseLibbyExport } from './lib/libbyExport'
 import { readDiary, writeDiary } from './lib/diary'
 import { foldDuplicates } from './lib/duplicates'
 import { bookSource } from './lib/bookSource'
@@ -1258,24 +1259,35 @@ function App() {
       window.prompt('Copy this link', link)
     }
   }
+  // Kindle's "My Clippings.txt", or the reading journey Libby exports for a book (JSON or CSV).
   async function importClippings(file: File) {
-    const clips = parseClippings(await file.text())
+    const contents = await file.text()
+    const libby = /\.(json|csv)$/i.test(file.name) || /^\s*[[{]/.test(contents)
+    const clips = libby ? parseLibbyExport(contents) : parseClippings(contents)
     if (clips.length === 0) {
-      showNotice('No highlights found. Choose the “My Clippings.txt” file from your Kindle.')
+      showNotice(
+        libby
+          ? 'No highlights found in that Libby file.'
+          : 'No highlights found. Choose “My Clippings.txt” from your Kindle, or a Libby export.',
+      )
       return
     }
-    const have = new Set(notes.map((note) => `${note.bookTitle ?? ''}|${note.body.trim()}`))
-    const fresh = clips.filter((clip) => !have.has(`${clip.bookTitle}|${clip.body.trim()}`))
+    const key = (title: string, body: string, quote = '') => `${title}|${body.trim()}|${quote.trim()}`
+    const have = new Set(notes.map((note) => key(note.bookTitle ?? '', note.body, note.quote)))
+    const fresh = clips.filter((clip) => !have.has(key(clip.bookTitle, clip.body, clip.quote)))
     const created: Note[] = fresh.map((clip) => ({
       id: `local-${crypto.randomUUID()}`,
       kind: clip.kind === 'note' ? 'note' : 'highlight',
       title: clip.bookTitle.slice(0, 60),
       body: clip.body,
+      quote: clip.quote,
+      chapter: clip.chapter,
       source: [clip.bookTitle, clip.author, clip.location].filter(Boolean).join(' · '),
       createdAt: clip.addedAt ?? new Date().toISOString(),
       bookTitle: clip.bookTitle,
       author: clip.author || undefined,
-      tags: ['kindle'],
+      bookId: books.find((book) => book.title.toLowerCase() === clip.bookTitle.toLowerCase())?.id,
+      tags: [clip.from ?? 'kindle'],
     }))
     const next = [...created, ...notes]
     setNotes(next)

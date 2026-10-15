@@ -195,3 +195,7 @@ and a Wrangler dry run. The live health endpoint is
 - Libby (`lib/libby.ts`, `LibbyBar.tsx`): Libby's books are DRM-protected and have no public reading API, so they
   can't be read inside Noesis. The Library page has a Libby bar (Shelf, the chosen library in Libby, and a search
   that opens Libby's results for that library, by its `libbyKey`); Explore offers "Search Libby for …".
+- Libby highlights (`lib/libbyExport.ts`): Second Brain's "Import highlights" takes Kindle's My Clippings.txt or the
+  reading journey Libby exports for a book (Timeline › a book › Export reading journey) as JSON or CSV. Highlights
+  come in as highlights; a highlight with a note comes in as a note with the passage as its quote; chapter and
+  place are kept, the book is linked when it is in the library, tag `libby`, and ones already there are skipped.
