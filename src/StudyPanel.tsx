@@ -1,41 +1,32 @@
-import { Check, StickyNote, Target } from 'lucide-react'
+import { HelpCircle, StickyNote } from 'lucide-react'
 
 export type StudyInfo = {
   pathTitle: string
-  stage: string
-  stageNumber: number
-  stageCount: number
-  outcome?: string
-  topics: Array<{ id: string; label: string; done: boolean }>
+  questions: Array<{ id: string; text: string }>
 }
 
-// What this book is for, shown beside the page: the stage, its topics, and a way to tick or write about each.
+// Beside the page: the questions from the reader's subject to keep in mind while reading, and a way to write
+// about each.
 export function StudyPanel({ study, onNote }: { study: StudyInfo; onNote: (topic: string) => void }) {
   return (
-    <section className="study-panel" aria-label="What you are studying">
+    <section className="study-panel" aria-label="Questions for this book">
       <div className="study-head">
-        <Target size={13} />
-        <span>
-          {study.pathTitle} · stage {study.stageNumber} of {study.stageCount}
-        </span>
+        <HelpCircle size={13} />
+        <span>{study.pathTitle}</span>
       </div>
-      <strong>{study.stage}</strong>
-      {study.outcome ? (
-        <p className="study-outcome">You’re aiming to: {study.outcome.replace(/^./, (c) => c.toLowerCase())}</p>
-      ) : null}
+      <strong>Questions to keep in mind</strong>
       <ul>
-        {study.topics.map((topic) => (
-          <li key={topic.id} className={topic.done ? 'study-done' : ''}>
-            <span className="study-topic">{topic.label}</span>
+        {study.questions.map((question) => (
+          <li key={question.id}>
+            <span className="study-topic">{question.text}</span>
             <button
               className="plan-ask"
-              onClick={() => onNote(topic.label)}
-              aria-label={`Write about ${topic.label}`}
+              onClick={() => onNote(question.text)}
+              aria-label={`Write about ${question.text}`}
               title="Write about this"
             >
               <StickyNote size={13} />
             </button>
-            {topic.done ? <Check size={12} aria-hidden="true" /> : null}
           </li>
         ))}
       </ul>

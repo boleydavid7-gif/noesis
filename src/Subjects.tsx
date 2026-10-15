@@ -18,7 +18,7 @@ import {
   Trash2,
   Wrench,
 } from 'lucide-react'
-import { FreeCopyFinder } from './PathPlanner'
+import { FreeCopyFinder } from './FreeCopyFinder'
 import { AtYourLibrary } from './PublicLibrary'
 import type { LibraryBook } from './lib/library'
 import {
@@ -36,6 +36,7 @@ import {
   addArea,
   addQuestion,
   answerQuestion,
+  booksForNow,
   areaState,
   canSumUp,
   comingBack,
@@ -255,8 +256,10 @@ export function SubjectView({
   onAsk,
   onNote,
   onNotice,
+  initialQuestion,
 }: {
   path: LearningPath
+  initialQuestion?: string
   library: LibraryBook[]
   onChange: (path: LearningPath) => void
   onOpenBook?: (id: string) => void
@@ -265,7 +268,9 @@ export function SubjectView({
   onNotice: (message: string) => void
 }) {
   const subject = useMemo(() => subjectOf(path), [path])
-  const [view, setView] = useState<View>({ kind: 'map' })
+  const [view, setView] = useState<View>(() =>
+    initialQuestion ? { kind: 'question', id: initialQuestion } : { kind: 'map' },
+  )
   const [undo, setUndo] = useState<{ label: string; before: Subject } | null>(null)
   const topRef = useRef<HTMLDivElement | null>(null)
 
@@ -274,8 +279,6 @@ export function SubjectView({
     const timer = window.setTimeout(() => setUndo(null), 7_000)
     return () => window.clearTimeout(timer)
   }, [undo])
-
-  if (!subject) return null
 
   const save = (next: Subject, undoLabel?: string) => {
     if (undoLabel) setUndo({ label: undoLabel, before: subject })
@@ -315,20 +318,23 @@ export function SubjectView({
         <SubjectShelf subject={subject} onOpen={(id) => go({ kind: 'question', id })} onSave={save} />
       ) : null}
       {question ? (
-        <QuestionPage
-          key={question.id}
-          path={path}
-          subject={subject}
-          question={question}
-          library={library}
-          onSave={save}
-          onBack={() => go({ kind: 'map' })}
-          onOpen={(id) => go({ kind: 'question', id })}
-          onOpenBook={onOpenBook}
-          onAsk={onAsk}
-          onNote={onNote}
-          onNotice={onNotice}
-        />
+        <div className="subject-split">
+          <QuestionIndex subject={subject} current={question.id} onOpen={(id) => go({ kind: 'question', id })} />
+          <QuestionPage
+            key={question.id}
+            path={path}
+            subject={subject}
+            question={question}
+            library={library}
+            onSave={save}
+            onBack={() => go({ kind: 'map' })}
+            onOpen={(id) => go({ kind: 'question', id })}
+            onOpenBook={onOpenBook}
+            onAsk={onAsk}
+            onNote={onNote}
+            onNotice={onNotice}
+          />
+        </div>
       ) : null}
       {undo ? (
         <div className="subject-undo" role="status">
@@ -345,6 +351,49 @@ export function SubjectView({
         </div>
       ) : null}
     </div>
+  )
+}
+
+// Beside an open question on wider screens: the subject's questions, so another is one click away.
+function QuestionIndex({
+  subject,
+  current,
+  onOpen,
+}: {
+  subject: Subject
+  current: string
+  onOpen: (id: string) => void
+}) {
+  const row = (q: Question) => (
+    <li key={q.id}>
+      <button
+        className={q.id === current ? 'question-index-on' : ''}
+        aria-current={q.id === current ? 'true' : undefined}
+        onClick={() => onOpen(q.id)}
+      >
+        {q.text}
+      </button>
+    </li>
+  )
+  const now = nowQuestions(subject)
+  return (
+    <nav className="question-index" aria-label="Questions in this subject">
+      {now.length ? (
+        <>
+          <h5>Now</h5>
+          <ul>{now.map(row)}</ul>
+        </>
+      ) : null}
+      {subject.areas.map((area) => {
+        const rest = subject.questions.filter((q) => q.areaId === area.id && q.state !== 'now')
+        return rest.length ? (
+          <div key={area.id}>
+            <h5>{area.title}</h5>
+            <ul>{rest.map(row)}</ul>
+          </div>
+        ) : null
+      })}
+    </nav>
   )
 }
 
@@ -425,48 +474,50 @@ function SubjectMap({
   const [newArea, setNewArea] = useState('')
   const areaName = (id: string) => subject.areas.find((area) => area.id === id)?.title
   return (
-    <>
-      <Reading path={path} library={library} onOpenBook={onOpenBook} />
-      {back ? (
-        <section className="subject-block subject-back">
-          <h4>From before</h4>
-          <p className="subject-back-q">{back.text}</p>
-          <blockquote>{back.answer?.text}</blockquote>
-          <div className="subject-actions">
-            {back.followUp ? (
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  const added = addQuestion(markCameBack(subject, back.id), back.areaId, back.followUp!, 'side')
-                  onSave(added.subject)
-                  onNotice('Added to Later.')
-                }}
-              >
-                <Plus size={14} /> {back.followUp}
+    <div className="subject-map">
+      <div className="subject-map-lead">
+        <Reading path={path} library={library} onOpenBook={onOpenBook} />
+        {back ? (
+          <section className="subject-block subject-back">
+            <h4>From before</h4>
+            <p className="subject-back-q">{back.text}</p>
+            <blockquote>{back.answer?.text}</blockquote>
+            <div className="subject-actions">
+              {back.followUp ? (
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    const added = addQuestion(markCameBack(subject, back.id), back.areaId, back.followUp!, 'side')
+                    onSave(added.subject)
+                    onNotice('Added to Later.')
+                  }}
+                >
+                  <Plus size={14} /> {back.followUp}
+                </button>
+              ) : null}
+              <button className="text-button" onClick={() => onOpen(back.id)}>
+                Add to it
               </button>
-            ) : null}
-            <button className="text-button" onClick={() => onOpen(back.id)}>
-              Add to it
-            </button>
-            <button className="text-button" onClick={() => onSave(markCameBack(subject, back.id))}>
-              Still right
-            </button>
-          </div>
+              <button className="text-button" onClick={() => onSave(markCameBack(subject, back.id))}>
+                Still right
+              </button>
+            </div>
+          </section>
+        ) : null}
+        <section className="subject-block">
+          <h4>Now</h4>
+          {now.length ? (
+            <div className="subject-list">
+              {now.map((q) => (
+                <QuestionRow key={q.id} question={q} area={areaName(q.areaId)} onOpen={() => onOpen(q.id)} />
+              ))}
+            </div>
+          ) : (
+            <p className="subject-empty">Choose up to {NOW_LIMIT} questions from the areas.</p>
+          )}
         </section>
-      ) : null}
-      <section className="subject-block">
-        <h4>Now</h4>
-        {now.length ? (
-          <div className="subject-list">
-            {now.map((q) => (
-              <QuestionRow key={q.id} question={q} area={areaName(q.areaId)} onOpen={() => onOpen(q.id)} />
-            ))}
-          </div>
-        ) : (
-          <p className="subject-empty">Choose up to {NOW_LIMIT} questions from the areas below.</p>
-        )}
-      </section>
-      <section className="subject-block">
+      </div>
+      <section className="subject-block subject-map-areas">
         <h4>Areas</h4>
         <div className="subject-areas">
           {subject.areas.map((area) => (
@@ -504,7 +555,7 @@ function SubjectMap({
           </button>
         </form>
       </section>
-    </>
+    </div>
   )
 }
 
@@ -1168,5 +1219,77 @@ function SubjectShelf({
         </div>
       ))}
     </div>
+  )
+}
+
+// ---------- On Home ----------
+
+// Books for the questions in Now, then the questions themselves: the reading leads.
+export function HomeQuestions({
+  paths,
+  library,
+  onOpenBook,
+  onOpenQuestion,
+  onFindBook,
+}: {
+  paths: LearningPath[]
+  library: LibraryBook[]
+  onOpenBook: (book: LibraryBook) => void
+  onOpenQuestion: (pathId: string, questionId: string) => void
+  onFindBook: (title: string) => void
+}) {
+  const books = booksForNow(paths).slice(0, 8)
+  const questions = paths
+    .flatMap((path) => nowQuestions(subjectOf(path)).map((question) => ({ path, question })))
+    .slice(0, 4)
+  if (!books.length && !questions.length) return null
+  return (
+    <section className="section-block home-questions" aria-label="Your questions">
+      <div className="section-heading">
+        <div>
+          <h2>Your questions</h2>
+        </div>
+      </div>
+      {books.length ? (
+        <div className="bookshelf-row">
+          {books.map(({ path, question, pick }) => {
+            const owned = ownedBook(library, pick.title)
+            return (
+              <button
+                className="shelf-book"
+                key={`${path.id}-${pick.id}`}
+                title={`For: ${question.text}`}
+                onClick={() => (owned ? onOpenBook(owned) : onFindBook(pick.title))}
+              >
+                <div className={'shelf-cover' + (owned ? '' : ' shelf-add-cover')}>
+                  {owned && coverOf(owned) ? (
+                    <img src={coverOf(owned)} alt="" />
+                  ) : pick.book?.coverUrl ? (
+                    <img src={pick.book.coverUrl} alt="" referrerPolicy="no-referrer" />
+                  ) : (
+                    <BookOpen size={22} />
+                  )}
+                </div>
+                <strong>{pick.title}</strong>
+                {pick.source ? <span>{pick.source}</span> : null}
+                <small>{owned ? (owned.progress > 0 ? 'Carry on' : 'Start') : 'Find a copy'}</small>
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+      {questions.length ? (
+        <div className="subject-list">
+          {questions.map(({ path, question }) => (
+            <QuestionRow
+              key={`${path.id}-${question.id}`}
+              question={question}
+              area={path.title}
+              onOpen={() => onOpenQuestion(path.id, question.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }

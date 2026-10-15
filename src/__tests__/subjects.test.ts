@@ -21,6 +21,8 @@ import {
   subjectFromPlan,
   updatePick,
   youtubeId,
+  subjectFor,
+  booksForNow,
   type Subject,
 } from '../lib/subjects'
 
@@ -213,5 +215,43 @@ describe('library lines', () => {
       'E-book in Libby: wait about 8 weeks',
     )
     expect(copyLine({ format: 'audiobook', available: true, url: 'x' })).toBe('Audiobook in Libby: available now')
+  })
+})
+
+describe('while reading', () => {
+  const subject = subjectFromDraft(draft)
+  const first = nowQuestions(subject)[0]
+  const withBook: Subject = {
+    ...subject,
+    questions: subject.questions.map((q) =>
+      q.id === first.id
+        ? {
+            ...q,
+            picks: [
+              { id: 'b', type: 'book' as const, title: 'Teaming with Microbes: The Organic Gardener', source: 'J' },
+            ],
+          }
+        : q,
+    ),
+  }
+  const path = {
+    id: 'p',
+    title: 'Gardening',
+    description: '',
+    bookIds: ['lib-2'],
+    createdAt: '2026-10-01',
+    subject: withBook,
+  }
+  it('finds the subject for a book a question suggested, with that question first', () => {
+    const found = subjectFor({ id: 'lib-1', title: 'Teaming with Microbes' }, [path])
+    expect(found?.questions[0].id).toBe(first.id)
+    expect(found?.questions.length).toBe(3)
+  })
+  it('finds it for a book added to the subject, and not for others', () => {
+    expect(subjectFor({ id: 'lib-2', title: 'Anything' }, [path])?.path.id).toBe('p')
+    expect(subjectFor({ id: 'lib-3', title: 'Unrelated' }, [path])).toBeNull()
+  })
+  it('lists books for questions in Now once each', () => {
+    expect(booksForNow([path, { ...path, id: 'p2' }]).map((row) => row.pick.id)).toEqual(['b'])
   })
 })

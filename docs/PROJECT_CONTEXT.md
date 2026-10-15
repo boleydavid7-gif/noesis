@@ -60,7 +60,12 @@ The current app is a working reader-first build:
   can confirm: links checked, Wikipedia by exact title, YouTube through oEmbed (or found by search with the
   optional secret `YOUTUBE_API_KEY`, with lengths), podcast episodes through Apple's open podcast search; books are
   matched through `/api/book`. Older planned paths turn into subjects when opened (stages become areas, topics
-  questions, ticked ones answered).
+  questions, ticked ones answered); the old planner, its Home shelf and the `/api/path`, `/api/materials` and
+  `/api/quiz` routes are gone. Where the subject area is at least 720px wide (a container query), the map is two
+  columns (Reading and Now beside Areas) and an open question has the subject's questions listed beside it. Home's
+  "Your questions" shows books suggested for the questions in Now (Start, Carry on, or Find a copy) and the questions
+  themselves, each opening straight to its page. While reading a book that belongs to a subject, the study panel
+  lists the questions to keep in mind (ones that suggested this book first, then Now), each with Write about this.
 - Your public library (Settings > Reading, or "Check your library" on a book; `PublicLibrary.tsx`,
   `lib/publicLibrary.ts`, synced preference `noesis:public-library:v1`): `/api/libraries` finds library systems with
   a branch within about 50 miles of a typed city or ZIP code, or of the reader's location (turned into a postal code

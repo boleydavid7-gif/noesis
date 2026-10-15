@@ -101,7 +101,9 @@ describe('books that arrive from outside', () => {
   it('wait until the app takes them, then go straight to it', async () => {
     const { onIncoming, startIncoming } = await import('../lib/incoming')
     let consumer: ((params: { files: { getFile: () => Promise<File> }[] }) => void) | undefined
-    ;(globalThis as unknown as { window: unknown }).window = { launchQueue: { setConsumer: (fn: typeof consumer) => (consumer = fn) } }
+    ;(globalThis as unknown as { window: unknown }).window = {
+      launchQueue: { setConsumer: (fn: typeof consumer) => (consumer = fn) },
+    }
     startIncoming()
     consumer?.({ files: [{ getFile: async () => new File(['a'], 'Early.epub') }] })
     await new Promise((resolve) => setTimeout(resolve, 0))

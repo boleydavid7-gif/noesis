@@ -123,20 +123,9 @@ import { WebdavBrowser } from './WebdavBrowser'
 import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
-import { PathPlanDetail } from './PathPlanner'
-import { SubjectStarter, SubjectView } from './Subjects'
-import { emptySubject, subjectCounts, subjectOf } from './lib/subjects'
-import {
-  addPicks,
-  advanceTopic,
-  currentTopic,
-  isRecent,
-  matchScore,
-  planProgress,
-  type LearningPath,
-} from './lib/pathPlan'
-import { requestTopicBooks, resolveBooks } from './lib/pathClient'
-import { currentStage, libraryBooksForStage, readNextOnPath, studyFor } from './lib/pathLink'
+import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
+import { emptySubject, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
+import type { LearningPath } from './lib/pathPlan'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
 import { WeatherPanel } from './WeatherPanel'
@@ -406,13 +395,13 @@ function App() {
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
   const [shuffle, setShuffle] = useState(0)
-  const [findingStage, setFindingStage] = useState<string | null>(null)
-  const triedTopics = useRef(new Set<string>())
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [justSavedPath, setJustSavedPath] = useState<string | null>(null)
+  // A question opened from Home or elsewhere: its subject opens on that question.
+  const [openAt, setOpenAt] = useState<{ pathId: string; questionId: string } | null>(null)
   const [signOutClear, setSignOutClear] = useState(false)
   const [keepDismissed, setKeepDismissed] = useState(() => {
     try {
@@ -450,18 +439,9 @@ function App() {
   const authUserId = authUser?.id
   const cloudConnection = cloudConnectionForUser(cloudConnections, authUserId)
   const selectedBook = useMemo(() => books.find((book) => book.id === selectedBookId) ?? null, [books, selectedBookId])
-  const studyLink = useMemo(() => (selectedBook ? studyFor(selectedBook, paths) : null), [selectedBook, paths])
+  const studyLink = useMemo(() => (selectedBook ? subjectFor(selectedBook, paths) : null), [selectedBook, paths])
   const studyInfo: StudyInfo | null =
-    studyLink && studyLink.path.plan
-      ? {
-          pathTitle: studyLink.path.title,
-          stage: studyLink.milestone.title,
-          stageNumber: studyLink.milestoneIndex + 1,
-          stageCount: studyLink.path.plan.milestones.length,
-          outcome: studyLink.milestone.outcome,
-          topics: studyLink.milestone.topics,
-        }
-      : null
+    studyLink && studyLink.questions.length ? { pathTitle: studyLink.path.title, questions: studyLink.questions } : null
   const filteredBooks = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase()
     const inShelf = shelfFilter.startsWith('shelf:')
@@ -1268,56 +1248,6 @@ function App() {
         ? `Brought in ${created.length} highlights and notes.`
         : `Brought in ${created.length}. ${clips.length - created.length} were already here.`,
     )
-  }
-  useEffect(() => {
-    moreBooksRef.current = moreBooks
-  })
-  // The first time a topic comes up, its shelf is filled once, without the reader asking.
-  useEffect(() => {
-    if (!learner || findingStage !== null) return
-    for (const path of paths) {
-      const here = path.plan ? currentTopic(path.plan) : null
-      if (!here || (here.topic.picks?.length ?? 0) >= 5 || triedTopics.current.has(here.topic.id)) continue
-      triedTopics.current.add(here.topic.id)
-      void moreBooksRef.current(path)
-      return
-    }
-  }, [learner, paths, findingStage])
-  // Brings books for the topic the reader is on, keeping them on the path.
-  const moreBooksRef = useRef<(path: LearningPath) => Promise<void>>(async () => undefined)
-  async function moreBooks(path: LearningPath) {
-    const plan = path.plan
-    const here = plan ? currentTopic(plan) : null
-    if (!plan || !here) return
-    setFindingStage(here.topic.id)
-    try {
-      const found = await requestTopicBooks({
-        goal: plan.goal,
-        stage: here.milestone.title,
-        topic: here.topic.label,
-        level: plan.level,
-        recent: plan.fastChanging,
-        exclude: [...(here.topic.picks ?? []).map((pick) => pick.title), ...(here.milestone.bookTitles ?? [])],
-      })
-      // The catalog knows the real year, so it overrides the AI's guess; books it cannot find are dropped.
-      const checked = await resolveBooks(found)
-      const withYears = found
-        .map((candidate) => {
-          const real = checked.find((book) => matchScore(book, candidate.title, candidate.author) > 0)
-          return real || checked.length === 0 ? { ...candidate, year: real?.year ?? candidate.year } : null
-        })
-        .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
-      const updated = { ...path, plan: addPicks(plan, here.topic.id, withYears), updated: new Date().toISOString() }
-      setPaths((current) => {
-        const next = current.map((item) => (item.id === updated.id ? updated : item))
-        writePaths(next)
-        return next
-      })
-    } catch (reason) {
-      showNotice(reason instanceof Error ? reason.message : 'Could not find books right now.')
-    } finally {
-      setFindingStage(null)
-    }
   }
   function openTopicNote(title: string, source: string) {
     setNoteDraft({ title, body: '', source, kind: 'note' })
@@ -2445,24 +2375,18 @@ function App() {
         {fresh ? null : (
           <>
             {learner ? (
-              <RecommendedShelf
+              <HomeQuestions
                 paths={paths}
-                books={books}
+                library={books}
                 onOpenBook={openSavedBook}
-                working={findingStage !== null}
-                onMore={(path) => void moreBooks(path)}
-                onTake={(path, title, owned) => {
-                  if (!path.plan) return
-                  const updated = { ...path, plan: advanceTopic(path.plan), updated: new Date().toISOString() }
-                  const next = paths.map((item) => (item.id === updated.id ? updated : item))
-                  setPaths(next)
-                  writePaths(next)
-                  // A book not in the library yet: search for a copy of it.
-                  if (!owned) {
-                    setResourceQuery(title)
-                    selectNav('Explore')
-                    void searchResources(undefined, title)
-                  }
+                onOpenQuestion={(pathId, questionId) => {
+                  setOpenAt({ pathId, questionId })
+                  selectNav('Learning Paths')
+                }}
+                onFindBook={(title) => {
+                  setResourceQuery(title)
+                  selectNav('Explore')
+                  void searchResources(undefined, title)
                 }}
               />
             ) : null}
@@ -2694,11 +2618,12 @@ function App() {
             </button>
           </form>
           <PathSection
-            key={justSavedPath ?? 'paths'}
+            key={openAt ? `${openAt.pathId}:${openAt.questionId}` : (justSavedPath ?? 'paths')}
+            initialQuestion={openAt}
             paths={paths}
             books={books}
             editable
-            initialOpen={justSavedPath}
+            initialOpen={openAt?.pathId ?? justSavedPath}
             onDelete={deletePath}
             onAssign={(pathId, bookId) => {
               const next = paths.map((path) =>
@@ -3293,7 +3218,7 @@ function App() {
         learner={learner}
         study={studyInfo}
         onTopicNote={(topic, location) => {
-          const source = [studyLink?.path.title, studyLink?.milestone.title].filter(Boolean).join(' · ')
+          const source = studyLink?.path.title ?? ''
           setNoteDraft({
             title: topic,
             body: '',
@@ -4652,109 +4577,6 @@ function ShelfMenu({ mode, onChange }: { mode: ShelfMode; onChange: (mode: Shelf
 const SHELF_KEY = 'noesis:home-shelf:v1'
 type ShelfMode = 'reading' | 'added'
 
-// Under the hero: books for the topic you are on. Choosing one means you have taken this step, and the shelf
-// moves to the next topic. "More on" keeps you where you are and brings more books for the same topic.
-function RecommendedShelf({
-  paths,
-  books,
-  onOpenBook,
-  onTake,
-  onMore,
-  working,
-}: {
-  paths: LearningPath[]
-  books: LibraryBook[]
-  onOpenBook: (book: LibraryBook) => void
-  onTake: (path: LearningPath, title: string, owned?: LibraryBook) => void
-  onMore: (path: LearningPath) => void
-  working: boolean
-}) {
-  const [older, setOlder] = useState(false)
-  const active = paths.flatMap((path) => {
-    const here = path.plan ? currentTopic(path.plan) : null
-    return here ? [{ path, here }] : []
-  })[0]
-  if (!active) return null
-  const { path, here } = active
-  const ownedFor = (title: string) =>
-    books.find((book) => matchScore({ title: book.title, authors: [book.author] }, title, '') > 0)
-  const mine = libraryBooksForStage(here.milestone, books).filter((book) => !book.finished && book.progress < 98)
-  const allPicks = here.topic.picks ?? []
-  const limited = Boolean(path.plan?.fastChanging)
-  const picks = limited && !older ? allPicks.filter((pick) => isRecent(pick.year)) : allPicks
-  const hidden = allPicks.length - picks.length
-  const rows = [
-    ...mine.map((book) => ({
-      key: book.id,
-      title: book.title,
-      author: book.author,
-      year: undefined as number | undefined,
-      book,
-    })),
-    ...picks
-      .filter(
-        (pick) => !mine.some((book) => matchScore({ title: book.title, authors: [book.author] }, pick.title, '') > 0),
-      )
-      .map((pick) => ({
-        key: pick.title,
-        title: pick.title,
-        author: pick.author,
-        year: pick.year,
-        book: ownedFor(pick.title),
-      })),
-  ]
-  return (
-    <section className="section-block recommended-shelf" aria-label="Recommended next">
-      <div className="section-heading">
-        <div>
-          <h2>Recommended next</h2>
-          <p className="recommended-sub">
-            {path.title} · {here.topic.label}
-          </p>
-        </div>
-      </div>
-      {rows.length === 0 ? (
-        <div className="empty-state">{working ? 'Finding books…' : 'No books yet for this topic.'}</div>
-      ) : (
-        <div className="bookshelf-row">
-          {rows.slice(0, 12).map((row) => (
-            <button
-              className="shelf-book"
-              key={row.key}
-              onClick={() => {
-                onTake(path, row.title, row.book)
-                if (row.book) onOpenBook(row.book)
-              }}
-            >
-              <div className={'shelf-cover' + (row.book ? '' : ' shelf-add-cover')}>
-                {row.book ? <BookCover book={row.book} compact /> : <BookOpen size={22} />}
-                {row.book && row.book.progress > 0 ? (
-                  <span className="shelf-progress" style={{ width: `${Math.max(4, row.book.progress)}%` }} />
-                ) : null}
-              </div>
-              <strong>{row.title}</strong>
-              {row.author ? <span>{row.author}</span> : null}
-              {row.year ? <small>{row.year}</small> : null}
-              <small>{row.book ? (row.book.progress > 0 ? 'Carry on' : 'Start') : 'Find a copy'}</small>
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="recommended-actions">
-        {limited && (hidden > 0 || older) ? (
-          <label className="recommended-older">
-            <input type="checkbox" checked={older} onChange={(event) => setOlder(event.target.checked)} />
-            Include older books{hidden > 0 && !older ? ` (${hidden} hidden)` : ''}
-          </label>
-        ) : null}
-        <button className="secondary-button" disabled={working} onClick={() => onMore(path)}>
-          <Search size={14} /> {working ? 'Finding…' : `More on ${here.topic.label}`}
-        </button>
-      </div>
-    </section>
-  )
-}
-
 function ReadingShelfSection({
   books,
   onOpen,
@@ -4849,7 +4671,9 @@ function PathSection({
   onOpenBook,
   onNotice,
   initialOpen = null,
+  initialQuestion = null,
 }: {
+  initialQuestion?: { pathId: string; questionId: string } | null
   onOpenBook?: (id: string) => void
   paths: LearningPath[]
   books: LibraryBook[]
@@ -4872,18 +4696,18 @@ function PathSection({
     const timer = window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
     return () => window.clearTimeout(timer)
   }, [initialOpen])
-  const progressOf = (path: LearningPath) => {
-    const pathBooks = books.filter((book) => path.bookIds.includes(book.id))
-    const plan = path.plan ? planProgress(path.plan) : null
-    const percent = plan
-      ? plan.percent
-      : pathBooks.length
-        ? Math.round(pathBooks.reduce((sum, book) => sum + book.progress, 0) / pathBooks.length)
-        : 0
-    return { pathBooks, plan, percent }
-  }
   const active = paths.find((path) => path.id === selected) ?? null
-  const detail = active ? progressOf(active) : null
+  // What a tile says: the questions in Now, else how many areas; and the book being read for it.
+  const tileLine = (path: LearningPath) => {
+    const counts = subjectCounts(subjectOf(path))
+    return counts.now
+      ? `${counts.now} ${counts.now === 1 ? 'question' : 'questions'} now`
+      : `${counts.areas} ${counts.areas === 1 ? 'area' : 'areas'}`
+  }
+  const readingFor = (path: LearningPath) =>
+    books
+      .filter((book) => path.bookIds.includes(book.id) && book.progress > 0 && book.progress < 98)
+      .sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))[0]
   return (
     <section className="section-block path-section">
       <div className="section-heading">
@@ -4901,7 +4725,7 @@ function PathSection({
       ) : (
         <div className="path-tiles">
           {paths.map((path) => {
-            const { pathBooks, percent } = progressOf(path)
+            const reading = readingFor(path)
             const Icon = pathIcon(path.title)
             const seed = hashOf(path.id)
             return (
@@ -4924,32 +4748,8 @@ function PathSection({
                     <Icon size={16} />
                   </span>
                   <strong>{path.title}</strong>
-                  <small>
-                    {path.subject
-                      ? (() => {
-                          const counts = subjectCounts(path.subject)
-                          return counts.now
-                            ? `${counts.now} ${counts.now === 1 ? 'question' : 'questions'} now`
-                            : `${counts.areas} ${counts.areas === 1 ? 'area' : 'areas'}`
-                        })()
-                      : path.plan
-                        ? (() => {
-                            const stage = currentStage(path, books)
-                            return stage ? `Stage ${stage.index + 1} of ${path.plan.milestones.length}` : 'Finished'
-                          })()
-                        : `${pathBooks.length} ${pathBooks.length === 1 ? 'book' : 'books'}`}
-                  </small>
-                  {(() => {
-                    const next = readNextOnPath(path, books)
-                    return next && (next.kind === 'continue' || next.kind === 'start') ? (
-                      <small className="path-tile-next">Read next: {next.book.title}</small>
-                    ) : null
-                  })()}
-                  {path.subject ? null : (
-                    <span className="path-tile-track">
-                      <span style={{ width: `${percent}%` }} />
-                    </span>
-                  )}
+                  <small>{tileLine(path)}</small>
+                  {reading ? <small className="path-tile-next">Reading: {reading.title}</small> : null}
                 </span>
                 <ArrowRight size={14} className="path-tile-arrow" />
               </button>
@@ -4958,25 +4758,17 @@ function PathSection({
           {onOpen ? (
             <button className="path-tile path-tile-new" onClick={onOpen}>
               <Plus size={20} />
-              <strong>Plan a new path</strong>
+              <strong>Start a subject</strong>
             </button>
           ) : null}
         </div>
       )}
-      {active && detail ? (
+      {active ? (
         <article className="path-detail panel-card" ref={detailRef}>
           <div className="path-detail-head">
             <div>
               <h3>{active.title}</h3>
               <p>{active.description}</p>
-              {subjectOf(active) ? null : (
-                <small>
-                  {detail.plan
-                    ? `${detail.plan.done} of ${detail.plan.total} topics · ${active.plan?.weeks ?? ''}`
-                    : `${detail.pathBooks.length} ${detail.pathBooks.length === 1 ? 'book' : 'books'}`}{' '}
-                  · {detail.percent >= 100 ? 'Complete' : `${detail.percent}%`}
-                </small>
-              )}
             </div>
             {onDelete ? (
               <div className="path-remove">
@@ -5005,9 +4797,10 @@ function PathSection({
               </div>
             ) : null}
           </div>
-          {subjectOf(active) && onUpdate ? (
+          {onUpdate ? (
             <SubjectView
               path={active}
+              initialQuestion={initialQuestion?.pathId === active.id ? initialQuestion.questionId : undefined}
               library={books}
               onChange={onUpdate}
               onOpenBook={onOpenBook}
@@ -5015,24 +4808,6 @@ function PathSection({
               onNote={onNote}
               onNotice={onNotice ?? (() => undefined)}
             />
-          ) : active.plan && onUpdate ? (
-            <PathPlanDetail
-              path={active}
-              onChange={onUpdate}
-              onAsk={onAsk}
-              onNote={onNote}
-              library={books}
-              onOpenBook={onOpenBook}
-            />
-          ) : null}
-          {detail.pathBooks.length && !subjectOf(active) ? (
-            <ul className="path-detail-books">
-              {detail.pathBooks.map((book) => (
-                <li key={book.id}>
-                  {book.title} <small>{Math.round(book.progress)}%</small>
-                </li>
-              ))}
-            </ul>
           ) : null}
           {editable && books.length > 0 ? (
             <select
@@ -5043,7 +4818,7 @@ function PathSection({
                 event.target.value = ''
               }}
             >
-              <option value="">Add a book…</option>
+              <option value="">Add a book from your library…</option>
               {books
                 .filter((book) => !active.bookIds.includes(book.id))
                 .map((book) => (

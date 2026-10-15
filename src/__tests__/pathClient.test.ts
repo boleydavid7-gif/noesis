@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../lib/auth', () => ({ authHeaders: async () => ({}) }))
 
-import { bookKey, requestSuggestion, resolveBook, resolveBooks } from '../lib/pathClient'
+import { bookKey, requestSubject, resolveBook, resolveBooks } from '../lib/pathClient'
 
 const store = new Map<string, string>()
 beforeEach(() => {
@@ -86,24 +86,24 @@ describe('resolveBooks', () => {
   })
 })
 
-describe('requestSuggestion', () => {
-  it('returns the plan, or the server message when it fails', async () => {
+describe('requestSubject', () => {
+  it('returns the map, or the server message when it fails', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => reply({ ok: true, suggestion: { goal: 'g', paths: [], books: [], resources: [] } })),
+      vi.fn(async () => reply({ ok: true, draft: { title: 'g', summary: '', areas: [] } })),
     )
-    expect((await requestSuggestion('learn networking')).goal).toBe('g')
+    expect((await requestSubject({ goal: 'learn networking' })).title).toBe('g')
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => reply({ ok: false, error: 'Too many requests.' }, 429)),
     )
-    await expect(requestSuggestion('learn networking')).rejects.toThrow('Too many requests.')
+    await expect(requestSubject({ goal: 'learn networking' })).rejects.toThrow('Too many requests.')
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
         throw new Error('offline')
       }),
     )
-    await expect(requestSuggestion('learn networking')).rejects.toThrow(/connection/)
+    await expect(requestSubject({ goal: 'learn networking' })).rejects.toThrow(/connection/)
   })
 })

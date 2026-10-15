@@ -453,7 +453,54 @@ export function subjectFromPlan(plan: PathPlan, now = new Date()): Subject {
   return { areas, questions, level: plan.level }
 }
 
-export function subjectOf(path: LearningPath): Subject | null {
+// Every path has a subject: its own, one made from an older plan, or an empty one for a plain book collection.
+export function subjectOf(path: LearningPath): Subject {
   if (path.subject) return path.subject
-  return path.plan ? subjectFromPlan(path.plan) : null
+  if (path.plan) return subjectFromPlan(path.plan)
+  return { areas: [{ id: `area-${path.id}`, title: 'Getting started' }], questions: [] }
+}
+
+// ---------- While reading ----------
+
+const titleKey = (value: string) =>
+  value
+    .toLowerCase()
+    .split(':')[0]
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+// The subject a book belongs to, and the questions to keep in mind while reading it: questions that suggested
+// this book first, then the subject's Now questions.
+export function subjectFor(
+  book: { id: string; title: string },
+  paths: LearningPath[],
+): { path: LearningPath; questions: Question[] } | null {
+  const wanted = titleKey(book.title)
+  for (const path of paths) {
+    const subject = subjectOf(path)
+    if (!subject) continue
+    const named = subject.questions.filter((q) =>
+      (q.picks ?? []).some((pick) => pick.type === 'book' && titleKey(pick.title) === wanted),
+    )
+    if (!named.length && !path.bookIds.includes(book.id)) continue
+    const now = nowQuestions(subject).filter((q) => !named.includes(q))
+    return { path, questions: [...named, ...now].slice(0, 5) }
+  }
+  return null
+}
+
+// Books suggested for the questions in Now, across subjects, for Home's shelf.
+export function booksForNow(paths: LearningPath[]): Array<{ path: LearningPath; question: Question; pick: Pick }> {
+  const seen = new Set<string>()
+  return paths.flatMap((path) => {
+    const subject = subjectOf(path)
+    if (!subject) return []
+    return nowQuestions(subject).flatMap((question) =>
+      (question.picks ?? [])
+        .filter((pick) => pick.type === 'book')
+        .filter((pick) => !seen.has(titleKey(pick.title)) && Boolean(seen.add(titleKey(pick.title))))
+        .map((pick) => ({ path, question, pick })),
+    )
+  })
 }

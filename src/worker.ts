@@ -1,12 +1,6 @@
 import {
-  BOOK_NOTES,
-  RESOURCE_KINDS,
   buyLinks,
-  cleanBooks,
-  cleanResources,
   isPublicHttps,
-  cleanSuggestion,
-  MAX_PATHS,
   matchScore,
   pickBook,
   resolvedFromRecord,
@@ -397,115 +391,6 @@ async function clarifyGoal(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, topic, broad: parsed.broad !== false, focuses })
 }
 
-// Finds books and free resources for one stage of a saved path, on request.
-async function findMaterials(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(
-    request,
-    env,
-    'materials',
-    12,
-    'Too many requests. Try again in a few minutes.',
-    'Sign in to find study materials.',
-  )
-  if (refused) return refused
-  let input: {
-    goal?: unknown
-    stage?: unknown
-    topics?: unknown
-    level?: unknown
-    booksOnly?: unknown
-    recent?: unknown
-    exclude?: unknown
-  }
-  try {
-    input = (await request.json()) as typeof input
-  } catch {
-    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
-  }
-  const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
-  const goal = text(input.goal, 400)
-  const stage = text(input.stage, 100)
-  const topics = (Array.isArray(input.topics) ? input.topics : [])
-    .map((item) => text(item, 100))
-    .filter(Boolean)
-    .slice(0, 8)
-  if (!goal || !stage || topics.length === 0)
-    return json({ ok: false, error: 'Tell Noema which stage to find materials for.' }, 400)
-  const level = text(input.level, 40)
-  if (input.booksOnly === true) {
-    // Just books for one topic, with no link checks, so it is quick and cheap.
-    const exclude = (Array.isArray(input.exclude) ? input.exclude : [])
-      .map((item) => text(item, 120))
-      .filter(Boolean)
-      .slice(0, 30)
-    const more = await generate(env, {
-      system: [
-        'You recommend books for one topic of a learning path. Reply with JSON only, in exactly this shape: {"books":[{"title":"","author":"","year":0,"note":""}]}.',
-        'Give six real, published books you are confident exist that teach exactly that topic, best fit first, with the author\'s name and the "year" of the edition. "note" is one of: ' +
-          BOOK_NOTES.join(', ') +
-          '.',
-        input.recent === true
-          ? `This subject dates quickly, so give only editions published in ${new Date().getFullYear() - 4} or later.`
-          : '',
-        level ? `Pitch them for a learner who is: ${level}.` : '',
-        exclude.length ? `Do not include any of these: ${exclude.join('; ')}.` : '',
-        'Never invent a book or an author.',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      prompt: `Learner's goal: ${goal}\nStage: ${stage}\nTopic: ${topics.join('; ')}`,
-      maxOutputTokens: 1_200,
-      temperature: 0.4,
-      json: true,
-      timeoutMs: 25_000,
-    })
-    if (!more.ok) return json({ ok: false, error: more.error }, more.status)
-    try {
-      const books = cleanBooks((JSON.parse(more.text) as { books?: unknown }).books, 8)
-      if (books.length === 0)
-        return json({ ok: false, error: 'Noema could not find books for that topic. Try again.' }, 502)
-      return json({ ok: true, books, resources: [] })
-    } catch {
-      return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
-    }
-  }
-  const result = await generate(env, {
-    system: [
-      'You recommend study materials for one stage of a learning path. Reply with JSON only, in exactly this shape:',
-      '{"books":[{"title":"","author":"","note":""}],"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
-      'Give three or four real, published books you are confident exist that teach exactly the topics given, best fit first, with the author\'s name. "note" is one of: ' +
-        BOOK_NOTES.join(', ') +
-        '.',
-      'Give two to four free, reputable resources for those topics, such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
-        RESOURCE_KINDS.join(', ') +
-        '.',
-      level ? `Pitch them for a learner who is: ${level}.` : '',
-      "Never invent a book, an author, or a web address. If you are not sure of an exact address, use the provider's main website address.",
-    ]
-      .filter(Boolean)
-      .join(' '),
-    prompt: `Learner's goal: ${goal}\nStage: ${stage}\nTopics: ${topics.join('; ')}`,
-    maxOutputTokens: 2_000,
-    temperature: 0.4,
-    json: true,
-    timeoutMs: 30_000,
-  })
-  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
-  let parsed: { books?: unknown; resources?: unknown }
-  try {
-    parsed = JSON.parse(result.text)
-  } catch {
-    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
-  }
-  const books = cleanBooks(parsed.books, 5)
-  const resources = cleanResources(parsed.resources, 6)
-  const checks = await Promise.all(resources.map((resource) => linkWorks(resource.url)))
-  const working = resources.filter((_, index) => checks[index])
-  if (books.length === 0 && working.length === 0)
-    return json({ ok: false, error: 'Noema could not find materials for that stage. Try again.' }, 502)
-  return json({ ok: true, books, resources: working })
-}
-
 // Looks a word up in a free dictionary, so the reader can show a meaning without leaving the page.
 async function defineWord(request: Request): Promise<Response> {
   if (rateLimited(request, 'define', 40))
@@ -540,167 +425,6 @@ async function defineWord(request: Request): Promise<Response> {
   } catch {
     return json({ ok: false, error: 'The dictionary is unavailable right now.' }, 502)
   }
-}
-
-// A one-question check on a topic from a learning path: ask a question, then
-// judge the learner's answer. Stateless, so the page sends the question back.
-async function quizTopic(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(
-    request,
-    env,
-    'quiz',
-    20,
-    'Too many requests. Try again in a minute.',
-    'Sign in to be quizzed.',
-  )
-  if (refused) return refused
-  let input: {
-    mode?: unknown
-    goal?: unknown
-    stage?: unknown
-    topic?: unknown
-    question?: unknown
-    answer?: unknown
-    level?: unknown
-  }
-  try {
-    input = (await request.json()) as typeof input
-  } catch {
-    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
-  }
-  const text = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
-  const topic = text(input.topic, 120)
-  if (!topic) return json({ ok: false, error: 'Tell Noema which topic to check.' }, 400)
-  const context = `Learner's goal: ${text(input.goal, 300)}\nStage: ${text(input.stage, 100)}\nTopic: ${topic}\nLevel: ${text(input.level, 40) || 'Beginner'}`
-
-  if (input.mode === 'grade') {
-    const question = text(input.question, 500)
-    const answer = text(input.answer, 1_500)
-    if (!question || answer.length < 2) return json({ ok: false, error: 'Write an answer first.' }, 400)
-    const result = await generate(env, {
-      system: [
-        'You mark one answer from a learner. Reply with JSON only: {"verdict":"correct"|"partly"|"incorrect","feedback":"","ideal":""}.',
-        '"feedback" is one or two plain, encouraging sentences saying what was right and what was missing. "ideal" is a short model answer of one to three sentences.',
-        'Judge understanding, not wording. Never invent facts.',
-      ].join(' '),
-      prompt: `${context}\nQuestion: ${question}\nLearner's answer: ${answer}`,
-      maxOutputTokens: 500,
-      temperature: 0.2,
-      json: true,
-    })
-    if (!result.ok) return json({ ok: false, error: result.error }, result.status)
-    try {
-      const parsed = JSON.parse(result.text) as { verdict?: unknown; feedback?: unknown; ideal?: unknown }
-      const verdict = parsed.verdict === 'correct' || parsed.verdict === 'partly' ? parsed.verdict : 'incorrect'
-      return json({
-        ok: true,
-        verdict,
-        feedback: text(parsed.feedback, 400),
-        ideal: text(parsed.ideal, 600),
-      })
-    } catch {
-      return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
-    }
-  }
-
-  const result = await generate(env, {
-    system: [
-      'You check whether a learner understands one topic. Reply with JSON only: {"question":""}.',
-      "Ask one clear question that tests understanding of the topic rather than recall of a definition. It must be answerable in two or three sentences by someone who has studied the topic at the learner's level.",
-    ].join(' '),
-    prompt: context,
-    maxOutputTokens: 200,
-    temperature: 0.7,
-    json: true,
-  })
-  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
-  try {
-    const question = text((JSON.parse(result.text) as { question?: unknown }).question, 500)
-    return question
-      ? json({ ok: true, question })
-      : json({ ok: false, error: 'Noema could not write a question. Try again.' }, 502)
-  } catch {
-    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
-  }
-}
-
-// Turns a learner's goal into structured paths, plus books and free
-// resources to look up. Books are verified one by one through /api/book.
-async function planPath(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(
-    request,
-    env,
-    'path',
-    6,
-    'Too many requests. Try again in a few minutes.',
-    'Sign in to create learning paths.',
-  )
-  if (refused) return refused
-  let input: { goal?: unknown; focuses?: unknown; level?: unknown; purpose?: unknown }
-  try {
-    input = (await request.json()) as typeof input
-  } catch {
-    return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
-  }
-  const goal = typeof input.goal === 'string' ? input.goal.trim().slice(0, 400) : ''
-  if (goal.length < 8) return json({ ok: false, error: 'Describe what you want to learn in a sentence or two.' }, 400)
-  const focuses = (Array.isArray(input.focuses) ? input.focuses : [])
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim().slice(0, 80))
-    .filter(Boolean)
-    .slice(0, MAX_PATHS)
-  const level = typeof input.level === 'string' ? input.level.trim().slice(0, 40) : ''
-  const purpose = typeof input.purpose === 'string' ? input.purpose.trim().slice(0, 80) : ''
-  const count = focuses.length || 3
-
-  const system = [
-    'You design learning paths for a reading app. Reply with JSON only, in exactly this shape:',
-    '{"paths":[{"title":"","summary":"","level":"","fastChanging":false,"milestones":[{"title":"","outcome":"","hours":0,"topics":[""],"resources":[""],"books":[""]}],"reading":[{"title":"","author":"","note":""}]}],',
-    '"resources":[{"title":"","publisher":"","url":"","kind":"","note":""}]}.',
-    focuses.length
-      ? `Give exactly ${focuses.length} ${focuses.length === 1 ? 'path' : 'paths'}, one for each of these focus areas, using the focus area as the basis of the title: ${focuses.map((item) => `"${item}"`).join(', ')}.`
-      : `Give exactly ${count} paths for the learner's goal, each with a different emphasis that fits the goal (for example foundations, career or exam preparation, and hands-on practice).`,
-    'Each path has five milestones ordered from basics to advanced, and each milestone has two to four short topics. "level" is Beginner, Intermediate, or Advanced' +
-      (level ? `; the learner described their level as "${level}", so pitch every path for that level` : '') +
-      '.',
-    '"fastChanging" is true only when the subject dates quickly, such as medicine, nursing, technology, computing, data, law, finance, business, marketing, or the sciences, and false for lasting subjects such as philosophy, history, literature, languages, or classics. When it is true, every book in "reading" must be a recent edition published in the last four years. Add a "year" (the year of the edition you name) to every book in "reading".',
-    purpose ? `The learner wants this for: ${purpose}. Let that shape what each path emphasises.` : '',
-    'For every milestone give an "outcome", one sentence starting with a verb that says what the learner can do once the milestone is finished; "hours", your honest estimate of the total study hours an average learner needs for the whole milestone (a whole number); and "resources" and "books", each listing one or two items taken from your own lists that best fit that milestone, written with their exact titles. Do not give dates or durations.',
-    'Every path has its own "reading" list of six real, published books you are confident exist, specific to that path\'s focus (include the standard foundational textbooks or introductions for that focus, not just general titles), with the author\'s name. "note" is one of: ' +
-      BOOK_NOTES.join(', ') +
-      '. The "books" in each milestone must use titles from that path\'s own reading list.',
-    'List four to six free, reputable resources for the whole goal, such as official courses, documentation, university open courseware, or well-known video series. "kind" is one of: ' +
-      RESOURCE_KINDS.join(', ') +
-      '.',
-    "Never invent a book, an author, or a web address. If you are not sure of an exact address, use the provider's main website address.",
-  ]
-    .filter(Boolean)
-    .join(' ')
-  const result = await generate(env, {
-    system,
-    prompt: `Learner's goal: ${goal}`,
-    maxOutputTokens: 2_500 * count + 1_000,
-    timeoutMs: 20_000 + 8_000 * count,
-    temperature: 0.5,
-    json: true,
-  })
-  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(result.text)
-  } catch {
-    return json({ ok: false, error: 'Noema returned a plan in an unexpected format. Try again.' }, 502)
-  }
-  const suggestion = cleanSuggestion(goal, parsed)
-  if (!suggestion)
-    return json(
-      { ok: false, error: 'Noema could not build a path for that. Try describing your goal differently.' },
-      502,
-    )
-  const checks = await Promise.all(suggestion.resources.map((resource) => linkWorks(resource.url)))
-  suggestion.resources = suggestion.resources.filter((_, index) => checks[index])
-  return json({ ok: true, suggestion })
 }
 
 type GoogleVolume = {
@@ -2241,19 +1965,11 @@ const worker = {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return draftReviewCards(request, env)
     }
-    if (url.pathname === '/api/path') {
-      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
-      return planPath(request, env)
-    }
     if (url.pathname === '/api/libraries' && request.method === 'GET') return findLibraries(request)
     if (url.pathname === '/api/library-has' && request.method === 'GET') return libraryHas(request)
     if (url.pathname === '/api/subject' && request.method === 'POST') return startSubject(request, env)
     if (url.pathname === '/api/question' && request.method === 'POST') return exploreQuestion(request, env)
     if (url.pathname === '/api/sumup' && request.method === 'POST') return sumUpArea(request, env)
-    if (url.pathname === '/api/materials') {
-      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
-      return findMaterials(request, env)
-    }
     if (url.pathname === '/api/webdav') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return proxyWebdav(request)
@@ -2265,10 +1981,6 @@ const worker = {
     if (url.pathname === '/api/define') {
       if (request.method !== 'GET') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return defineWord(request)
-    }
-    if (url.pathname === '/api/quiz') {
-      if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
-      return quizTopic(request, env)
     }
     if (url.pathname === '/api/clarify') {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)

@@ -237,7 +237,6 @@ export const PREFERENCE_KEYS = [
   'noesis:ambient:v1',
   'noesis:pace:v1',
   'noesis:home-shelf:v1',
-  'noesis:planner:v1',
   'noesis:paths-guide:v1',
   'noesis:keep-banner:v1',
   'noesis:library-folder:v1',

@@ -1,6 +1,6 @@
 import { authHeaders } from './auth'
 import type { SubjectDraft } from './subjects'
-import { unverifiedBook, type BookCandidate, type PlanResource, type ResolvedBook, type Suggestion } from './pathPlan'
+import { unverifiedBook, type BookCandidate, type ResolvedBook } from './pathPlan'
 
 const CACHE_KEY = 'noesis:book-cache:v1'
 const FOUND_DAYS = 30
@@ -36,7 +36,6 @@ export class AuthRequiredError extends Error {}
 
 export type Focus = { title: string; description: string; covers?: string[]; fits?: string }
 export type Clarification = { topic: string; broad: boolean; focuses: Focus[] }
-export type PlanOptions = { focuses?: string[]; level?: string; purpose?: string }
 
 async function post<T>(route: string, body: unknown, fallback: string): Promise<T> {
   let response: Response
@@ -57,80 +56,6 @@ async function post<T>(route: string, body: unknown, fallback: string): Promise<
 
 export async function requestClarification(goal: string): Promise<Clarification> {
   return post<Clarification>('/api/clarify', { goal }, 'Noema could not narrow that down right now. Try again.')
-}
-
-export async function requestSuggestion(goal: string, options: PlanOptions = {}): Promise<Suggestion> {
-  const result = await post<{ suggestion?: Suggestion }>(
-    '/api/path',
-    { goal, ...options },
-    'Noema could not build a path right now. Try again in a moment.',
-  )
-  if (!result.suggestion) throw new Error('Noema could not build a path right now. Try again in a moment.')
-  return result.suggestion
-}
-
-export async function requestMaterials(input: {
-  goal: string
-  stage: string
-  topics: string[]
-  level?: string
-}): Promise<{ books: BookCandidate[]; resources: PlanResource[] }> {
-  const result = await post<{ books?: BookCandidate[]; resources?: PlanResource[] }>(
-    '/api/materials',
-    input,
-    'Noema could not find materials right now. Try again in a moment.',
-  )
-  return { books: result.books ?? [], resources: result.resources ?? [] }
-}
-
-// Six more books on one topic, skipping any already shown.
-export async function requestTopicBooks(input: {
-  goal: string
-  stage: string
-  topic: string
-  level?: string
-  recent?: boolean
-  exclude: string[]
-}): Promise<BookCandidate[]> {
-  const result = await post<{ books?: BookCandidate[] }>(
-    '/api/materials',
-    {
-      goal: input.goal,
-      stage: input.stage,
-      topics: [input.topic],
-      level: input.level,
-      booksOnly: true,
-      exclude: input.exclude,
-    },
-    'Noema could not find books right now. Try again in a moment.',
-  )
-  return result.books ?? []
-}
-
-export type QuizTopic = { goal: string; stage: string; topic: string; level?: string }
-export type QuizGrade = { verdict: 'correct' | 'partly' | 'incorrect'; feedback: string; ideal: string }
-
-export async function requestQuestion(input: QuizTopic): Promise<string> {
-  const result = await post<{ question?: string }>(
-    '/api/quiz',
-    { ...input, mode: 'question' },
-    'Noema could not write a question right now.',
-  )
-  if (!result.question) throw new Error('Noema could not write a question right now.')
-  return result.question
-}
-
-export async function requestGrade(input: QuizTopic & { question: string; answer: string }): Promise<QuizGrade> {
-  const result = await post<Partial<QuizGrade>>(
-    '/api/quiz',
-    { ...input, mode: 'grade' },
-    'Noema could not check that right now.',
-  )
-  return {
-    verdict: result.verdict ?? 'incorrect',
-    feedback: result.feedback ?? '',
-    ideal: result.ideal ?? '',
-  }
 }
 
 // null means "no such book was found" (so it is left out); a catalog outage
