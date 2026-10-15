@@ -2139,6 +2139,11 @@
 .reader-frame .epub-container {
   overflow-x: hidden !important;
   overscroll-behavior: contain;
+  touch-action: pan-y pinch-zoom;
+}
+html:has(body.reading-focus),
+body.reading-focus {
+  overscroll-behavior-x: none;
 }
 .reader-wide-topbar {
   display: flex;

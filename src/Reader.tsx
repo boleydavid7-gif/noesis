@@ -191,7 +191,12 @@ function applyReadingStyle(
   const rules: Record<string, Record<string, string>> = {
     p: paragraph,
     // Nothing wider than the page, so a finger moving down never pans it sideways.
-    'html, body': { 'overflow-x': 'hidden !important' },
+    'html, body': {
+      'overflow-x': 'hidden !important',
+      // A finger moves the page up and down only; Chrome's sideways back-swipe preview stays out of the book.
+      'touch-action': 'pan-y pinch-zoom',
+      'overscroll-behavior-x': 'none',
+    },
     'img, svg, video, table, pre': { 'max-width': '100% !important' },
     'img, video': { height: 'auto' },
     pre: { 'white-space': 'pre-wrap !important', 'overflow-wrap': 'anywhere' },
