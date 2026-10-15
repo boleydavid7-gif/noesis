@@ -163,6 +163,22 @@ export async function exploreQuestion(input: {
   }
 }
 
+// Rabbit holes: three questions one level further down.
+export async function requestDeeper(input: {
+  subject: string
+  area?: string
+  question: string
+  level?: string
+  trail: string[]
+}): Promise<string[]> {
+  const result = await post<{ deeper?: unknown }>(
+    '/api/question',
+    { ...input, part: 'deeper' },
+    'Noema could not go deeper right now. Try again in a moment.',
+  )
+  return Array.isArray(result.deeper) ? result.deeper.filter((item): item is string => typeof item === 'string') : []
+}
+
 export async function requestSumUp(input: {
   subject: string
   area: string

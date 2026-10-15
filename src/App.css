@@ -11425,3 +11425,95 @@ button.loan-title {
 .book-card-badge svg {
   vertical-align: -1px;
 }
+
+/* Rabbit holes: the way down to a question, and the questions under it. */
+.question-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  min-width: 0;
+}
+.question-trail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--muted-2);
+}
+.question-trail-step .text-button {
+  overflow: hidden;
+  max-width: 14em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deeper-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.deeper-list li + li {
+  border-top: 1px solid var(--line);
+}
+.deeper-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.deeper-list small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.deeper-list svg {
+  color: var(--muted);
+}
+.question-deeper .subject-add {
+  margin-top: 12px;
+}
+.subject-later-deeper {
+  padding-left: calc(var(--depth, 1) * 14px);
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.25);
+  margin-left: 4px;
+}
+.home-down {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 16px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-down > svg:first-child {
+  color: var(--gold-warm, #d5ab61);
+}
+.home-down span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.home-down small {
+  color: var(--muted);
+}
+.home-down > svg:last-child {
+  color: var(--muted);
+}

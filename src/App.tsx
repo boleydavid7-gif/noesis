@@ -232,7 +232,7 @@ const navItems = [
   { label: 'My Library', text: 'Library', icon: Library },
   { label: 'Notes', text: 'Second Brain', icon: Brain },
   { label: 'Review', text: 'Review', icon: RotateCcw },
-  { label: 'Learning Paths', text: 'Paths', icon: ListChecks },
+  { label: 'Learning Paths', text: 'Rabbit holes', icon: ListChecks },
   { label: 'Explore', text: 'Explore', icon: Search },
   { label: 'Settings', text: 'Settings', icon: Settings },
 ]
@@ -499,7 +499,13 @@ function App() {
       { id: 'go-home', label: 'Home', group: 'Go to', run: go('Home') },
       { id: 'go-library', label: 'Library', group: 'Go to', run: go('My Library') },
       { id: 'go-notes', label: 'Second Brain', group: 'Go to', keywords: 'notes highlights', run: go('Notes') },
-      { id: 'go-paths', label: 'Learning paths', group: 'Go to', keywords: 'plan study', run: go('Learning Paths') },
+      {
+        id: 'go-paths',
+        label: 'Rabbit holes',
+        group: 'Go to',
+        keywords: 'learning paths plan study questions',
+        run: go('Learning Paths'),
+      },
       { id: 'go-review', label: 'Review', group: 'Go to', keywords: 'cards flashcards', run: go('Review') },
       { id: 'go-explore', label: 'Explore', group: 'Go to', keywords: 'find free books search', run: go('Explore') },
       { id: 'go-settings', label: 'Settings', group: 'Go to', run: () => openSettings('account') },
@@ -538,7 +544,7 @@ function App() {
         run: () => (note.bookId ? openNoteLocation(note) : selectNav('Notes')),
       })
     for (const path of paths)
-      list.push({ id: `path-${path.id}`, label: path.title, group: 'Paths', run: go('Learning Paths') })
+      list.push({ id: `path-${path.id}`, label: path.title, group: 'Rabbit holes', run: go('Learning Paths') })
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, notes, paths, focusState.running])
@@ -1861,7 +1867,7 @@ function App() {
     markDeleted('path', id)
     setPaths(next)
     writePaths(next)
-    showNotice('Path removed.')
+    showNotice('Rabbit hole removed.')
   }
   function createPath(event: React.FormEvent) {
     event.preventDefault()
@@ -2449,7 +2455,7 @@ function App() {
               <button className="start-choice" onClick={() => selectNav('Learning Paths')}>
                 <ListChecks size={20} />
                 <strong>Learn something</strong>
-                <span>Name a subject and get a plan of steps and books</span>
+                <span>Start a rabbit hole from a question</span>
               </button>
             </div>
             {authUser && !isAnonymousUser(authUser) ? null : (
@@ -2731,7 +2737,7 @@ function App() {
   }
   function pathsPage() {
     return (
-      <Page title="Learning paths" subtitle="">
+      <Page title="Rabbit holes" subtitle="">
         <PathsGuide />
         <FreeCopyContext.Provider value={addResource}>
           <SubjectStarter
@@ -2826,7 +2832,7 @@ function App() {
           <Metric label="Overall progress" value={`${overallProgress}%`} detail="Across your library" />
           <Metric label="Books started" value={`${readCount}`} detail={`of ${books.length} saved titles`} />
           <Metric label="Notes saved" value={`${notes.length}`} detail="In your Second Brain" />
-          <Metric label="Learning paths" value={`${paths.length}`} detail="Created by you" />
+          <Metric label="Rabbit holes" value={`${paths.length}`} detail="Created by you" />
         </div>
         <div className="progress-list panel-card">
           <h3>Reading progress</h3>
@@ -3141,7 +3147,7 @@ function App() {
               label="Automatic sync"
             />
           </Row>
-          <Row title="Export a ZIP" detail="Books, notes and learning paths in one file.">
+          <Row title="Export a ZIP" detail="Books, notes and rabbit holes in one file.">
             <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
               <Download size={15} /> Export
             </button>
@@ -3289,7 +3295,7 @@ function App() {
         ) : null}
         <p className="auth-footnote">
           {authMode === 'sign-in' && books.length + notes.length + paths.length > 0
-            ? 'Your books, notes and paths on this device will be added to your account when you sign in. Anything already in the account stays too.'
+            ? 'Your books, notes and rabbit holes on this device will be added to your account when you sign in. Anything already in the account stays too.'
             : 'Your library stays on this device. Sign in to sync notes and books.'}
         </p>
       </form>
@@ -3542,8 +3548,8 @@ function App() {
               <button
                 className="quick-icon"
                 onClick={() => selectNav('Learning Paths')}
-                aria-label="Create learning path"
-                title="Create path"
+                aria-label="Start a rabbit hole"
+                title="Start a rabbit hole"
               >
                 <ListChecks size={16} />
               </button>
@@ -3635,7 +3641,7 @@ function App() {
             onClick={() => selectNav('Learning Paths')}
           >
             <ListChecks size={17} />
-            <span>Paths</span>
+            <span>Rabbit holes</span>
           </button>
           <button className={activeNav === 'Notes' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Notes')}>
             <FileText size={17} />
@@ -4523,7 +4529,7 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 }
 const GUIDE_KEY = 'noesis:paths-guide:v1'
 
-// A short guide for someone new to learning paths: what a path is and the best way to use one.
+// A short guide for someone new to rabbit holes: what one is and the best way to use one.
 function PathsGuide() {
   const [open, setOpen] = useState(() => {
     try {
@@ -4543,13 +4549,13 @@ function PathsGuide() {
   if (!open)
     return (
       <button className="text-button paths-guide-link" onClick={() => setOpen(true)}>
-        How subjects work
+        How rabbit holes work
       </button>
     )
   return (
-    <section className="paths-guide panel-card" aria-label="How subjects work">
+    <section className="paths-guide panel-card" aria-label="How rabbit holes work">
       <div className="paths-guide-head">
-        <strong>How subjects work</strong>
+        <strong>How rabbit holes work</strong>
         <button className="text-button" onClick={close}>
           Got it
         </button>
@@ -4557,6 +4563,7 @@ function PathsGuide() {
       <ol>
         <li>Say what you are curious about</li>
         <li>Pick up to three questions for now</li>
+        <li>Go deeper from any question; the trail shows the way back up</li>
         <li>Read your books; look at what goes with them</li>
         <li>Answer in a sentence or two of your own</li>
         <li>New questions wait under Later</li>
@@ -4925,7 +4932,7 @@ function PathSection({
     <section className="section-block path-section">
       <div className="section-heading">
         <div>
-          <h2>Learning paths</h2>
+          <h2>Rabbit holes</h2>
         </div>
         {onOpen ? (
           <button className="text-button" onClick={onOpen}>
@@ -4971,7 +4978,7 @@ function PathSection({
           {onOpen ? (
             <button className="path-tile path-tile-new" onClick={onOpen}>
               <Plus size={20} />
-              <strong>Start a subject</strong>
+              <strong>Start a rabbit hole</strong>
             </button>
           ) : null}
         </div>
@@ -4987,7 +4994,7 @@ function PathSection({
               <div className="path-remove">
                 {confirmRemove === active.id ? (
                   <>
-                    <span>Remove this path?</span>
+                    <span>Remove this rabbit hole?</span>
                     <button
                       className="secondary-button"
                       onClick={() => {
@@ -5004,7 +5011,7 @@ function PathSection({
                   </>
                 ) : (
                   <button className="text-button" onClick={() => setConfirmRemove(active.id)}>
-                    <Trash2 size={13} /> Remove path
+                    <Trash2 size={13} /> Remove
                   </button>
                 )}
               </div>

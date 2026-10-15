@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  ArrowDown,
   BookOpen,
   Brain,
   CalendarClock,
@@ -93,14 +94,20 @@ const PAGES: Page[] = [
     ],
   },
   {
-    title: 'Learn by asking',
+    title: 'Go down a rabbit hole',
     lead: 'Start from something you want to understand.',
     rows: [
       {
         icon: MessageCircleQuestion,
         tone: 'pink',
         title: 'Begin with a question',
-        text: 'Noesis breaks it into smaller ones, each with books, articles and videos.',
+        text: 'Each one comes with books, articles and videos.',
+      },
+      {
+        icon: ArrowDown,
+        tone: 'indigo',
+        title: 'Go deeper',
+        text: 'Every question leads to the next ones, as far as you want.',
       },
       {
         icon: Library,

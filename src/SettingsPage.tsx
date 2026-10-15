@@ -139,7 +139,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
       <Group title="How you use Noesis">
         <Row
           title="Mode"
-          detail="Reading keeps things plain. Reading and learning adds paths, a study side panel, and searching inside your books."
+          detail="Reading keeps things plain. Reading and learning adds rabbit holes, a study side panel, and searching inside your books."
         >
           <Segmented
             label="Mode"

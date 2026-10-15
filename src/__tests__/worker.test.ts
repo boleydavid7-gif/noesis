@@ -983,3 +983,44 @@ describe('a question in two halves', () => {
     expect(sent.generationConfig.maxOutputTokens).toBeLessThanOrEqual(1_000)
   })
 })
+
+describe('going deeper from a question', () => {
+  it('asks for three narrower questions with the way down, and returns them', async () => {
+    const mock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    { text: JSON.stringify({ deeper: ['Why does clay hold water?', 'What do worms do in soil?'] }) },
+                  ],
+                },
+              },
+            ],
+          }),
+        ),
+    )
+    vi.stubGlobal('fetch', mock)
+    const response = await call(
+      '/api/question',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '8.8.5.2' },
+        body: JSON.stringify({
+          subject: 'Gardening',
+          question: 'What makes soil good?',
+          trail: ['How do plants grow?'],
+          part: 'deeper',
+        }),
+      },
+      { GEMINI_API_KEY: 'k' },
+    )
+    const body = (await response.json()) as { ok: boolean; deeper: string[] }
+    expect(body).toEqual({ ok: true, deeper: ['Why does clay hold water?', 'What do worms do in soil?'] })
+    expect(mock).toHaveBeenCalledTimes(1)
+    const sent = JSON.parse(String((mock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(JSON.stringify(sent.contents)).toContain('How do plants grow?')
+  })
+})

@@ -172,3 +172,11 @@ and a Wrangler dry run. The live health endpoint is
   (the Settings storage rows, optional; "Start reading"). Skip, back, swipe and arrow keys; the step is kept in
   `noesis:intro:v1` (or `done`) so a storage sign-in that leaves the page returns to it. Settings > Account and data >
   Introduction shows it again.
+- Rabbit holes (the name people see for subjects / learning paths; the nav key and stored `paths` stay as they
+  were): a question can go deeper. `Question.parentId` links it to the one above; `goDeeper` adds up to three
+  questions one level down (origin `deeper`, in Later, same area, duplicates left out), `trailOf` gives the way back
+  up (loops stop), `deeperFrom` the ones under it, `inTreeOrder` nests them in an area's Later list, and removing a
+  question moves the ones under it up a level. The Worker's `/api/question` with `part: 'deeper'` (and the `trail`)
+  asks Noema for three narrower questions (`goDeeperFrom`, 300 tokens, 15 s). The question page shows the trail at
+  the top and a "Go deeper" list with "Go deeper" / "Find more" and "Your own question"; Home offers "Back down the
+  rabbit hole" with the deepest open question (`deepestOpen`).

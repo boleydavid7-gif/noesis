@@ -1,13 +1,15 @@
 // Subjects: a map of questions around the reader's books. The reading comes first; each question can bring a
 // few things to read, watch or listen to beside it, and the reader's own answer in a sentence or two.
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { exploreError, exploreInto, isExploring, subscribeExploring, type EditSubject } from './lib/subjectExplore'
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   Bookmark,
   BookOpen,
   Check,
+  ChevronRight,
   ExternalLink,
   Headphones,
   Lightbulb,
@@ -26,6 +28,7 @@ import type { LibraryBook } from './lib/library'
 import {
   AuthRequiredError,
   requestClarification,
+  requestDeeper,
   requestSubject,
   requestSumUp,
   type Clarification,
@@ -41,7 +44,11 @@ import {
   canSumUp,
   cleanMerges,
   comingBack,
+  deeperFrom,
+  deepestOpen,
+  goDeeper,
   guidance,
+  inTreeOrder,
   markUsed,
   mergeQuestions,
   groupPicks,
@@ -57,6 +64,7 @@ import {
   reopenQuestion,
   shelf,
   subjectOf,
+  trailOf,
   sumUpArea,
   updatePick,
   withQuestion,
@@ -161,7 +169,7 @@ export function SubjectStarter({
 
   const busy = status === 'narrowing' || status === 'mapping'
   return (
-    <section className="subject-start panel-card" aria-label="Start a subject">
+    <section className="subject-start panel-card" aria-label="Start a rabbit hole">
       <form onSubmit={begin}>
         <h3>What are you curious about?</h3>
         {!signedIn ? (
@@ -734,8 +742,12 @@ function AreaCard({
           <>
             <h5>Later</h5>
             <ul className="subject-later">
-              {later.map((q) => (
-                <li key={q.id}>
+              {inTreeOrder(later).map(({ question: q, depth }) => (
+                <li
+                  key={q.id}
+                  className={depth ? 'subject-later-deeper' : undefined}
+                  style={depth ? ({ '--depth': Math.min(depth, 4) } as CSSProperties) : undefined}
+                >
                   <button className="subject-later-text" onClick={() => onOpen(q.id)}>
                     {q.text}
                   </button>
@@ -992,12 +1004,52 @@ function QuestionPage({
   const sources = picks.filter((pick) => pick.looked || pick.saved || used.includes(pick.id))
   const groups = groupPicks(picks)
   const change = (next: Partial<Question>) => onSave(withQuestion(subject, { ...question, ...next }))
+  const trail = trailOf(subject, question.id)
+  const deeper = deeperFrom(subject, question.id)
+  const [digging, setDigging] = useState(false)
+  const [digError, setDigError] = useState('')
+  async function dig() {
+    setDigging(true)
+    setDigError('')
+    try {
+      const found = await requestDeeper({
+        subject: path.title,
+        area: area?.title,
+        question: question.text,
+        level: subject.level,
+        trail: trail.map((step) => step.text),
+      })
+      const next = goDeeper(latest.current.subject, question.id, found)
+      if (next === latest.current.subject) setDigError('Nothing new further down this time.')
+      else onSave(next)
+    } catch (reason) {
+      setDigError(
+        reason instanceof AuthRequiredError
+          ? 'Sign in to go deeper.'
+          : reason instanceof Error
+            ? reason.message
+            : 'Noema could not go deeper right now.',
+      )
+    } finally {
+      setDigging(false)
+    }
+  }
 
   return (
     <article className="question-page">
-      <button className="text-button question-back" onClick={onBack}>
-        <ArrowLeft size={14} /> {path.title}
-      </button>
+      <nav className="question-trail" aria-label="How you got here">
+        <button className="text-button question-back" onClick={onBack}>
+          <ArrowLeft size={14} /> {path.title}
+        </button>
+        {trail.map((step) => (
+          <span key={step.id} className="question-trail-step">
+            <ChevronRight size={13} aria-hidden="true" />
+            <button className="text-button" onClick={() => onOpen(step.id)} title={step.text}>
+              {step.text}
+            </button>
+          </span>
+        ))}
+      </nav>
       <header>
         {area ? <span className="question-area">{area.title}</span> : null}
         <h3>{question.text}</h3>
@@ -1220,60 +1272,61 @@ function QuestionPage({
         </section>
       ) : null}
 
-      <section className="question-block">
-        <h4>What this raised</h4>
+      <section className="question-block question-deeper">
+        <h4>Go deeper</h4>
+        {deeper.length ? (
+          <ul className="deeper-list">
+            {deeper.map((q) => (
+              <li key={q.id}>
+                <button onClick={() => onOpen(q.id)}>
+                  <span>{q.text}</span>
+                  {q.state === 'answered' ? (
+                    <Check size={15} aria-label="Answered" />
+                  ) : deeperFrom(subject, q.id).length ? (
+                    <small>{deeperFrom(subject, q.id).length} further</small>
+                  ) : null}
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {question.followUp && !subject.questions.some((q) => q.text === question.followUp) ? (
           <button
             className="secondary-button question-follow"
-            onClick={() => {
-              const added = addQuestion(subject, question.areaId, question.followUp!, 'side')
-              onSave(added.subject)
-              onNotice('Added to Later.')
-            }}
+            onClick={() => onSave(goDeeper(subject, question.id, [question.followUp!]))}
           >
             <Plus size={14} /> {question.followUp}
           </button>
         ) : null}
+        <div className="subject-actions">
+          <button className="primary-button" onClick={() => void dig()} disabled={digging}>
+            <ArrowDown size={14} /> {digging ? 'Digging…' : deeper.length ? 'Find more' : 'Go deeper'}
+          </button>
+        </div>
+        {digError ? <p className="weather-error">{digError}</p> : null}
         <form
           className="subject-add"
           onSubmit={(event) => {
             event.preventDefault()
-            const added = addQuestion(subject, question.areaId, side, 'side')
-            if (added.question) {
-              onSave(added.subject)
+            const next = goDeeper(subject, question.id, [side])
+            if (next !== subject) {
+              onSave(next)
               setSide('')
-              onNotice('Added to Later.')
             }
           }}
         >
           <input
             value={side}
             onChange={(event) => setSide(event.target.value)}
-            placeholder="Another question"
-            aria-label="Another question"
+            placeholder="Your own question"
+            aria-label="Your own question"
             maxLength={200}
           />
           <button className="secondary-button" type="submit" disabled={!side.trim()}>
             Add
           </button>
         </form>
-        {(() => {
-          const raised = subject.questions.filter(
-            (q) =>
-              q.origin === 'side' && q.areaId === question.areaId && q.id !== question.id && q.state !== 'answered',
-          )
-          return raised.length ? (
-            <ul className="subject-later">
-              {raised.slice(-4).map((q) => (
-                <li key={q.id}>
-                  <button className="subject-later-text" onClick={() => onOpen(q.id)}>
-                    {q.text}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null
-        })()}
       </section>
     </article>
   )
@@ -1339,7 +1392,13 @@ export function HomeQuestions({
   const questions = paths
     .flatMap((path) => nowQuestions(subjectOf(path)).map((question) => ({ path, question })))
     .slice(0, 4)
-  if (!books.length && !questions.length) return null
+  // The most recent rabbit hole someone went down, when it is not already among Now.
+  const down = paths
+    .map((path) => ({ path, question: deepestOpen(subjectOf(path)) }))
+    .filter((item): item is { path: LearningPath; question: Question } => Boolean(item.question))
+    .filter((item) => !questions.some((q) => q.question.id === item.question.id))
+    .sort((a, b) => b.question.askedAt.localeCompare(a.question.askedAt))[0]
+  if (!books.length && !questions.length && !down) return null
   return (
     <section className="section-block home-questions" aria-label="Your questions">
       <div className="section-heading">
@@ -1386,6 +1445,16 @@ export function HomeQuestions({
             />
           ))}
         </div>
+      ) : null}
+      {down ? (
+        <button className="home-down panel-card" onClick={() => onOpenQuestion(down.path.id, down.question.id)}>
+          <ArrowDown size={18} aria-hidden="true" />
+          <span>
+            <small>Back down the rabbit hole</small>
+            <strong>{down.question.text}</strong>
+          </span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
       ) : null}
     </section>
   )

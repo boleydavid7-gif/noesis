@@ -9,6 +9,7 @@ import {
 } from './lib/pathPlan'
 import { handlePasskey, sendReviewReminders } from './workerAccount'
 import {
+  cleanDeeperReply,
   cleanQuestionReply,
   cleanSubjectReply,
   isoMinutes,
@@ -1772,6 +1773,47 @@ export async function wikipediaPick(title: string, why: string | undefined): Pro
 // What to explore for one question: Noema names books, articles, videos and episodes; every link is checked or
 // found by a real search, and anything that cannot be confirmed is left out. Books come back as names for the
 // app to look up (with covers and where to get them).
+// Rabbit holes: three questions one level further down from this one, narrower and more specific, never sideways.
+async function goDeeperFrom(
+  input: { subject?: unknown; area?: unknown; question?: unknown; level?: unknown; trail?: unknown },
+  env: Env,
+): Promise<Response> {
+  const subject = textOf(input.subject, 100)
+  const area = textOf(input.area, 80)
+  const question = textOf(input.question, 200)
+  const level = textOf(input.level, 40)
+  const trail = (Array.isArray(input.trail) ? input.trail : [])
+    .map((item) => textOf(item, 200))
+    .filter(Boolean)
+    .slice(-6)
+  if (!subject || question.length < 3) return json({ ok: false, error: 'Choose a question to go deeper from.' }, 400)
+  const result = await generate(env, {
+    system: [
+      'You help a curious reader go down a rabbit hole in a reading app: from one question, the next three questions one level deeper.',
+      'Reply with JSON only, in exactly this shape: {"deeper":["","",""]}.',
+      'Each is a single question under 15 words that narrows into a specific part, cause, case, person, mechanism or surprise inside the question, so answering it means going further in, not to a neighboring topic.',
+      'The three should differ from one another, and none may repeat a question on the way down.',
+      level ? `The reader describes their level as: ${level}.` : '',
+      'Use American English.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}${trail.length ? `\nOn the way down: ${trail.join(' > ')}` : ''}\nQuestion: ${question}`,
+    maxOutputTokens: 300,
+    temperature: 0.6,
+    json: true,
+    timeoutMs: 15_000,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  try {
+    const deeper = cleanDeeperReply(JSON.parse(result.text))
+    if (!deeper.length) return json({ ok: false, error: 'Noema found nothing further down. Try again.' }, 502)
+    return json({ ok: true, deeper })
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+}
+
 async function exploreQuestion(request: Request, env: Env): Promise<Response> {
   const refused = await guardAi(
     request,
@@ -1789,8 +1831,10 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     level?: unknown
     reading?: unknown
     part?: unknown
+    trail?: unknown
   }>(request)
   if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
+  if (input.part === 'deeper') return goDeeperFrom(input, env)
   // The app asks for the two halves at once, so each is a short answer that comes back quickly:
   // "answer" (hook, short answer, follow-up, use it) and "picks" (what to read, watch and listen to).
   const part = input.part === 'answer' || input.part === 'picks' ? input.part : 'both'

@@ -37,7 +37,8 @@ export type Question = {
   text: string
   hook?: string // why it is interesting, one line
   state: QuestionState
-  origin: 'start' | 'side' | 'own'
+  origin: 'start' | 'side' | 'own' | 'deeper'
+  parentId?: string // the question this one went deeper from
   guess?: string
   short?: string // Noema's short answer, folded until opened
   followUp?: string // a question the answer leads to, offered when it comes back
@@ -155,6 +156,7 @@ export function addQuestion(
   text: string,
   origin: Question['origin'] = 'own',
   now = new Date(),
+  parentId?: string,
 ): { subject: Subject; question: Question | null } {
   const words = clip(text, 200)
   if (!words || !subject.areas.some((area) => area.id === areaId)) return { subject, question: null }
@@ -167,12 +169,91 @@ export function addQuestion(
     state: 'later',
     origin,
     askedAt: now.toISOString(),
+    ...(parentId ? { parentId } : {}),
   }
   return { subject: withQuestion(subject, question), question }
 }
 
+// ---------- Rabbit holes: going deeper from a question ----------
+
+export const DEEPER_LIMIT = 3
+
+// The questions above this one, the first asked first; a broken or looping chain stops where it breaks.
+export function trailOf(subject: Subject, id: string): Question[] {
+  const byId = new Map(subject.questions.map((q) => [q.id, q]))
+  const trail: Question[] = []
+  const seen = new Set([id])
+  let parentId = byId.get(id)?.parentId
+  while (parentId && !seen.has(parentId) && byId.has(parentId)) {
+    seen.add(parentId)
+    const parent = byId.get(parentId)!
+    trail.unshift(parent)
+    parentId = parent.parentId
+  }
+  return trail
+}
+
+export const deeperFrom = (subject: Subject, id: string): Question[] =>
+  subject.questions.filter((q) => q.parentId === id)
+
+// How far down a question sits: 0 for one asked at the top.
+export const depthOf = (subject: Subject, id: string) => trailOf(subject, id).length
+
+// The questions Noema offers one level down, added under the question in Later; ones already there are left out.
+export function goDeeper(subject: Subject, id: string, texts: string[], now = new Date()): Subject {
+  const parent = subject.questions.find((q) => q.id === id)
+  if (!parent) return subject
+  let next = subject
+  for (const text of texts.slice(0, DEEPER_LIMIT)) {
+    const words = clip(text, 200)
+    if (!words || next.questions.some((q) => q.text.toLowerCase() === words.toLowerCase())) continue
+    next = addQuestion(next, parent.areaId, words, 'deeper', now, parent.id).subject
+  }
+  return next
+}
+
+// A list with each question followed by the ones under it, and how many levels in it sits within the list.
+export function inTreeOrder(list: Question[]): Array<{ question: Question; depth: number }> {
+  const ids = new Set(list.map((q) => q.id))
+  const out: Array<{ question: Question; depth: number }> = []
+  const seen = new Set<string>()
+  const visit = (question: Question, depth: number) => {
+    if (seen.has(question.id)) return
+    seen.add(question.id)
+    out.push({ question, depth })
+    for (const child of list) if (child.parentId === question.id) visit(child, depth + 1)
+  }
+  for (const q of list) if (!q.parentId || !ids.has(q.parentId)) visit(q, 0)
+  for (const q of list) visit(q, 0) // anything left in a loop
+  return out
+}
+
+// The question furthest down that is still open, for "Back down the rabbit hole" on Home.
+export function deepestOpen(subject: Subject): Question | null {
+  const open = subject.questions.filter((q) => q.state !== 'answered' && q.parentId)
+  if (!open.length) return null
+  return open
+    .map((q) => ({ q, depth: depthOf(subject, q.id) }))
+    .sort((a, b) => b.depth - a.depth || b.q.askedAt.localeCompare(a.q.askedAt))[0].q
+}
+
+export function cleanDeeperReply(raw: unknown): string[] {
+  const list = raw && typeof raw === 'object' ? (raw as { deeper?: unknown }).deeper : undefined
+  return (Array.isArray(list) ? list : [])
+    .map((item) => clip(item, 200))
+    .filter((text) => text.length >= 8)
+    .slice(0, DEEPER_LIMIT)
+}
+
+// The questions under a removed one move up a level, so nothing further down is lost.
 export function removeQuestion(subject: Subject, id: string): Subject {
-  return { ...subject, questions: subject.questions.filter((q) => q.id !== id) }
+  const gone = subject.questions.find((q) => q.id === id)
+  return {
+    ...subject,
+    questions: subject.questions
+      .filter((q) => q.id !== id)
+      .map((q) => (q.parentId === id ? { ...q, parentId: gone?.parentId } : q)),
+  }
 }
 
 export function addArea(subject: Subject, title: string): { subject: Subject; area: Area | null } {
