@@ -62,6 +62,16 @@ The current app is a working reader-first build:
 - Cloud Backup (Settings → Backup & Sync) can connect a learner's own Google Drive, OneDrive, or Dropbox.
   It syncs a manifest and separate EPUB files, then merges them on another
   device. ZIP remains an optional manual export only.
+- Settings › Backup and sync is one page: status with Sync now; Your storage (one row per provider, Connect /
+  Connect again / Disconnect); Library folder (`LibraryFolderPicker`, `lib/libraryFolder.ts`, `lib/cloudFind.ts`):
+  a folder in the person's storage, looked through on opening and on coming back into view, each file once (by name
+  and size, a second path is the same book), files already in the library linked, newer files replacing older ones,
+  removed books not brought back, under the Web Lock `noesis-library-folder`; the folder and the path map are synced
+  preferences. Options: automatic sync, ZIP export and restore, Clear the library (then the folder is read again).
+  Connections now ask for `Files.Read` (OneDrive) and `drive.readonly` (Google) beside the Noesis folder
+  (`readsFolders`); older ones show Connect again. A book not on this device is fetched from the account, the Noesis
+  folder, then anywhere in a connected storage by its file name and size (`foundIn` remembers where). Google's
+  consent screen needs `drive.readonly` added; Dropbox's app-folder app sees only its own folder.
 
 ## Installed foundation
 
