@@ -10914,6 +10914,8 @@ input[type='radio'] {
 /* Subjects on wider screens: the map in two columns, and an open question with its list beside it */
 .subject {
   container-type: inline-size;
+  min-width: 0;
+  max-width: 100%;
 }
 .subject-map,
 .subject-map-lead {
@@ -10928,25 +10930,28 @@ input[type='radio'] {
 .question-index {
   display: none;
 }
-@container (min-width: 720px) {
-  .subject-map {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    align-items: start;
-    gap: 24px;
-  }
-  .subject-split {
-    grid-template-columns: minmax(200px, 0.42fr) minmax(0, 1fr);
-    align-items: start;
-    gap: 28px;
-  }
-  .question-index {
-    position: sticky;
-    top: 16px;
-    display: grid;
-    gap: 6px;
-    max-height: calc(100vh - 32px);
-    overflow: auto;
-    padding: 4px 4px 12px 0;
+/* Only on computer-sized screens: iPhone Safari can measure the subject area wider than the screen. */
+@media (min-width: 62rem) {
+  @container (min-width: 720px) {
+    .subject-map {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      align-items: start;
+      gap: 24px;
+    }
+    .subject-split {
+      grid-template-columns: minmax(200px, 0.42fr) minmax(0, 1fr);
+      align-items: start;
+      gap: 28px;
+    }
+    .question-index {
+      position: sticky;
+      top: 16px;
+      display: grid;
+      gap: 6px;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding: 4px 4px 12px 0;
+    }
   }
 }
 .question-index h5 {
