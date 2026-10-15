@@ -161,7 +161,7 @@ export function ResourceList({ resources }: { resources: PlanResource[] }) {
               <strong>
                 {resource.title} <ExternalLink size={11} />
               </strong>
-              <small>{[resource.publisher, resource.note].filter(Boolean).join(' · ')}</small>
+              {resource.publisher ? <small>{resource.publisher}</small> : null}
             </span>
             <em>{resource.kind}</em>
             {resource.note ? <small className="plan-why">Why: {resource.note}</small> : null}

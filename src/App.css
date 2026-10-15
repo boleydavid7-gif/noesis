@@ -10060,3 +10060,115 @@ input[type='radio'] {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* A path's detail card: room inside its border at every width. */
+.path-detail {
+  padding: 20px;
+}
+
+/* A path on a phone: the header stacks, nothing is pushed in from the left, resources stack, and books are a
+   list with a small cover beside the words instead of two tall columns. */
+@media (max-width: 620px) {
+  .path-detail {
+    padding: 16px;
+    gap: 14px;
+  }
+  .path-detail-head {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .path-detail .path-detail-head h3 {
+    font-size: 22px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .path-remove {
+    font-size: 12px;
+  }
+  .plan-next {
+    padding: 14px;
+  }
+  .plan-next-actions > * {
+    max-width: 100%;
+  }
+  .plan-milestone > summary {
+    gap: 10px;
+  }
+  .plan-milestone-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .plan-milestone ul {
+    padding-left: 0;
+  }
+  .plan-milestone li {
+    align-items: flex-start;
+  }
+  .plan-milestone li > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .plan-milestone .plan-study {
+    margin-left: 0;
+  }
+  .plan-resources a {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .plan-resources strong {
+    overflow-wrap: anywhere;
+  }
+  .plan-books {
+    grid-template-columns: 1fr;
+  }
+  .plan-book {
+    grid-template-columns: 64px minmax(0, 1fr);
+    column-gap: 14px;
+    align-items: start;
+  }
+  .plan-book > img,
+  .plan-book > .plan-book-cover-fallback {
+    grid-column: 1;
+    grid-row: 1 / span 8;
+    width: 64px;
+    font-size: 24px;
+  }
+  .plan-book > :not(img):not(.plan-book-cover-fallback):not(.plan-rank) {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .plan-book strong {
+    font-size: 14px;
+  }
+  /* The stages of a suggested path read down the page, each name whole, joined by a thin line. */
+  .plan-timeline {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  .plan-step {
+    grid-template-columns: 11px minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    font-size: 13px;
+  }
+  .plan-step span {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow-wrap: anywhere;
+  }
+  .plan-step:not(:last-child)::before {
+    top: 50%;
+    left: 4.5px;
+    width: 2px;
+    height: calc(100% + 10px);
+  }
+  .plan-rank {
+    top: 6px;
+    left: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+}
