@@ -101,6 +101,7 @@ import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
 import { readDiary, writeDiary } from './lib/diary'
 import { foldDuplicates } from './lib/duplicates'
+import { bookSource } from './lib/bookSource'
 import { dueNotes, revisitDate } from './lib/noteLinks'
 import { BOOKMARK_TAG, isBookmark } from './lib/bookmarks'
 import { IMPORT_ACCEPT, convertToEpub, isImportable } from './lib/convert'
@@ -2657,9 +2658,17 @@ function App() {
                   <strong>{group[0].title}</strong>
                   {group.map((book) => (
                     <div className="dupes-row" key={book.id}>
-                      <span>
-                        {book.author} · {Math.round(book.progress)}% read
-                        {book.fileSize ? ` · ${(book.fileSize / 1_048_576).toFixed(1)} MB` : ''}
+                      <span className="dupes-what">
+                        <strong>{bookSource(book, chosenLibraryFolder()?.provider)}</strong>
+                        <small>
+                          {[
+                            book.fileName,
+                            book.fileSize ? `${(book.fileSize / 1_048_576).toFixed(1)} MB` : '',
+                            `${Math.round(book.progress)}% read`,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </small>
                       </span>
                       <button className="text-button" onClick={() => deleteBook(book)}>
                         Remove this copy
@@ -4517,6 +4526,7 @@ function BookSection({
                 </small>
               ) : null}
               {preview.shelves?.length ? <small>On: {preview.shelves.join(', ')}</small> : null}
+              <small>{bookSource(preview, chosenLibraryFolder()?.provider)}</small>
               {onIntent ? (
                 <label className="book-detail-intent">
                   Why this book?

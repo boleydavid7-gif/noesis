@@ -11524,3 +11524,16 @@ button.loan-title {
   align-items: center;
   justify-content: flex-end;
 }
+.dupes-what {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.dupes-what strong {
+  color: var(--text, #edf4ff);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dupes-what small {
+  overflow-wrap: anywhere;
+}
