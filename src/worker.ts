@@ -141,14 +141,20 @@ async function generate(
   const busy = new Set([429, 500, 502, 503, 504])
   let lastStatus = 0
   let lastDetail = ''
+  const timeout = options.timeoutMs ?? 25_000
+  // A model that does not answer in time (or a dropped connection) is a reason to try the next one, not to stop.
+  let timedOut = false
+  const deadline = Date.now() + timeout * 3
   for (let round = 0; round < 2; round += 1) {
     let sawBusy = false
     for (const model of models) {
+      // Never keep the reader waiting for more than about three tries' worth of time.
+      if (timedOut && Date.now() > deadline) break
       // Gemini's thinking is spent from the same allowance as the answer, which cut answers off partway.
       // Thinking is turned off (Pro models cannot turn it off, so they get a small budget). A model that
       // refuses the setting is asked again without it and with room for its thinking, and an answer that
       // still stops at the limit is asked for once more with twice the room.
-      const call = (thinking: boolean, room: number) =>
+      const call = (thinking: boolean, room: number, wait = timeout) =>
         fetchWithTimeout(
           `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`,
           {
@@ -165,7 +171,7 @@ async function generate(
               },
             }),
           },
-          options.timeoutMs ?? 25_000,
+          wait,
         )
       const read = async (reply: Response) => {
         const body = (await reply.json()) as {
@@ -196,10 +202,16 @@ async function generate(
         if (response.ok) {
           let answer = await read(response)
           if (answer.cutOff) {
-            const again = await call(thinking, room * 2 + THINKING_ROOM)
-            if (again.ok) {
+            // A longer answer takes longer to write, so it gets more time.
+            const again = await call(thinking, room * 2 + THINKING_ROOM, timeout * 2).catch(() => null)
+            if (again?.ok) {
               const longer = await read(again)
               if (longer.text) answer = longer
+            }
+            // Half of a JSON answer cannot be read: another model may manage it whole.
+            if (answer.cutOff && options.json) {
+              timedOut = true
+              continue
             }
           }
           return answer.text
@@ -207,7 +219,8 @@ async function generate(
             : { ok: false, error: 'Gemini returned an empty answer.', status: 502 }
         }
       } catch {
-        return { ok: false, error: 'Noema could not reach Gemini right now.', status: 502 }
+        timedOut = true
+        continue
       }
 
       lastStatus = response.status
@@ -229,6 +242,9 @@ async function generate(
     // Every model was busy: wait a moment and go around once more.
     if (!sawBusy || round === 1) break
     await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS))
+  }
+  if (timedOut && !lastStatus) {
+    return { ok: false, error: 'Noema took too long to answer. Try again in a moment.', status: 504 }
   }
   if (busy.has(lastStatus)) {
     return { ok: false, error: 'Noema is very busy right now. Please try again in a moment.', status: 503 }
@@ -357,7 +373,7 @@ async function clarifyGoal(request: Request, env: Env): Promise<Response> {
       'You help a learner narrow down what they want to learn. Reply with JSON only, in exactly this shape:',
       '{"topic":"","broad":true,"focuses":[{"title":"","description":"","covers":[""],"fits":""}]}.',
       '"topic" is the subject in two to five words. "broad" is true when the goal is a whole field that contains several distinct areas (such as psychology, finance, or programming) and false when it is already specific.',
-      'List six to eight "focuses": distinct, specific areas within the subject that someone might want to study, ordered from the usual starting point to more specialised areas. Include a foundational or introductory focus first. "title" is two to five words; "description" is one or two plain sentences saying what studying this area is about; "covers" lists three or four of the main topics someone would study; "fits" is one short sentence on who it suits or what it leads to.',
+      'List six to eight "focuses": distinct, specific areas within the subject that someone might want to study, ordered from the usual starting point to more specialized areas. Include a foundational or introductory focus first. "title" is two to five words; "description" is one or two plain sentences saying what studying this area is about; "covers" lists three or four of the main topics someone would study; "fits" is one short sentence on who it suits or what it leads to.',
       'If the goal is already specific, list focuses that are different angles on it (for example theory, practice, exam preparation).',
     ].join(' '),
     prompt: `Learner's goal: ${goal}`,
@@ -1553,19 +1569,19 @@ async function startSubject(request: Request, env: Env): Promise<Response> {
       'You help a reader explore a subject they are curious about, alongside the books they read. This is not a course: no lessons, tests, or schedules.',
       'Reply with JSON only, in exactly this shape: {"title":"","summary":"","areas":[{"title":"","blurb":"","questions":[{"text":"","hook":""}]}]}.',
       '"title" names the subject in two to five words. "summary" is one plain sentence on what exploring it covers.',
-      'Give four to seven "areas", ordered from where most people start to more specialised ground. "title" is two to four words; "blurb" is one short sentence.',
-      'Each area has three to five "questions": real questions a curious person would ask, specific and answerable by reading, in plain words, most concrete first. Mix practical questions (how do I…, why does…) with ones about how it works.',
-      '"hook" is one short line on what makes the question interesting: a surprise, a common mistake, or what knowing it lets you do. No exclamation marks.',
+      'Give four to six "areas", ordered from where most people start to more specialized ground. "title" is two to four words; "blurb" is one short sentence.',
+      'Each area has three or four "questions": real questions a curious person would ask, specific and answerable by reading, in plain words, most concrete first. Mix practical questions (how do I…, why does…) with ones about how it works.',
+      '"hook" is one short line (at most 14 words) on what makes the question interesting: a surprise, a common mistake, or what knowing it lets you do. No exclamation marks.',
       level ? `The reader describes their level as: ${level}.` : '',
       'Use American English.',
     ]
       .filter(Boolean)
       .join(' '),
     prompt: `What the reader is curious about: ${goal}${focus ? `\nFocus: ${focus}` : ''}`,
-    maxOutputTokens: 3_000,
+    maxOutputTokens: 5_000,
     temperature: 0.5,
     json: true,
-    timeoutMs: 30_000,
+    timeoutMs: 45_000,
   })
   if (!result.ok) return json({ ok: false, error: result.error }, result.status)
   let parsed: unknown
@@ -1776,10 +1792,10 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
       .filter(Boolean)
       .join(' '),
     prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}\nQuestion: ${question}`,
-    maxOutputTokens: 2_200,
+    maxOutputTokens: 3_500,
     temperature: 0.4,
     json: true,
-    timeoutMs: 30_000,
+    timeoutMs: 40_000,
   })
   if (!result.ok) return json({ ok: false, error: result.error }, result.status)
   let parsed: Record<string, unknown>

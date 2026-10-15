@@ -897,3 +897,57 @@ describe('summing up an area', () => {
     expect(sent.contents[0].parts[0].text).toContain('2. How can I check my soil?')
   })
 })
+
+describe('a model that does not answer in time', () => {
+  const draft = {
+    title: 'Gardening',
+    summary: 'Growing food.',
+    areas: [
+      { title: 'Soil', questions: [{ text: 'What makes soil good?' }] },
+      { title: 'Water', questions: [{ text: 'How often to water?' }] },
+    ],
+  }
+  const ask = (ip: string) =>
+    call(
+      '/api/subject',
+      { method: 'POST', headers: { 'cf-connecting-ip': ip }, body: JSON.stringify({ goal: 'gardening' }) },
+      { GEMINI_API_KEY: 'k' },
+    )
+  const answer = (text: string, finishReason = 'STOP') =>
+    new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason }] }))
+
+  it('tries the next model instead of giving up', async () => {
+    const mock = vi
+      .fn()
+      .mockRejectedValueOnce(new DOMException('The operation was aborted.', 'AbortError'))
+      .mockResolvedValueOnce(answer(JSON.stringify(draft)))
+    vi.stubGlobal('fetch', mock)
+    const body = (await (await ask('8.8.4.1')).json()) as { ok: boolean; draft?: { title: string } }
+    expect(body.ok).toBe(true)
+    expect(body.draft?.title).toBe('Gardening')
+  })
+
+  it('moves on when a JSON answer is still cut off after asking again', async () => {
+    const mock = vi
+      .fn()
+      .mockResolvedValueOnce(answer('{"title":"Gard', 'MAX_TOKENS'))
+      .mockResolvedValueOnce(answer('{"title":"Gardening","areas":[', 'MAX_TOKENS'))
+      .mockResolvedValueOnce(answer(JSON.stringify(draft)))
+    vi.stubGlobal('fetch', mock)
+    const body = (await (await ask('8.8.4.2')).json()) as { ok: boolean }
+    expect(body.ok).toBe(true)
+    expect(mock).toHaveBeenCalledTimes(3)
+  })
+
+  it('says it took too long when no model answers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new DOMException('The operation was aborted.', 'AbortError')
+      }),
+    )
+    const response = await ask('8.8.4.3')
+    expect(response.status).toBe(504)
+    expect(((await response.json()) as { error: string }).error).toMatch(/too long/)
+  })
+})
