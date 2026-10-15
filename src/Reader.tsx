@@ -397,11 +397,22 @@ export function Reader({
       moved = true
     }
     const events = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
-    for (const name of events) container?.addEventListener(name, stop, { passive: true, once: true })
+    // The wheel and touches land in the page's own frame, not the box around it, so both are listened to.
+    const listened = new Set<EventTarget>()
+    const listen = (target: EventTarget | null | undefined) => {
+      if (!target || listened.has(target)) return
+      listened.add(target)
+      for (const name of events) target.addEventListener(name, stop, { passive: true, once: true })
+    }
+    listen(container)
+    // Any scroll the reader makes away from where the page was put also hands control back.
+    let placed: number | undefined
     const apply = () => {
       if (moved) return
+      if (placed !== undefined && container && Math.abs(container.scrollTop - placed) > 8) return stop()
       const doc = frame.current?.querySelector('iframe')?.contentDocument
       if (!doc?.body) return
+      listen(doc)
       const anchor = fragment
         ? (doc.getElementById(fragment) ?? doc.querySelector(`[name="${CSS.escape(fragment)}"]`))
         : null
@@ -413,10 +424,11 @@ export function Reader({
         const scroller = doc.scrollingElement
         if (scroller && scroller.scrollTop > 0) scroller.scrollTop = 0
       }
+      placed = container?.scrollTop
     }
     for (const wait of [40, 250, 700, 1500, 3000]) window.setTimeout(apply, wait)
     window.setTimeout(() => {
-      for (const name of events) container?.removeEventListener(name, stop)
+      for (const target of listened) for (const name of events) target.removeEventListener(name, stop)
     }, 3200)
   }
   const goToChapter = (targetIndex: number) => {
