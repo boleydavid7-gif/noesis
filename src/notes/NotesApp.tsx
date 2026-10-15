@@ -184,7 +184,7 @@ export function NotesApp() {
         <Home
           notebooks={notebooks}
           notes={notes}
-          library={library}
+
           onOpen={(key) => go({ kind: 'notebook', key })}
           onOpenNote={(id) => go({ kind: 'note', id })}
           onAdd={() => setAdding(true)}
@@ -309,7 +309,6 @@ function NotebookIcon({ notebook }: { notebook: Notebook }) {
 function Home({
   notebooks,
   notes,
-  library,
   onOpen,
   onOpenNote,
   onAdd,
@@ -318,7 +317,6 @@ function Home({
 }: {
   notebooks: Notebook[]
   notes: BrainNote[]
-  library: LibraryBook[]
   onOpen: (key: string) => void
   onOpenNote: (id: string) => void
   onAdd: () => void
@@ -369,13 +367,9 @@ function Home({
         </section>
       ) : fresh ? (
         <section className="notes-first">
-          <p>Notes for every book, on paper or on screen. Quotes with their page, your own words, and questions.</p>
           <button className="notes-primary" onClick={onAdd}>
             <Plus size={16} /> Add a book
           </button>
-          {library.length ? (
-            <small>Books in your Noesis library are here too, once you add notes to them.</small>
-          ) : null}
         </section>
       ) : (
         <>
@@ -383,7 +377,7 @@ function Home({
             <div className="notes-section-head">
               <h2>Books</h2>
               <button className="notes-link" onClick={onAdd}>
-                <Plus size={14} /> Notes for a book
+                <Plus size={14} /> Add a book
               </button>
             </div>
             {books.length ? (
@@ -392,9 +386,7 @@ function Home({
                   <NotebookRow key={book.key} notebook={book} onOpen={() => onOpen(book.key)} />
                 ))}
               </div>
-            ) : (
-              <p className="notes-empty">No book notebooks yet.</p>
-            )}
+            ) : null}
           </section>
           <section className="notes-section">
             <div className="notes-section-head">
@@ -431,9 +423,6 @@ function Home({
               {folders.map((folder) => (
                 <NotebookRow key={folder.key} notebook={folder} onOpen={() => onOpen(folder.key)} />
               ))}
-              {!inbox && !folders.length ? (
-                <p className="notes-empty notes-list-empty">Notes without a book go here.</p>
-              ) : null}
             </div>
           </section>
         </>
@@ -549,7 +538,6 @@ function NotebookPage({
         ))
       ) : (
         <section className="notes-first">
-          <p>Nothing here yet. Keep a quote with its page, or write what you think.</p>
           <button className="notes-primary" onClick={onNew}>
             <Plus size={16} /> New note
           </button>
@@ -727,14 +715,14 @@ function BookPicker({
         className="notes-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="Notes for a book"
+        aria-label="Add a book"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="notes-topbar">
           <button className="notes-back" onClick={onClose}>
             Cancel
           </button>
-          <span className="notes-editor-where">Notes for a book</span>
+          <span className="notes-editor-where">Add a book</span>
           <span />
         </header>
         <label className="notes-search">
