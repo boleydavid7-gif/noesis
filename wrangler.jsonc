@@ -6,6 +6,8 @@
   "vars": {
     "GEMINI_TUTOR_MODEL": "gemini-2.5-flash",
     "TUTOR_REQUIRE_AUTH": "true",
+    "VAPID_PUBLIC_KEY": "BKCosZ_0fSUKgK9fIXHeCZUhrk7PnB9MsJTHpQdRIhig05QIL7Ou-AfVLS_plb4lId5JNRIPZHUoNeyhdDCfaOA",
+    "VAPID_SUBJECT": "mailto:boleydavid1227@outlook.com",
     "VITE_DROPBOX_APP_KEY": "sx9m3fqvqa9s9oe",
     // Public, as in the built app; the Worker needs it too, to finish connecting Google Drive with the secret.
     "VITE_GOOGLE_DRIVE_CLIENT_ID": "486939287305-4uflkd132at87n3talvbgnec25sbn1r8.apps.googleusercontent.com",
