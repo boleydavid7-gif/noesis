@@ -188,7 +188,15 @@ function applyReadingStyle(
     paragraph['margin-top'] = '0 !important'
     paragraph['margin-bottom'] = '1em !important'
   }
-  const rules: Record<string, Record<string, string>> = { p: paragraph }
+  const rules: Record<string, Record<string, string>> = {
+    p: paragraph,
+    // Nothing wider than the page, so a finger moving down never pans it sideways.
+    'html, body': { 'overflow-x': 'hidden !important' },
+    'img, svg, video, table, pre': { 'max-width': '100% !important' },
+    'img, video': { height: 'auto' },
+    pre: { 'white-space': 'pre-wrap !important', 'overflow-wrap': 'anywhere' },
+    'td, th': { 'overflow-wrap': 'anywhere' },
+  }
   if (reading.paragraphs === 'indent') {
     rules['h1 + p, h2 + p, h3 + p, hr + p'] = { 'text-indent': '0 !important' }
   }
@@ -202,6 +210,50 @@ function applyReadingStyle(
     }
   }
   themes.default(rules)
+}
+
+// epubjs clears the chapter and opens it again at its last known place on any change of size. On a phone the
+// window's height changes while scrolling (the browser's bars come and go), which threw the reader back to the
+// start of the chapter or shook the page sideways. In a scrolled page only the width changes how the text lies,
+// so a change of height now only lets the box follow, and a real change of width reopens at the place last read.
+function keepPlaceOnResize(instance: unknown, element: HTMLElement, place: () => string | undefined) {
+  const manager = (
+    instance as {
+      manager?: {
+        resize: (width?: number, height?: number, cfi?: string) => void
+        container?: HTMLElement
+        steady?: boolean
+      }
+    }
+  ).manager
+  if (!manager || manager.steady) return
+  manager.steady = true
+  const original = manager.resize.bind(manager)
+  let width = Math.round(element.getBoundingClientRect().width)
+  manager.resize = (nextWidth, nextHeight, cfi) => {
+    const now = Math.round(nextWidth ?? element.getBoundingClientRect().width)
+    if (now < 1) return
+    if (Math.abs(now - width) < 2) {
+      if (manager.container) manager.container.style.height = '100%'
+      return
+    }
+    width = now
+    // The text reflows at a new width, so the place is kept as how far through the chapter it was.
+    const box = manager.container
+    const reach = box ? box.scrollHeight - box.clientHeight : 0
+    const fraction = box && reach > 0 ? box.scrollTop / reach : 0
+    let restored = false
+    const restore = () => {
+      if (restored || !box) return
+      restored = true
+      window.requestAnimationFrame(() => {
+        box.scrollTop = fraction * Math.max(0, box.scrollHeight - box.clientHeight)
+      })
+    }
+    ;(instance as { once?: (name: string, handler: () => void) => void }).once?.('rendered', restore)
+    window.setTimeout(restore, 900)
+    original(nextWidth, nextHeight, cfi ?? place())
+  }
 }
 
 export function Reader({
@@ -1197,6 +1249,7 @@ export function Reader({
             }
           }
         }
+        if (frame.current) keepPlaceOnResize(instance, frame.current, () => locationRef.current.cfi)
         void settle()
         // A chapter that is only pictures still counts as open.
         if (!opened && !displayedOnce) throw new Error('This EPUB has no readable opening chapter.')
