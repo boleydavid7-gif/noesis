@@ -11567,3 +11567,43 @@ button.loan-title {
 :where(.app-shell) :where(input[type='date']) {
   color-scheme: dark;
 }
+.libby-bar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+.libby-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.libby-head small {
+  color: var(--muted);
+}
+.libby-links {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.libby-links .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.libby-search {
+  position: relative;
+}
+.libby-search svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--muted);
+}
+.libby-search input {
+  width: 100%;
+  padding-left: 36px;
+}

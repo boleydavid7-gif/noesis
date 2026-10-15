@@ -130,6 +130,7 @@ import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
 import { AddExternalBook, Borrowed } from './Borrowed'
+import { LibbyBar, SearchLibbyLink } from './LibbyBar'
 import { newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
 import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
@@ -2726,6 +2727,7 @@ function App() {
                 ) : null
               })()
             : null}
+          <LibbyBar />
           <Borrowed books={books} onOpenBook={openSavedBook} />
           <BookSection
             title="On this device"
@@ -2951,6 +2953,7 @@ function App() {
             <BookSection books={localMatches} onOpen={openSavedBook} />
           </section>
         ) : null}
+        <SearchLibbyLink query={resourceQuery} />
         <section className="resource-section">
           <div className="section-heading">
             <div>

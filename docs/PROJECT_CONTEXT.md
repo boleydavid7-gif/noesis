@@ -192,3 +192,6 @@ and a Wrangler dry run. The live health endpoint is
   place and anything set on either copy. Notes, review cards, loans, reading diary, rabbit holes' books and the
   folder map move to it, a copy's file moves over when the kept one has none here, and the copy is tombstoned so no
   sync brings it back.
+- Libby (`lib/libby.ts`, `LibbyBar.tsx`): Libby's books are DRM-protected and have no public reading API, so they
+  can't be read inside Noesis. The Library page has a Libby bar (Shelf, the chosen library in Libby, and a search
+  that opens Libby's results for that library, by its `libbyKey`); Explore offers "Search Libby for …".
