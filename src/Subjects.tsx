@@ -958,6 +958,7 @@ function QuestionPage({
   const [editing, setEditing] = useState(!question.answer)
   const [used, setUsed] = useState<string[]>(question.answer?.pickIds ?? [])
   const [side, setSide] = useState('')
+  const [kind, setKind] = useState<'all' | PickType>('all')
   const latest = useRef({ subject, question })
   latest.current = { subject, question }
   const asked = useRef(false)
@@ -1023,6 +1024,8 @@ function QuestionPage({
   }, [])
 
   const picks = question.picks ?? []
+  // Only what was opened or saved is offered as where the answer came from.
+  const sources = picks.filter((pick) => pick.looked || pick.saved || used.includes(pick.id))
   const groups = groupPicks(picks)
   const change = (next: Partial<Question>) => onSave(withQuestion(subject, { ...question, ...next }))
 
@@ -1114,23 +1117,44 @@ function QuestionPage({
           </div>
         ) : null}
         {error ? <p className="weather-error">{error}</p> : null}
-        {groups.map((group) => (
-          <div className="pick-group" key={group.type}>
-            <h5>{group.label}</h5>
-            {group.picks.map((pick) => (
-              <PickCard
-                key={pick.id}
-                pick={pick}
-                owned={pick.type === 'book' ? ownedBook(library, pick.title) : undefined}
-                onOpenBook={onOpenBook}
-                onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: !pick.saved }))}
-                onLooked={() => {
-                  if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
-                }}
-              />
+        {groups.length > 1 ? (
+          <div className="pick-filter" role="tablist" aria-label="Show">
+            <button role="tab" aria-selected={kind === 'all'} onClick={() => setKind('all')}>
+              All <span>{picks.length}</span>
+            </button>
+            {groups.map((group) => (
+              <button
+                key={group.type}
+                role="tab"
+                aria-selected={kind === group.type}
+                onClick={() => setKind(group.type)}
+              >
+                {group.label} <span>{group.picks.length}</span>
+              </button>
             ))}
           </div>
-        ))}
+        ) : null}
+        {groups
+          .filter((group) => kind === 'all' || group.type === kind || !groups.some((item) => item.type === kind))
+          .map((group) => (
+            <div className="pick-group" key={group.type}>
+              <h5>{group.label}</h5>
+              <div className="pick-list">
+                {group.picks.map((pick) => (
+                  <PickCard
+                    key={pick.id}
+                    pick={pick}
+                    owned={pick.type === 'book' ? ownedBook(library, pick.title) : undefined}
+                    onOpenBook={onOpenBook}
+                    onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: !pick.saved }))}
+                    onLooked={() => {
+                      if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
       </section>
 
       <section className="question-block question-answer">
@@ -1175,9 +1199,9 @@ function QuestionPage({
               aria-label="Your answer"
               maxLength={600}
             />
-            {picks.length ? (
+            {sources.length ? (
               <div className="answer-sources" role="group" aria-label="Where you found it">
-                {picks.map((pick) => (
+                {sources.map((pick) => (
                   <button
                     type="button"
                     key={pick.id}
@@ -1309,20 +1333,22 @@ function SubjectShelf({
       {groups.map((group) => (
         <div className="pick-group" key={group.type}>
           <h5>{group.label}</h5>
-          {group.items.map(({ pick, question }) => (
-            <div key={pick.id} className="shelf-item">
-              <PickCard
-                pick={pick}
-                onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: false }), 'Unsaved.')}
-                onLooked={() => {
-                  if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
-                }}
-              />
-              <button className="text-button shelf-question" onClick={() => onOpen(question.id)}>
-                For: {question.text}
-              </button>
-            </div>
-          ))}
+          <div className="pick-list">
+            {group.items.map(({ pick, question }) => (
+              <div key={pick.id} className="shelf-item">
+                <PickCard
+                  pick={pick}
+                  onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: false }), 'Unsaved.')}
+                  onLooked={() => {
+                    if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
+                  }}
+                />
+                <button className="text-button shelf-question" onClick={() => onOpen(question.id)}>
+                  For: {question.text}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>

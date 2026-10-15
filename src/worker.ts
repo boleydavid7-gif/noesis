@@ -55,6 +55,8 @@ const MAX_CONTEXT_LENGTH = 32_000
 const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const MAX_SEARCH_LENGTH = 160
+// Wikimedia asks callers to name themselves with a way to reach them.
+const WIKI_AGENT = 'Noesis/1.0 (https://noesis.proairetos.com; reading app)'
 
 async function fetchWithTimeout(input: string | URL, init: RequestInit = {}, milliseconds = 5_000): Promise<Response> {
   const controller = new AbortController()
@@ -1637,7 +1639,7 @@ async function checkVideo(draft: PickDraft): Promise<CheckedPick | null> {
 export async function searchVideos(words: string, why: string | undefined, key: string): Promise<CheckedPick[]> {
   try {
     const search = await fetchWithTimeout(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=strict&relevanceLanguage=en&maxResults=3&q=${encodeURIComponent(words)}&key=${encodeURIComponent(key)}`,
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&safeSearch=strict&relevanceLanguage=en&maxResults=4&q=${encodeURIComponent(words)}&key=${encodeURIComponent(key)}`,
       { headers: { accept: 'application/json' } },
       5_000,
     )
@@ -1662,7 +1664,7 @@ export async function searchVideos(words: string, why: string | undefined, key: 
       for (const item of body.items ?? [])
         if (item.id) lengths.set(item.id, isoMinutes(item.contentDetails?.duration ?? ''))
     }
-    return items.slice(0, 2).map((item) => ({
+    return items.slice(0, 3).map((item) => ({
       type: 'watch' as const,
       title: decodeEntities(item.snippet!.title!).slice(0, 140),
       source: decodeEntities(item.snippet?.channelTitle ?? 'YouTube').slice(0, 80),
@@ -1722,11 +1724,35 @@ export async function searchEpisodes(words: string, why: string | undefined): Pr
 }
 
 // One Wikipedia article by its exact title, when it exists and is not a list of meanings.
+// Wikipedia articles found by Wikipedia's own search (they exist), with a line from the article as the reason.
+export async function wikipediaSearch(words: string, limit = 3): Promise<CheckedPick[]> {
+  try {
+    const response = await fetchWithTimeout(
+      `https://en.wikipedia.org/w/rest.php/v1/search/page?limit=${limit}&q=${encodeURIComponent(words.slice(0, 200))}`,
+      { headers: { accept: 'application/json', 'user-agent': WIKI_AGENT } },
+      4_000,
+    )
+    if (!response.ok) return []
+    const body = (await response.json()) as { pages?: Array<{ key?: string; title?: string; description?: string }> }
+    return (body.pages ?? [])
+      .filter((page) => page.key && page.title)
+      .map((page) => ({
+        type: 'read' as const,
+        title: page.title!.slice(0, 140),
+        source: 'Wikipedia',
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.key!)}`,
+        why: page.description ? page.description.slice(0, 140) : undefined,
+      }))
+  } catch {
+    return []
+  }
+}
+
 export async function wikipediaPick(title: string, why: string | undefined): Promise<CheckedPick | null> {
   try {
     const response = await fetchWithTimeout(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`,
-      { headers: { accept: 'application/json', 'user-agent': 'Noesis/1.0 (reading app)' } },
+      { headers: { accept: 'application/json', 'user-agent': WIKI_AGENT } },
       4_000,
     )
     if (!response.ok) return null
@@ -1782,8 +1808,8 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
       '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.',
       '"useIt" is one small, concrete thing the reader could do in the next few days to use the answer, under 15 words, starting with a verb (for example "Squeeze a handful of your soil and see if it holds together"); give it only when the subject is practical (a skill, craft, garden, kitchen, body, money, tools), otherwise "".',
       '"wiki" is the exact title of the English Wikipedia article that best covers it, or "" if none fits.',
-      '"books": one or two real, published books you are confident exist that answer it well, with the author. "read": up to two free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.',
-      '"watch": up to two YouTube videos; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one podcast search phrase for an episode on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].',
+      '"books": two to four real, published books you are confident exist that answer it well, with the author, best first. "read": three or four free articles or guides from reputable sites (universities, public bodies, well-known publications, extension services); give an exact address only when you are sure of it, and "minutes" as reading time.',
+      '"watch": two or three YouTube videos (talks, lectures, explainers, demonstrations), from well-known channels where you can; give "url" only if you are certain of the exact video address, and always give "search", the words to find a good video on it. "listen": one or two podcast search phrases for episodes on it. "try": at most one hands-on thing (a tool, calculator, field guide, or exercise) only if the subject is practical; otherwise [].',
       '"why" is a short line on what this pick adds for the question, never generic praise.',
       reading.length ? `The reader already has these books: ${reading.join('; ')}. Do not suggest them again.` : '',
       level ? `The reader describes their level as: ${level}.` : '',
@@ -1808,24 +1834,26 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
   const wiki = textOf(parsed.wiki, 120)
   const books = draft.picks
     .filter((pick) => pick.type === 'book')
-    .slice(0, 2)
+    .slice(0, 4)
     .map((pick) => ({ title: pick.title, author: pick.author || pick.source, note: pick.why }))
   const links = draft.picks.filter((pick) => (pick.type === 'read' || pick.type === 'try') && pick.url)
   const videos = draft.picks.filter((pick) => pick.type === 'watch')
-  const listen = draft.picks.find((pick) => pick.type === 'listen')
+  const listens = draft.picks.filter((pick) => pick.type === 'listen').slice(0, 2)
   const youtubeKey = env.YOUTUBE_API_KEY?.trim()
   const videoWords = videos.find((pick) => pick.search)?.search ?? `${question} ${subject}`
-  const [checkedLinks, wikiPick, foundVideos, checkedVideos, episodes] = await Promise.all([
+  const [checkedLinks, wikiPick, foundVideos, checkedVideos, episodeLists, related] = await Promise.all([
     Promise.all(links.map(async (pick) => ((await linkWorks(pick.url!)) ? pick : null))),
     wiki ? wikipediaPick(wiki, undefined) : Promise.resolve(null),
     youtubeKey ? searchVideos(videoWords, videos[0]?.why, youtubeKey) : Promise.resolve([] as CheckedPick[]),
-    youtubeKey ? Promise.resolve([] as Array<CheckedPick | null>) : Promise.all(videos.slice(0, 2).map(checkVideo)),
-    listen ? searchEpisodes(listen.search || listen.title, listen.why) : Promise.resolve([] as CheckedPick[]),
+    youtubeKey ? Promise.resolve([] as Array<CheckedPick | null>) : Promise.all(videos.slice(0, 3).map(checkVideo)),
+    Promise.all(listens.map((pick) => searchEpisodes(pick.search || pick.title, pick.why))),
+    wikipediaSearch(`${question} ${subject}`),
   ])
+  const episodes = episodeLists.flat()
   const kept: CheckedPick[] = []
-  const read = checkedLinks.filter((pick): pick is PickDraft => Boolean(pick && pick.type === 'read')).slice(0, 2)
+  const read = checkedLinks.filter((pick): pick is PickDraft => Boolean(pick && pick.type === 'read')).slice(0, 4)
   if (wikiPick && !read.some((pick) => pick.url === wikiPick.url)) kept.push(wikiPick)
-  for (const pick of read.slice(0, wikiPick ? 1 : 2))
+  for (const pick of read)
     kept.push({
       type: 'read',
       title: pick.title,
@@ -1834,8 +1862,16 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
       minutes: pick.minutes,
       why: pick.why,
     })
+  // Wikipedia's own search fills Read up to four with articles that exist, when Noema's links fell short.
+  for (const pick of related) {
+    if (kept.filter((item) => item.type === 'read').length >= 4) break
+    if (!kept.some((item) => item.url === pick.url)) kept.push(pick)
+  }
   kept.push(...foundVideos, ...checkedVideos.filter((pick): pick is CheckedPick => Boolean(pick)))
-  kept.push(...episodes.slice(0, 1))
+  const seenEpisodes = new Set<string>()
+  kept.push(
+    ...episodes.filter((pick) => pick.url && !seenEpisodes.has(pick.url) && seenEpisodes.add(pick.url)).slice(0, 3),
+  )
   const tried = checkedLinks.find((pick) => pick?.type === 'try')
   if (tried) kept.push({ type: 'try', title: tried.title, source: tried.source, url: tried.url, why: tried.why })
   return json({

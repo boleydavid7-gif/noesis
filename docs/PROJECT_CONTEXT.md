@@ -135,3 +135,7 @@ cited titles stay as published.
 The current source passes `npm run typecheck`, `npm run build`, `npm run lint`,
 and a Wrangler dry run. The live health endpoint is
 `/api/health`; free-resource search is `/api/search?q=...`.
+
+- Question page look (iOS style): pill actions under the title; Explore has a row of filter chips (All, Books, Read,
+  Watch, Listen with counts) over one inset grouped list per kind (leading cover or icon, hairlines after it);
+  "where you found it" offers only picks that were opened or saved. Wikipedia calls send `WIKI_AGENT` as asked.
