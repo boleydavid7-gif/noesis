@@ -37,6 +37,8 @@ export type LibraryBook = {
   cloudAt?: string // when this book was last confirmed in the account's cloud
   intent?: string // why the reader chose this book, in their own choice of words
   toc?: Array<{ label: string; href: string; level?: number }>
+  fromFolder?: string // the path in the library folder this book came from (Settings › Sync)
+  foundIn?: { provider: 'google-drive' | 'onedrive' | 'dropbox'; id: string } // where its file was last found in the person's storage
 }
 
 const BOOKS_KEY = 'noesis:library:v2'

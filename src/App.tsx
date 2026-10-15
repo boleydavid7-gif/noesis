@@ -44,6 +44,7 @@ import {
   Upload,
   UserRound,
   X,
+  FolderOpen,
 } from 'lucide-react'
 import './App.css'
 import {
@@ -74,9 +75,20 @@ import {
   writeLibraryBooks,
   type LibraryBook,
 } from './lib/library'
+import { LibraryFolderPicker } from './LibraryFolderPicker'
 import { Reader, type NoteAction, type ReaderTutorContext, type TutorHandler } from './Reader'
 import { useLatest } from './lib/useLatest'
-import { moveTo, tap } from './lib/device'
+import { moveTo, oneAtATime, tap } from './lib/device'
+import { cloudLabel, downloadById, filesInFolder } from './lib/cloudFind'
+import {
+  chooseLibraryFolder,
+  chosenLibraryFolder,
+  fileNameOf,
+  folderBooks,
+  planFolderScan,
+  sameFile,
+  saveFolderBooks,
+} from './lib/libraryFolder'
 import { BookCover } from './BookCover'
 import { friendlyBookError } from './lib/text'
 import { goalProgress } from './lib/goal'
@@ -151,6 +163,7 @@ import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
 import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
 import {
+  indexDownloadedBook,
   syncAccountBundle,
   syncAccountLibrary,
   syncAccountPreferences,
@@ -408,6 +421,11 @@ function App() {
   })
   const [authBusy, setAuthBusy] = useState(false)
   const [cloudConnections, setCloudConnections] = useState<CloudConnection[]>(() => readCloudConnections())
+  // Settings › Sync: choosing the library folder in a connected storage, and what the last look found.
+  const [pickingFolder, setPickingFolder] = useState<CloudProviderId | null>(null)
+  const [libraryFolder, setLibraryFolder] = useState(() => chosenLibraryFolder())
+  const [folderSaid, setFolderSaid] = useState('')
+  const [folderBusy, setFolderBusy] = useState(false)
   const [cloudProviders, setCloudProviders] = useState<CloudProviderInfo[]>(() => listCloudProviders())
   const [cloudSyncing, setCloudSyncing] = useState(false)
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine)
@@ -1948,41 +1966,138 @@ function App() {
     cloudReady.current = false
     showNotice('Cloud provider disconnected. Your local library is unchanged.')
   }
-  async function syncNow(providerId?: CloudProviderId) {
-    const connection = providerId
-      ? cloudConnectionForUser(
-          cloudConnections.filter((item) => item.provider === providerId),
-          authUserId,
-        )
-      : cloudConnection
-    if (!connection) {
-      showNotice('Sign in and connect the same provider to sync your books.')
-      return
+  /**
+   * The library folder (Settings › Sync): new files come in once each, files the library already has are linked,
+   * newer files replace older ones, and a book removed from Noesis is not brought back. One tab or window at a time.
+   */
+  async function syncLibraryFolder(ask = false): Promise<string> {
+    const folder = chosenLibraryFolder()
+    if (!folder) return 'Choose a library folder first.'
+    const connection = cloudConnectionForUser(
+      readCloudConnections().filter((item) => item.provider === folder.provider),
+      authUserId,
+    )
+    const label = cloudLabel(folder.provider)
+    if (!connection || !cloudConnectionUsable(connection)) return `Connect ${label} on this device to read the folder.`
+    if (!connection.readsFolders) return `Connect ${label} again so Noesis can read your folders.`
+    const run = async (): Promise<string> => {
+      const files = await filesInFolder(connection, folder)
+      const known = folderBooks()
+      const plan = planFolderScan(files, known, readLibraryBooks())
+      for (const { path, bookId } of plan.link) {
+        const item = files.find((each) => each.path === path)!
+        known[path] = { bookId, size: item.size }
+        const book = readLibraryBooks().find((each) => each.id === bookId)
+        if (book && !book.fromFolder)
+          upsertLibraryBook({ ...book, fromFolder: path, fileSize: book.fileSize ?? item.size })
+      }
+      saveFolderBooks(known)
+      let added = 0
+      for (const path of plan.add) {
+        const item = files.find((each) => each.path === path)!
+        const name = fileNameOf(path)
+        // The library as it is now (another device's sync may have just brought this book): linked, never added twice.
+        const already = readLibraryBooks().find((book) => sameFile(book, name, item.size))
+        if (already) {
+          known[path] = { bookId: already.id, size: item.size }
+          saveFolderBooks(known)
+          continue
+        }
+        try {
+          const bytes = await downloadById(connection, item)
+          const result = await importOne(new File([bytes], name))
+          const book =
+            result === 'duplicate' ? readLibraryBooks().find((each) => sameFile(each, name, item.size)) : result
+          if (book) {
+            upsertLibraryBook({ ...(readLibraryBooks().find((each) => each.id === book.id) ?? book), fromFolder: path })
+            known[path] = { bookId: book.id, size: item.size }
+            if (result !== 'duplicate') added += 1
+          } else known[path] = { bookId: '', size: item.size }
+        } catch {
+          // Not a readable book: remembered, so it is not tried at every look.
+          known[path] = { bookId: '', size: item.size }
+        }
+        saveFolderBooks(known)
+      }
+      // The same file at a second path is the same book.
+      for (const { path, as } of plan.same) if (known[as]) known[path] = known[as]
+      saveFolderBooks(known)
+      let replaced = 0
+      for (const { path, bookId } of plan.replace) {
+        const item = files.find((each) => each.path === path)!
+        const book = readLibraryBooks().find((each) => each.id === bookId)
+        if (!book) continue
+        try {
+          const bytes = await downloadById(connection, item)
+          await saveEpubFile(bookId, bytes)
+          void indexDownloadedBook(book, bytes)
+          upsertLibraryBook({ ...book, fileSize: item.size, updated: new Date().toISOString() })
+          known[path] = { bookId, size: item.size }
+          saveFolderBooks(known)
+          replaced += 1
+        } catch {
+          // Left as it was; the next look tries again.
+        }
+      }
+      setBooks(readLibraryBooks())
+      const words = [
+        added ? `${added === 1 ? 'One book' : `${added} books`} added from ${folder.name}` : '',
+        replaced ? `${replaced === 1 ? 'one' : replaced} updated` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      if (words) showNotice(`${words[0].toUpperCase()}${words.slice(1)}.`)
+      return words ? `${words[0].toUpperCase()}${words.slice(1)}.` : `Nothing new in ${folder.name}.`
     }
-    setCloudSyncing(true)
+    void ask
     try {
-      const merged = await syncCloudState(connection, {
-        books,
-        notes,
-        paths,
-        bundle: { events, cards: readReviewCards(), focus: focusToSync(focusState) },
-      })
-      setBooks(merged.books)
-      setNotes(merged.notes)
-      setPaths(merged.paths as LearningPath[])
-      writeLibraryBooks(merged.books)
-      writeLocalNotes(merged.notes)
-      writePaths(merged.paths as LearningPath[])
-      if (merged.bundle) applyBundle(merged.bundle)
-      markSynced()
-      showNotice(
-        `${connection.provider === 'google-drive' ? 'Google Drive' : connection.provider === 'onedrive' ? 'OneDrive' : 'Dropbox'} sync completed.`,
-      )
+      return await oneAtATime('noesis-library-folder', run)
     } catch (reason) {
-      showNotice(reason instanceof Error ? reason.message : 'Cloud sync failed.')
-    } finally {
-      setCloudSyncing(false)
+      return reason instanceof Error ? reason.message : `${label} could not be reached.`
     }
+  }
+  const syncLibraryFolderRef = useLatest(syncLibraryFolder)
+  // The library folder is looked through a moment after opening and on coming back to Noesis (at most once a minute).
+  useEffect(() => {
+    if (!authUserId) return
+    let last = 0
+    const look = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 60_000 || !chosenLibraryFolder()) return
+      last = Date.now()
+      void syncLibraryFolderRef.current()
+    }
+    const first = window.setTimeout(look, 5000)
+    document.addEventListener('visibilitychange', look)
+    return () => {
+      window.clearTimeout(first)
+      document.removeEventListener('visibilitychange', look)
+    }
+  }, [authUserId])
+  async function lookAtFolder() {
+    setFolderBusy(true)
+    setFolderSaid('')
+    try {
+      setFolderSaid(await syncLibraryFolder(true))
+    } finally {
+      setFolderBusy(false)
+    }
+  }
+  /** Settings › Clear the library: every book removed (on every device, once synced), then a fresh look at the folder. */
+  function clearLibrary() {
+    const all = readLibraryBooks()
+    if (!all.length) return
+    if (
+      !window.confirm(
+        `Remove all ${all.length} books from your library? Their notes stay. ${chosenLibraryFolder() ? 'The library folder is then read again, each book once.' : ''}`.trim(),
+      )
+    )
+      return
+    for (const book of all) removeLibraryBook(book.id)
+    saveFolderBooks({})
+    setBooks([])
+    setSelectedBookId(null)
+    showNotice(`${all.length === 1 ? 'One book' : `${all.length} books`} removed.`)
+    if (chosenLibraryFolder()) window.setTimeout(() => void syncLibraryFolderRef.current(), 1500)
   }
   async function handleAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -2874,13 +2989,7 @@ function App() {
             <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
           </button>
         </section>
-        <Group title="Cloud backup" icon={<Cloud size={18} />}>
-          <p className="setting-note">
-            Signed-in accounts sync automatically. You can also connect your own cloud storage; it only sees a Noesis
-            folder, and each device connects separately.
-          </p>
-        </Group>
-        <section className="cloud-provider-grid">
+        <Group title="Your storage" icon={<Cloud size={18} />}>
           {cloudProviders.map((provider) => {
             const connection = signedIn
               ? cloudConnectionForUser(
@@ -2888,84 +2997,143 @@ function App() {
                   authUser?.id,
                 )
               : undefined
-            const expired = Boolean(connection && !cloudConnectionUsable(connection))
+            const usable = Boolean(connection && cloudConnectionUsable(connection))
+            const detail = !provider.configured
+              ? 'Not set up on this site yet.'
+              : !connection
+                ? 'Backs up your library and finds books you keep there.'
+                : !usable
+                  ? 'The connection ended. Connect again.'
+                  : connection.readsFolders
+                    ? 'Connected on this device. Books not here come from it.'
+                    : 'Connected. Connect again to let Noesis read your folders.'
             return (
-              <article className="cloud-provider-card panel-card" key={provider.id}>
-                <div className="cloud-provider-head">
-                  <div className="backup-icon">
-                    <Cloud size={18} />
-                  </div>
-                  <div>
-                    <h3>{provider.label}</h3>
-                    <p>{provider.description}</p>
-                  </div>
-                  <span className={connection && !expired ? 'cloud-status cloud-status-connected' : 'cloud-status'}>
-                    {connection
-                      ? expired
-                        ? 'Reconnect'
-                        : 'Connected'
-                      : provider.configured
-                        ? 'Ready'
-                        : 'Setup needed'}
-                  </span>
-                </div>
-                {connection && !expired ? (
-                  <div className="cloud-provider-actions">
-                    <button
-                      className="secondary-button"
-                      onClick={() => void syncNow(provider.id)}
-                      disabled={cloudSyncing || !online}
-                    >
-                      <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
-                    </button>
-                    <button className="secondary-button" onClick={() => disconnectCloud(provider.id)}>
-                      Disconnect
-                    </button>
-                  </div>
+              <Row key={provider.id} title={provider.label} detail={detail}>
+                {connection && usable && connection.readsFolders ? (
+                  <button className="secondary-button" onClick={() => disconnectCloud(provider.id)}>
+                    Disconnect
+                  </button>
                 ) : (
-                  <div className="cloud-provider-actions">
-                    <button
-                      className="primary-button"
-                      onClick={() => void connectCloud(provider.id)}
-                      disabled={!signedIn || !provider.configured || !online}
-                    >
-                      <Cloud size={14} /> {expired ? 'Reconnect' : 'Connect'} {provider.label}
-                    </button>
-                    <a className="cloud-setup-link" href={provider.setupUrl} target="_blank" rel="noreferrer">
-                      Provider setup
-                    </a>
-                  </div>
+                  <button
+                    className="primary-button"
+                    onClick={() => void connectCloud(provider.id)}
+                    disabled={!signedIn || !provider.configured || !online}
+                  >
+                    {connection ? 'Connect again' : 'Connect'}
+                  </button>
                 )}
-                {!provider.configured ? (
-                  <p className="cloud-provider-note">Not set up yet. Add its client ID in Cloudflare, then redeploy.</p>
-                ) : null}
-              </article>
+              </Row>
             )
           })}
-        </section>
-        <Group title="Offline backup" icon={<Download size={18} />}>
-          <Row title="Export a ZIP" detail="Books, notes and learning paths in one file.">
-            <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
-              <Download size={15} /> Export
-            </button>
-          </Row>
-          <Row title="Restore from a ZIP" detail="Load a file you exported earlier.">
-            <button className="secondary-button" onClick={() => backupInput.current?.click()}>
-              <Upload size={15} /> Restore
-            </button>
-          </Row>
+          {!signedIn ? <p className="setting-note">Sign in first; each device connects its storage once.</p> : null}
         </Group>
-        <Group title="Backup options" icon={<RotateCcw size={18} />}>
-          <Row title="Automatic sync" detail="Sync in the background when something changes.">
+        <Group title="Library folder" icon={<FolderOpen size={18} />}>
+          {pickingFolder ? (
+            (() => {
+              const connection = cloudConnectionForUser(
+                cloudConnections.filter((item) => item.provider === pickingFolder),
+                authUser?.id,
+              )
+              return connection ? (
+                <LibraryFolderPicker
+                  connection={connection}
+                  onClose={() => setPickingFolder(null)}
+                  onChosen={(folder) => {
+                    const changed =
+                      !libraryFolder || libraryFolder.provider !== folder.provider || libraryFolder.id !== folder.id
+                    chooseLibraryFolder(folder)
+                    if (changed) saveFolderBooks({})
+                    setLibraryFolder(folder)
+                    setPickingFolder(null)
+                    void lookAtFolder()
+                  }}
+                />
+              ) : null
+            })()
+          ) : libraryFolder ? (
+            <>
+              <Row
+                title={libraryFolder.name}
+                detail={
+                  folderSaid ||
+                  `In ${cloudLabel(libraryFolder.provider)}. New books there come into Noesis on every device.`
+                }
+              >
+                <button
+                  className="secondary-button"
+                  onClick={() => void lookAtFolder()}
+                  disabled={folderBusy || !online}
+                >
+                  <RotateCcw size={14} /> {folderBusy ? 'Looking…' : 'Look now'}
+                </button>
+              </Row>
+              <div className="setting-actions">
+                <button className="text-button" onClick={() => setPickingFolder(libraryFolder.provider)}>
+                  Choose another folder
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    chooseLibraryFolder(undefined)
+                    saveFolderBooks({})
+                    setLibraryFolder(undefined)
+                    setFolderSaid('')
+                  }}
+                >
+                  Stop using it
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="setting-note">
+                Keep your books in one folder of your storage; Noesis brings in what is there, each book once.
+              </p>
+              {cloudConnections
+                .filter((item) => item.ownerUserId === authUserId && cloudConnectionUsable(item) && item.readsFolders)
+                .map((connection) => (
+                  <Row key={connection.provider} title={`A folder in ${cloudLabel(connection.provider)}`}>
+                    <button className="primary-button" onClick={() => setPickingFolder(connection.provider)}>
+                      <FolderOpen size={14} /> Choose
+                    </button>
+                  </Row>
+                ))}
+            </>
+          )}
+        </Group>
+        <Group title="Options" icon={<RotateCcw size={18} />}>
+          <Row title="Automatic sync" detail="In the background when something changes.">
             <Toggle
               checked={settings.backup.autoSync}
               onChange={(value) => updateSettings({ ...settings, backup: { ...settings.backup, autoSync: value } })}
               label="Automatic sync"
             />
           </Row>
+          <Row title="Export a ZIP" detail="Books, notes and learning paths in one file.">
+            <button className="secondary-button" onClick={() => void downloadBackupFile(books, notes, paths)}>
+              <Download size={15} /> Export
+            </button>
+          </Row>
+          <Row title="Restore from a ZIP" detail="A file you exported earlier.">
+            <button className="secondary-button" onClick={() => backupInput.current?.click()}>
+              <Upload size={15} /> Restore
+            </button>
+          </Row>
+          <Row
+            title="Clear the library"
+            detail={
+              libraryFolder
+                ? 'Remove every book, then read the library folder again.'
+                : 'Remove every book. Notes stay.'
+            }
+          >
+            <button className="secondary-button" onClick={clearLibrary} disabled={!books.length}>
+              Clear
+            </button>
+          </Row>
           <p className="setting-note">
-            Synced: books, notes, progress, paths, calendar, focus steps and review cards. Settings and the timer stay
-            on this device.
+            Synced: books, notes, progress, paths, calendar, focus steps and review cards. The timer stays on this
+            device.
           </p>
         </Group>
       </>

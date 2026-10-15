@@ -240,6 +240,8 @@ export const PREFERENCE_KEYS = [
   'noesis:planner:v1',
   'noesis:paths-guide:v1',
   'noesis:keep-banner:v1',
+  'noesis:library-folder:v1',
+  'noesis:folder-books:v1',
 ]
 const PREFS_NAME = 'data/preferences.json'
 const PREFS_META = 'noesis:preferences-meta'

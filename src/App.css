@@ -9723,7 +9723,9 @@ input[type='radio'] {
   background: rgba(var(--accent-rgb, 220, 194, 142), 0.1);
   border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.3);
 }
-.reader-wide-tutor > div { background: transparent; }
+.reader-wide-tutor > div {
+  background: transparent;
+}
 
 /* Finding a cover online */
 .cover-finder-backdrop {
@@ -9942,8 +9944,18 @@ input[type='radio'] {
   font-weight: 400;
 }
 
-:is(.section-heading h2, .reader-wide-sidebar-head h2, .context-section-heading h2, .planner-goal-head h3, .plan-next h4,
-  .settings-subhead, .study-panel strong, .reader-wide-tutor strong, .shelf-add-frame span, .weather-current strong) {
+:is(
+  .section-heading h2,
+  .reader-wide-sidebar-head h2,
+  .context-section-heading h2,
+  .planner-goal-head h3,
+  .plan-next h4,
+  .settings-subhead,
+  .study-panel strong,
+  .reader-wide-tutor strong,
+  .shelf-add-frame span,
+  .weather-current strong
+) {
   font-family: 'DM Sans', system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -9959,4 +9971,82 @@ input[type='radio'] {
 .noema-ask {
   background: var(--accent-fill, #b48b4e);
   box-shadow: none;
+}
+
+/* Settings › Sync › Library folder */
+.setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 4px 0 2px;
+}
+.folder-picker {
+  display: grid;
+  gap: 10px;
+}
+.folder-picker-trail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.folder-picker-trail button {
+  border: 0;
+  background: none;
+  color: var(--accent, inherit);
+  font: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.folder-picker-trail button:disabled {
+  color: inherit;
+  cursor: default;
+}
+.folder-picker-trail button + button::before {
+  content: '›';
+  margin-right: 8px;
+  opacity: 0.6;
+}
+.folder-picker-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: 12px;
+}
+.folder-picker-list li + li {
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+}
+.folder-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.folder-picker-list button span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-picker-empty {
+  padding: 14px;
+  opacity: 0.7;
+}
+.folder-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }

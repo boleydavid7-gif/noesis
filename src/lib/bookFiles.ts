@@ -1,7 +1,8 @@
 import { downloadAccountBook, indexDownloadedBook } from './accountLibrary'
 import { downloadCloudBook } from './cloudSync'
+import { downloadById, findInStorage } from './cloudFind'
 import { readCloudConnections } from './cloudProviders'
-import { loadEpubFile, saveEpubFile, type LibraryBook } from './library'
+import { loadEpubFile, readLibraryBooks, saveEpubFile, upsertLibraryBook, type LibraryBook } from './library'
 
 export class BookNotFoundError extends Error {
   constructor() {
@@ -9,7 +10,7 @@ export class BookNotFoundError extends Error {
   }
 }
 
-/** Looks for a book's file in the account's storage, then in each connected cloud's Noesis folder. */
+/** Looks for a book's file in the account's storage, then each connected cloud's Noesis folder, then anywhere in it. */
 async function findInCloud(book: LibraryBook): Promise<ArrayBuffer | null> {
   try {
     const fromAccount = await downloadAccountBook(book)
@@ -23,6 +24,29 @@ async function findInCloud(book: LibraryBook): Promise<ArrayBuffer | null> {
       if (bytes) return bytes
     } catch {
       // An expired or unreachable cloud is skipped; the next one may have it.
+    }
+  }
+  // Then anywhere in the person's own storage: where it was found before, else by its file name and size.
+  if (!book.fileName) return null
+  const readers = readCloudConnections().filter((connection) => connection.readsFolders)
+  const first = book.foundIn ? readers.filter((connection) => connection.provider === book.foundIn!.provider) : []
+  for (const connection of [...first, ...readers.filter((each) => !first.includes(each))]) {
+    try {
+      const place =
+        book.foundIn?.provider === connection.provider
+          ? { id: book.foundIn.id }
+          : await findInStorage(connection, book.fileName, book.fileSize)
+      if (!place) continue
+      const bytes = await downloadById(connection, place)
+      if (book.fileSize && bytes.byteLength !== book.fileSize && book.foundIn?.provider !== connection.provider)
+        continue
+      if (book.foundIn?.id !== place.id) {
+        const current = readLibraryBooks().find((item) => item.id === book.id) ?? book
+        upsertLibraryBook({ ...current, foundIn: { provider: connection.provider, id: place.id } })
+      }
+      return bytes
+    } catch {
+      // Not there, or that storage could not be reached: the next one.
     }
   }
   return null

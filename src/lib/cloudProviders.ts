@@ -14,6 +14,11 @@ export type CloudConnection = {
    */
   ownerUserId?: string
   fileIds?: Record<string, string>
+  /**
+   * Connected with leave to read the person's own folders (read only), so a library folder can be chosen and a book
+   * found wherever it is. Connections made before this ask once more, from Settings.
+   */
+  readsFolders?: boolean
 }
 
 export type CloudProviderInfo = {
@@ -30,19 +35,17 @@ function env(name: string): string {
   return (import.meta.env[name] as string | undefined)?.trim() ?? ''
 }
 
-const configs: Record<
-  CloudProviderId,
-  { clientId: string; scopes: string; authUrl: string; tokenUrl: string }
-> = {
+const configs: Record<CloudProviderId, { clientId: string; scopes: string; authUrl: string; tokenUrl: string }> = {
   'google-drive': {
     clientId: env('VITE_GOOGLE_DRIVE_CLIENT_ID'),
-    scopes: 'https://www.googleapis.com/auth/drive.file',
+    // drive.file for the Noesis folder; drive.readonly to find books in the person's own folders.
+    scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
   },
   onedrive: {
     clientId: env('VITE_ONEDRIVE_CLIENT_ID'),
-    scopes: 'Files.ReadWrite.AppFolder User.Read offline_access',
+    scopes: 'Files.ReadWrite.AppFolder Files.Read User.Read offline_access',
     authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
   },
@@ -205,7 +208,13 @@ function randomState(): string {
 
 // A connection started in the same window (an iPhone Home Screen app, or a blocked popup): what the return needs.
 const PENDING_KEY = 'noesis:cloud-pending:v1'
-type PendingConnection = { provider: CloudProviderId; state: string; verifier: string; ownerUserId?: string; at: number }
+type PendingConnection = {
+  provider: CloudProviderId
+  state: string
+  verifier: string
+  ownerUserId?: string
+  at: number
+}
 
 /** An installed Home Screen app: a popup there opens apart from the app and cannot hand anything back. */
 function installedApp(): boolean {
@@ -255,12 +264,15 @@ async function finishInThisWindow(
         expiresAt: Date.now() + Math.max(60, tokens.expiresIn) * 1000,
         connectedAt: new Date().toISOString(),
         ownerUserId: pending.ownerUserId,
+        readsFolders: true,
       },
     ])
     return `${label} connected. Noesis will sync your library automatically.`
   } catch (reason) {
     if (code) rememberRenewalBroke(provider)
-    return reason instanceof Error ? `${label} could not be connected: ${reason.message}` : `${label} could not be connected.`
+    return reason instanceof Error
+      ? `${label} could not be connected: ${reason.message}`
+      : `${label} could not be connected.`
   }
 }
 
@@ -383,6 +395,7 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
               expiresAt: Date.now() + tokens.expiresIn * 1000,
               connectedAt: new Date().toISOString(),
               ownerUserId,
+              readsFolders: true,
             })
           },
           () => {
@@ -405,6 +418,7 @@ export async function connectCloudProvider(provider: CloudProviderId, ownerUserI
         expiresAt: Date.now() + Math.max(60, Number(event.data.expiresIn) || 3600) * 1000,
         connectedAt: new Date().toISOString(),
         ownerUserId,
+        readsFolders: true,
       })
     }
     const timer = window.setInterval(() => {
@@ -503,7 +517,9 @@ function exchangeCode(provider: CloudProviderId, code: string, verifier: string)
 
 /** True when the connection is good now, or can renew itself without the person doing anything. */
 export function cloudConnectionUsable(connection: CloudConnection): boolean {
-  return Boolean(connection.accessToken) && (connection.expiresAt > Date.now() + 30_000 || Boolean(connection.refreshToken))
+  return (
+    Boolean(connection.accessToken) && (connection.expiresAt > Date.now() + 30_000 || Boolean(connection.refreshToken))
+  )
 }
 
 const renewing = new Map<string, Promise<CloudConnection>>()
