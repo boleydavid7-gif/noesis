@@ -11062,3 +11062,26 @@ input[type='radio'] {
   color: #9fd8b0;
   font-size: 13px;
 }
+
+/* A path never grows wider than the screen: grid children may shrink, and the book picker (as wide as its longest
+   title) fills the row instead of stretching it. */
+.page-content > *,
+.path-section,
+.path-detail,
+.path-detail > * {
+  min-width: 0;
+}
+.path-book-select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+@media (max-width: 620px) {
+  .path-book-select {
+    width: 100%;
+  }
+}
+.subject-question strong,
+.subject-question small,
+.path-detail-head p {
+  overflow-wrap: anywhere;
+}
