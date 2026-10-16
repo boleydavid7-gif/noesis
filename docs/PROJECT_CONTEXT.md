@@ -217,7 +217,7 @@ and a Wrangler dry run. The live health endpoint is
 - Connected Libby (Borrowed › Connect Libby): the reader makes a code in Libby (Menu › Copy To Another Device) and
   Noesis joins their Libby as one more device (Worker `/api/libby`, `src/workerLibby.ts`: `POST /chip?client=dewey`,
   `POST /chip/clone/code`, the chip again for the joined token, then `GET /chip/sync` on
-  `sentry.libbyapp.com`, then `sentry-read.svc.overdrive.com` if that one turns it away, with headers like Libby's own web app; the address that answered is kept with the token; errors name the step and status, e.g. "Libby did not answer (starting, 403)"; unofficial, the same requests odmpy and the Calibre Libby plugin use, so it can
+  `sentry.libbyapp.com`, then `sentry-read.svc.overdrive.com` if that one turns it away, with headers like Libby's own web app; the address that answered is kept with the token; joining counts as done when a library card shows up in a sync right after (Libby's reply to the code read as a refusal once even though Libby accepted it); errors name the step and status, e.g. "Libby did not answer (starting, 403)"; unofficial, the same requests odmpy and the Calibre Libby plugin use, so it can
   stop working if Libby changes them; nothing kept on the server). The token stays on the device
   (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans` (`lib/libbyLink.ts`) lays Libby's loans over
   Borrowed: due dates follow renewals, a hand-typed e-book of the same title is joined, a loan Libby no longer has is

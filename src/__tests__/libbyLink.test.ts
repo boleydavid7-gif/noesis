@@ -57,6 +57,7 @@ describe('Libby bridge', () => {
         [200, { identity: 'first' }],
         [200, { result: 'success' }],
         [200, { identity: 'joined' }],
+        [200, SYNC],
       ],
       calls,
     )
@@ -69,6 +70,7 @@ describe('Libby bridge', () => {
       '/chip?client=dewey',
       '/chip/clone/code',
       '/chip?client=dewey',
+      '/chip/sync',
     ])
     expect(new Headers(calls[1].init?.headers).get('authorization')).toBe('Bearer first')
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({ code: '12345678' })
@@ -82,6 +84,7 @@ describe('Libby bridge', () => {
         [200, { identity: 'first' }],
         [200, { result: 'success' }],
         [200, { identity: 'joined' }],
+        [200, SYNC],
       ],
       calls,
     )
@@ -104,6 +107,16 @@ describe('Libby bridge', () => {
     ).rejects.toThrow('Libby did not answer (starting, 503).')
   })
 
+  it('counts the device joined when the card shows up, whatever Libby replied to the code', async () => {
+    const fetcher = fakeFetch([
+      [200, { identity: 'first' }],
+      [200, { result: 'cloned' }],
+      [200, { identity: 'joined' }],
+      [200, SYNC],
+    ])
+    await expect(connectLibby(fetcher, '12345678')).resolves.toMatchObject({ token: 'joined' })
+  })
+
   it('says plainly when the code is wrong or Libby refuses the token', async () => {
     await expect(connectLibby(fakeFetch([]), '123')).rejects.toThrow('8-digit')
     await expect(
@@ -111,10 +124,12 @@ describe('Libby bridge', () => {
         fakeFetch([
           [200, { identity: 'first' }],
           [200, { result: 'invalid_code' }],
+          [200, { identity: 'first' }],
+          [200, { result: 'synchronized', cards: [] }],
         ]),
         '12345678',
       ),
-    ).rejects.toThrow('did not work')
+    ).rejects.toThrow('did not work. Codes last about a minute; make a new one. Libby said: invalid_code.')
     const refused = await libbyLoans(fakeFetch([[401, {}]]), 'old').catch((error: LibbyError) => error)
     expect(refused).toBeInstanceOf(LibbyError)
     expect((refused as LibbyError).status).toBe(401)

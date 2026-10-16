@@ -37,7 +37,7 @@ export class LibbyError extends Error {
   }
 }
 
-type Step = 'starting' | 'joining' | 'finishing' | 'loans'
+type Step = 'starting' | 'joining' | 'finishing' | 'checking' | 'loans'
 
 async function call(
   fetcher: Fetcher,
@@ -63,7 +63,10 @@ async function call(
   // turning the request away.
   if (step === 'loans' && (response.status === 401 || response.status === 403))
     throw new LibbyError('Libby asked to connect again.', 401)
-  if (step === 'joining' && (response.status === 400 || response.status === 404))
+  if (
+    (step === 'joining' && (response.status === 400 || response.status === 404)) ||
+    (step === 'checking' && (response.status === 401 || response.status === 403))
+  )
     throw new LibbyError('That code did not work. Codes last about a minute; make a new one.', 400)
   if (!response.ok) throw new LibbyError(`Libby did not answer (${step}, ${response.status}).`, 502)
   try {
@@ -98,18 +101,23 @@ export async function connectLibby(fetcher: Fetcher, code: string): Promise<{ to
     }
   }
   if (!host) throw problem
+  // Libby's reply to the code is not a reliable sign (it can read as a refusal after Libby has accepted the code),
+  // so whether the device joined is judged by whether a library card shows up afterwards.
   const cloned = await call(fetcher, host, '/chip/clone/code', 'joining', {
     method: 'POST',
     token: first,
     body: { code },
   })
-  if (typeof cloned.result === 'string' && cloned.result !== 'success')
-    throw new LibbyError('That code did not work. Codes last about a minute; make a new one.', 400)
   // The token changes once the device is joined.
   const token = identity(
     await call(fetcher, host, '/chip?client=dewey', 'finishing', { method: 'POST', token: first }),
     'finishing',
   )
+  const synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
+  if (!Array.isArray(synced.cards) || synced.cards.length === 0) {
+    const said = typeof cloned.result === 'string' ? ` Libby said: ${cloned.result.slice(0, 60)}.` : ''
+    throw new LibbyError(`That code did not work. Codes last about a minute; make a new one.${said}`, 400)
+  }
   return { token, host }
 }
 
