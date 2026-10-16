@@ -60,14 +60,48 @@ describe('Libby bridge', () => {
       ],
       calls,
     )
-    await expect(connectLibby(fetcher, '12345678')).resolves.toBe('joined')
-    expect(calls.map((call) => call.url.replace('https://sentry-read.svc.overdrive.com', ''))).toEqual([
+    await expect(connectLibby(fetcher, '12345678')).resolves.toEqual({
+      token: 'joined',
+      host: 'https://sentry.libbyapp.com',
+    })
+    expect(new Headers(calls[0].init?.headers).get('origin')).toBe('https://libbyapp.com')
+    expect(calls.map((call) => call.url.replace('https://sentry.libbyapp.com', ''))).toEqual([
       '/chip?client=dewey',
       '/chip/clone/code',
       '/chip?client=dewey',
     ])
     expect(new Headers(calls[1].init?.headers).get('authorization')).toBe('Bearer first')
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({ code: '12345678' })
+  })
+
+  it('tries the older address when the new one turns the request away, and keeps the one that answered', async () => {
+    const calls: Call[] = []
+    const fetcher = fakeFetch(
+      [
+        [403, {}],
+        [200, { identity: 'first' }],
+        [200, { result: 'success' }],
+        [200, { identity: 'joined' }],
+      ],
+      calls,
+    )
+    await expect(connectLibby(fetcher, '12345678')).resolves.toEqual({
+      token: 'joined',
+      host: 'https://sentry-read.svc.overdrive.com',
+    })
+    expect(calls[1].url).toBe('https://sentry-read.svc.overdrive.com/chip?client=dewey')
+  })
+
+  it('names the step and the answer when Libby does not answer', async () => {
+    await expect(
+      connectLibby(
+        fakeFetch([
+          [403, {}],
+          [503, {}],
+        ]),
+        '12345678',
+      ),
+    ).rejects.toThrow('Libby did not answer (starting, 503).')
   })
 
   it('says plainly when the code is wrong or Libby refuses the token', async () => {

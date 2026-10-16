@@ -8,7 +8,7 @@ export const LIBBY_LINK_KEY = 'noesis:libby-link:v1'
 const CHANGED = 'noesis-libby-link-changed'
 const EVERY = 15 * 60_000
 
-export type LibbyLink = { token: string; connected: string; checked?: string; problem?: string }
+export type LibbyLink = { token: string; host?: string; connected: string; checked?: string; problem?: string }
 
 export type { LibbyLoan }
 
@@ -66,7 +66,11 @@ async function ask(body: Record<string, string>): Promise<Record<string, unknown
 export async function connectLibby(code: string): Promise<LibbyLink> {
   const data = await ask({ action: 'connect', code: code.replace(/\D/g, '') })
   if (typeof data.token !== 'string') throw new Error('Libby did not answer. Try again later.')
-  const link = { token: data.token, connected: new Date().toISOString() }
+  const link = {
+    token: data.token,
+    host: typeof data.host === 'string' ? data.host : undefined,
+    connected: new Date().toISOString(),
+  }
   writeLibbyLink(link)
   return link
 }
@@ -134,7 +138,7 @@ export async function refreshFromLibby(
   const link = readLibbyLink()
   if (!link) return { problem: 'Libby is not connected.' }
   try {
-    const data = await ask({ action: 'loans', token: link.token })
+    const data = await ask({ action: 'loans', token: link.token, ...(link.host ? { host: link.host } : {}) })
     const fromLibby = Array.isArray(data.loans) ? (data.loans as LibbyLoan[]) : []
     const next = mergeLibbyLoans(loans, fromLibby, now)
     if (JSON.stringify(next) !== JSON.stringify(loans)) save(next)

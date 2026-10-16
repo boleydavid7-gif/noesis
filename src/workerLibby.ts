@@ -3,8 +3,16 @@
 // open-source Libby tools use (odmpy, the Calibre Libby plugin); it can stop working if Libby changes them.
 // Nothing is kept here: the device holds its own Libby token and sends it with each request.
 
-const SENTRY = 'https://sentry-read.svc.overdrive.com'
-const AGENT = 'Mozilla/5.0 (Noesis reading app)'
+// Libby's service lives at a new address; the older one is tried when the new one does not answer.
+export const LIBBY_HOSTS = ['https://sentry.libbyapp.com', 'https://sentry-read.svc.overdrive.com']
+// Libby's service answers its own web app; requests are made to look like it.
+const HEADERS = {
+  accept: 'application/json',
+  'user-agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+  origin: 'https://libbyapp.com',
+  referer: 'https://libbyapp.com/',
+}
 
 type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -29,43 +37,80 @@ export class LibbyError extends Error {
   }
 }
 
+type Step = 'starting' | 'joining' | 'finishing' | 'loans'
+
 async function call(
   fetcher: Fetcher,
+  host: string,
   path: string,
+  step: Step,
   { method = 'GET', token, body }: { method?: string; token?: string; body?: unknown } = {},
 ): Promise<Record<string, unknown>> {
-  const headers: Record<string, string> = { accept: 'application/json', 'user-agent': AGENT }
+  const headers: Record<string, string> = { ...HEADERS }
   if (token) headers.authorization = `Bearer ${token}`
-  if (body !== undefined) headers['content-type'] = 'application/json'
-  const response = await fetcher(`${SENTRY}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  if (response.status === 401 || response.status === 403) throw new LibbyError('Libby asked to connect again.', 401)
-  if (!response.ok) throw new LibbyError('Libby did not answer. Try again later.', 502)
+  if (body !== undefined) headers['content-type'] = 'application/json; charset=UTF-8'
+  let response: Response
+  try {
+    response = await fetcher(`${host}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch {
+    throw new LibbyError(`Libby did not answer (${step}, no reply).`, 502)
+  }
+  // A refused token on the loans step means the device was removed from Libby; earlier, a refusal is Libby
+  // turning the request away.
+  if (step === 'loans' && (response.status === 401 || response.status === 403))
+    throw new LibbyError('Libby asked to connect again.', 401)
+  if (step === 'joining' && (response.status === 400 || response.status === 404))
+    throw new LibbyError('That code did not work. Codes last about a minute; make a new one.', 400)
+  if (!response.ok) throw new LibbyError(`Libby did not answer (${step}, ${response.status}).`, 502)
   try {
     return (await response.json()) as Record<string, unknown>
   } catch {
-    throw new LibbyError('Libby did not answer. Try again later.', 502)
+    throw new LibbyError(`Libby did not answer (${step}, not JSON).`, 502)
   }
 }
 
-const identity = (chip: Record<string, unknown>) => {
+const identity = (chip: Record<string, unknown>, step: Step) => {
   const token = chip.identity
-  if (typeof token !== 'string' || !token) throw new LibbyError('Libby did not answer. Try again later.', 502)
+  if (typeof token !== 'string' || !token) throw new LibbyError(`Libby did not answer (${step}, no token).`, 502)
   return token
 }
 
-/** Joins this device to the reader's Libby with the 8-digit code from Copy To Another Device. Returns the token. */
-export async function connectLibby(fetcher: Fetcher, code: string): Promise<string> {
+/**
+ * Joins this device to the reader's Libby with the 8-digit code from Copy To Another Device. Returns the token and
+ * the address that answered, which later requests use.
+ */
+export async function connectLibby(fetcher: Fetcher, code: string): Promise<{ token: string; host: string }> {
   if (!/^\d{8}$/.test(code)) throw new LibbyError('Enter the 8-digit code from Libby.', 400)
-  const first = identity(await call(fetcher, '/chip?client=dewey', { method: 'POST' }))
-  const cloned = await call(fetcher, '/chip/clone/code', { method: 'POST', token: first, body: { code } })
+  let first = ''
+  let host = ''
+  let problem: unknown
+  for (const each of LIBBY_HOSTS) {
+    try {
+      first = identity(await call(fetcher, each, '/chip?client=dewey', 'starting', { method: 'POST' }), 'starting')
+      host = each
+      break
+    } catch (error) {
+      problem = error
+    }
+  }
+  if (!host) throw problem
+  const cloned = await call(fetcher, host, '/chip/clone/code', 'joining', {
+    method: 'POST',
+    token: first,
+    body: { code },
+  })
   if (typeof cloned.result === 'string' && cloned.result !== 'success')
     throw new LibbyError('That code did not work. Codes last about a minute; make a new one.', 400)
   // The token changes once the device is joined.
-  return identity(await call(fetcher, '/chip?client=dewey', { method: 'POST', token: first }))
+  const token = identity(
+    await call(fetcher, host, '/chip?client=dewey', 'finishing', { method: 'POST', token: first }),
+    'finishing',
+  )
+  return { token, host }
 }
 
 const text = (value: unknown, max = 300) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
@@ -112,7 +157,8 @@ export function loansFromSync(sync: Record<string, unknown>): LibbyLoan[] {
   })
 }
 
-export async function libbyLoans(fetcher: Fetcher, token: string): Promise<LibbyLoan[]> {
+export async function libbyLoans(fetcher: Fetcher, token: string, host = LIBBY_HOSTS[0]): Promise<LibbyLoan[]> {
   if (!token || token.length > 4_000) throw new LibbyError('Libby asked to connect again.', 401)
-  return loansFromSync(await call(fetcher, '/chip/sync', { token }))
+  if (!LIBBY_HOSTS.includes(host)) host = LIBBY_HOSTS[0]
+  return loansFromSync(await call(fetcher, host, '/chip/sync', 'loans', { token }))
 }

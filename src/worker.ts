@@ -108,7 +108,7 @@ async function hasValidSession(request: Request, env: Env): Promise<boolean> {
 // the device keeps (workerLibby.ts). Nothing is stored here.
 async function libby(request: Request): Promise<Response> {
   if (rateLimited(request, 'libby', 20)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
-  let body: { action?: unknown; code?: unknown; token?: unknown }
+  let body: { action?: unknown; code?: unknown; token?: unknown; host?: unknown }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -116,8 +116,11 @@ async function libby(request: Request): Promise<Response> {
   }
   const fetcher = (input: string, init?: RequestInit) => fetchWithTimeout(input, init, 10_000)
   try {
-    if (body.action === 'connect') return json({ token: await connectLibby(fetcher, String(body.code ?? '').trim()) })
-    if (body.action === 'loans') return json({ loans: await libbyLoans(fetcher, String(body.token ?? '')) })
+    if (body.action === 'connect') return json(await connectLibby(fetcher, String(body.code ?? '').trim()))
+    if (body.action === 'loans')
+      return json({
+        loans: await libbyLoans(fetcher, String(body.token ?? ''), body.host ? String(body.host) : undefined),
+      })
     return json({ error: 'Bad request.' }, 400)
   } catch (error) {
     if (error instanceof LibbyError) return json({ error: error.message }, error.status)
