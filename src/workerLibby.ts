@@ -112,15 +112,41 @@ export async function checkLibbyCode(
   fetcher: Fetcher,
   token: string,
   host: string,
-): Promise<{ joined: boolean; token: string }> {
+): Promise<{ joined: boolean; token: string; seen: string }> {
   if (!token || token.length > 4_000) throw new LibbyError('Get a new code.', 400)
   if (!LIBBY_HOSTS.includes(host)) host = LIBBY_HOSTS[0]
+  // What Libby says about the code itself, shown while waiting so a stuck join can be looked into.
+  let codeSaid: string
+  try {
+    codeSaid = said(await call(fetcher, host, '/chip/clone/code', 'checking', { token }))
+  } catch (error) {
+    codeSaid =
+      error instanceof LibbyError ? error.message.replace(/^Libby did not answer \(checking, /, '(') : 'no reply'
+  }
   const fresh = identity(
     await call(fetcher, host, '/chip?client=dewey', 'checking', { method: 'POST', token }),
     'checking',
   )
-  const synced = await call(fetcher, host, '/chip/sync', 'checking', { token: fresh })
-  return { joined: Array.isArray(synced.cards) && synced.cards.length > 0, token: fresh }
+  let synced = await call(fetcher, host, '/chip/sync', 'checking', { token: fresh })
+  if (!cardsIn(synced) && fresh !== token) synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
+  const cards = cardsIn(synced)
+  return {
+    joined: cards > 0,
+    token: fresh,
+    seen: `code: ${codeSaid}; sync: ${said(synced)}; cards: ${cards}${fresh === token ? '' : '; new token'}`,
+  }
+}
+
+const cardsIn = (synced: Record<string, unknown>) => (Array.isArray(synced.cards) ? synced.cards.length : 0)
+
+// A short, safe description of a Libby reply: its result word and the names of its fields, never their values.
+function said(reply: Record<string, unknown>): string {
+  const result = typeof reply.result === 'string' ? `${reply.result.slice(0, 30)} ` : ''
+  const keys = Object.keys(reply)
+    .filter((key) => key !== 'result')
+    .slice(0, 10)
+    .join(', ')
+  return `${result}[${keys || 'nothing'}]`
 }
 
 const text = (value: unknown, max = 300) => (typeof value === 'string' ? value.trim().slice(0, max) : '')

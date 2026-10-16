@@ -275,6 +275,7 @@ export function Borrowed({
 function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => void }) {
   const [link, setLink] = useState(readLibbyLink)
   const [waiting, setWaiting] = useState<LibbyCode | null>(null)
+  const [seen, setSeen] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [leaving, setLeaving] = useState(false)
@@ -309,8 +310,10 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
       try {
         const next = await checkLibbyCode(current)
         if (stopped) return
-        if ('code' in next) current = next
-        else {
+        if ('code' in next) {
+          current = next
+          if (Date.now() - started > 20_000 && next.seen) setSeen(next.seen)
+        } else {
           window.clearInterval(timer)
           setWaiting(null)
           setMessage('')
@@ -330,6 +333,7 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
     setBusy(true)
     setMessage('')
     try {
+      setSeen('')
       setWaiting(await libbyCode())
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Libby did not answer.')
@@ -350,6 +354,7 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
             Cancel
           </button>
         </div>
+        {seen ? <small className="libby-seen">Libby: {seen}</small> : null}
       </div>
     )
   }

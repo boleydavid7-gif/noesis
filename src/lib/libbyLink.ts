@@ -63,7 +63,7 @@ async function ask(body: Record<string, string>): Promise<Record<string, unknown
   return data
 }
 
-export type LibbyCode = { code: string; token: string; host: string }
+export type LibbyCode = { code: string; token: string; host: string; seen?: string }
 
 /** Asks Libby for a code to show; the reader enters it in their signed-in Libby. */
 export async function libbyCode(): Promise<LibbyCode> {
@@ -80,7 +80,7 @@ export async function libbyCode(): Promise<LibbyCode> {
 export async function checkLibbyCode(waiting: LibbyCode): Promise<LibbyLink | LibbyCode> {
   const data = await ask({ action: 'check', token: waiting.token, host: waiting.host })
   const token = typeof data.token === 'string' ? data.token : waiting.token
-  if (!data.joined) return { ...waiting, token }
+  if (!data.joined) return { ...waiting, token, seen: typeof data.seen === 'string' ? data.seen : undefined }
   const link = { token, host: waiting.host, connected: new Date().toISOString() }
   writeLibbyLink(link)
   return link

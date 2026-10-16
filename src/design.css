@@ -387,3 +387,10 @@ body {
 .loan-row:has(.loan-cover) {
   grid-template-columns: 40px minmax(0, 1fr);
 }
+
+.libby-seen {
+  color: var(--paper-3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

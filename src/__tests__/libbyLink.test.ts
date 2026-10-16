@@ -108,25 +108,33 @@ describe('Libby bridge', () => {
     ).rejects.toThrow('Libby did not answer (code, sent result).')
   })
 
-  it('waits until the reader’s Libby has copied a library card over, refreshing the token', async () => {
+  it('waits until the reader’s Libby has copied a library card over, and says what Libby reports', async () => {
     const waiting = await checkLibbyCode(
       fakeFetch([
+        [200, { code: '12345678', expiry: 1 }],
         [200, { identity: 'second' }],
+        [200, { result: 'synchronized', cards: [] }],
         [200, { result: 'synchronized', cards: [] }],
       ]),
       'first',
       'https://sentry.libbyapp.com',
     )
-    expect(waiting).toEqual({ joined: false, token: 'second' })
+    expect(waiting).toEqual({
+      joined: false,
+      token: 'second',
+      seen: 'code: [code, expiry]; sync: synchronized [cards]; cards: 0; new token',
+    })
     const joined = await checkLibbyCode(
       fakeFetch([
+        [404, {}],
         [200, { identity: 'third' }],
         [200, SYNC],
       ]),
       'second',
       'https://sentry.libbyapp.com',
     )
-    expect(joined).toEqual({ joined: true, token: 'third' })
+    expect(joined).toMatchObject({ joined: true, token: 'third' })
+    expect(joined.seen).toContain('code: (404).')
   })
 
   it('says what Libby sent when a joined device has no card yet, and asks to connect again when refused', async () => {
