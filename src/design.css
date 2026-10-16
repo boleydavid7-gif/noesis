@@ -1,0 +1,299 @@
+/* Noesis's look: Apple's calm and depth (translucent bars, large titles, space instead of lines) with Google's
+   Material 3 structure (tonal surfaces in steps instead of outlines, pill controls, a clear "you are here"
+   indicator), in Noesis's own key: a night-blue study and one gold light, the moment an idea comes clear.
+   (Its warm sibling, Lamplight, is kept for Proairetos.) Loaded last; other surfaces chosen in Settings still set
+   their own --surface-* values. */
+
+:root {
+  --lamp: #e2b86e;
+  --lamp-soft: #f0d6a2;
+  --on-lamp: #1a1306;
+  --paper: #eef3fa;
+  --paper-2: #aebccd;
+  --paper-3: #8394aa;
+  --tone-0: var(--surface-deep, #060d16);
+  --tone-1: var(--surface-shell, #08111c);
+  --tone-2: var(--surface-card-b, #0f1a27);
+  --tone-3: var(--surface-card-a, #152335);
+  --tone-4: var(--surface-pop, #1b2c41);
+  --hair: rgba(200, 220, 245, 0.075);
+  --lamplight:
+    radial-gradient(110% 70% at 20% 0%, rgba(226, 184, 110, 0.2), rgba(226, 184, 110, 0) 55%),
+    radial-gradient(90% 70% at 100% 100%, rgba(90, 130, 190, 0.18), rgba(90, 130, 190, 0) 60%),
+    linear-gradient(180deg, #12223a 0%, #08111c 100%);
+  --radius-l: 22px;
+  --radius-m: 16px;
+  --radius-s: 12px;
+  --bg: var(--tone-1);
+  --panel: var(--tone-2);
+  --line: var(--hair);
+  --line-strong: rgba(200, 220, 245, 0.16);
+  --muted: var(--paper-2);
+  --muted-2: var(--paper-3);
+  --gold-warm: var(--lamp);
+  --gold-soft: var(--lamp-soft);
+  color: var(--paper);
+  background: var(--tone-1);
+}
+body {
+  background: var(--tone-1);
+  color: var(--paper);
+}
+
+/* The shell: one calm canvas with a gold glow at the top. */
+.app-shell {
+  background:
+    radial-gradient(70% 45% at 30% -10%, rgba(226, 184, 110, 0.09), rgba(226, 184, 110, 0) 70%), var(--tone-1);
+}
+.ambient {
+  display: none;
+}
+
+/* Sidebar: a quiet panel. Without a chosen picture it shows the night-and-gold light, not a photograph. */
+.sidebar {
+  background: var(--tone-0);
+  border-right: 1px solid var(--hair);
+}
+.sidebar-image {
+  background-image: var(--img-sidebar, var(--lamplight));
+  opacity: 1;
+  filter: none;
+}
+.sidebar::after {
+  background: var(
+    --sidebar-shade,
+    linear-gradient(180deg, rgba(6, 13, 22, 0.15) 0%, rgba(6, 13, 22, 0.35) 60%, rgba(6, 13, 22, 0.85) 100%)
+  );
+}
+.main-nav .nav-item,
+.main-nav button {
+  border: 0;
+  border-radius: 999px;
+  color: var(--paper-2);
+  background: transparent;
+}
+.main-nav .nav-item:hover,
+.main-nav button:hover {
+  background: rgba(200, 220, 245, 0.06);
+}
+.main-nav .nav-item-active,
+.main-nav button[aria-current='page'] {
+  color: var(--paper);
+  background: rgba(226, 184, 110, 0.16);
+  box-shadow: none;
+}
+.main-nav .nav-item-active svg {
+  color: var(--lamp);
+}
+
+/* Cards: filled tonal surfaces with a hairline, never a box drawn around a box. */
+.panel-card,
+.rail-card {
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-m);
+  background: var(--tone-2);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.panel-card .panel-card,
+.panel-card .rail-card {
+  border-color: transparent;
+  background: var(--tone-3);
+}
+.empty-state {
+  border: 0;
+  border-radius: var(--radius-m);
+  color: var(--paper-3);
+  background: rgba(200, 220, 245, 0.035);
+}
+
+/* Buttons: filled for the one main action, tonal for the rest, text for the quiet ones. */
+.primary-button {
+  border: 0;
+  border-radius: 999px;
+  color: var(--on-lamp);
+  background: var(--lamp);
+  box-shadow: none;
+}
+.primary-button:hover:not(:disabled) {
+  background: var(--lamp-soft);
+}
+.secondary-button {
+  border: 0;
+  border-radius: 999px;
+  color: var(--paper);
+  background: rgba(200, 220, 245, 0.08);
+  box-shadow: none;
+}
+.secondary-button:hover:not(:disabled) {
+  background: rgba(200, 220, 245, 0.13);
+}
+.text-button {
+  color: var(--lamp-soft);
+}
+.icon-button,
+.topbar .icon-button {
+  border: 0;
+  border-radius: 50%;
+  color: var(--paper);
+  background: rgba(200, 220, 245, 0.07);
+}
+.icon-button:hover {
+  background: rgba(200, 220, 245, 0.12);
+}
+
+/* Fields: filled, like Material's filled text fields, with the lamp as the focus. */
+:where(.app-shell, .intro)
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']),
+    select,
+    textarea
+  ) {
+  border-color: transparent;
+  background: rgba(200, 220, 245, 0.06);
+}
+.app-shell input:focus-visible,
+.app-shell textarea:focus-visible,
+.app-shell select:focus-visible {
+  border-color: rgba(226, 184, 110, 0.6);
+  box-shadow: 0 0 0 3px rgba(226, 184, 110, 0.14);
+}
+
+/* Chips: tonal pills, the chosen one lit. */
+.shelf-chips button,
+.pick-filter button,
+.chip {
+  border: 0;
+  color: var(--paper-2);
+  background: rgba(200, 220, 245, 0.07);
+}
+.shelf-chips button[aria-selected='true'],
+.shelf-chips .shelf-chip-active,
+.pick-filter button[aria-selected='true'],
+.chip-on {
+  color: var(--on-lamp);
+  background: var(--lamp-soft);
+}
+
+/* Home banner: the night-and-gold light by default, a chosen picture when there is one. */
+.home-reading-hero {
+  border: 0;
+  border-radius: var(--radius-l);
+  background-image:
+    linear-gradient(90deg, rgba(6, 13, 22, 0.72) 0%, rgba(6, 13, 22, 0.35) 55%, rgba(6, 13, 22, 0.05) 100%),
+    var(--img-banner, var(--lamplight));
+}
+.home-reading-hero::after {
+  background: radial-gradient(circle, rgba(226, 184, 110, 0.3), rgba(226, 184, 110, 0) 68%);
+}
+
+/* Phone tab bar: Apple's translucent material with Material's pill indicator. */
+.mobile-bottom-nav {
+  border: 1px solid var(--hair);
+  background: rgba(10, 19, 31, 0.72);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+.mobile-bottom-nav button {
+  color: var(--paper-3);
+}
+.mobile-bottom-nav .mobile-bottom-active {
+  color: var(--paper);
+  background: rgba(226, 184, 110, 0.18);
+}
+.mobile-bottom-nav .mobile-bottom-active svg {
+  color: var(--lamp);
+}
+
+/* Right-hand rail on computers: lighter, so the page stays the focus. */
+.context-sidebar,
+.context-rail {
+  background: transparent;
+  border-left: 1px solid var(--hair);
+}
+
+/* Covers made from the title when a book has no picture, the way a printed spine is set. */
+.book-cover-made {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 11px 11px;
+  border: 0;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 45%),
+    linear-gradient(180deg, hsl(var(--cover-h) 32% 30%), hsl(var(--cover-h) 38% 17%));
+  box-shadow:
+    inset 3px 0 0 rgba(0, 0, 0, 0.18),
+    0 8px 22px rgba(0, 0, 0, 0.35);
+}
+.book-cover-made::after {
+  display: none;
+}
+.book-cover-made .made-title {
+  color: #fbf6ec;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.book-cover-made .made-author {
+  color: rgba(251, 246, 236, 0.72);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.book-cover-made .made-rule {
+  display: block;
+  margin-bottom: 6px;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(251, 246, 236, 0.55);
+}
+
+/* The page itself sits on the shell's canvas, so nothing paints a second background behind the cards. */
+.main-column,
+.page-content {
+  background: transparent;
+}
+
+/* Remaining outlined pieces, made tonal like the rest. */
+.keep-banner,
+.subject-question,
+.shelf-menu-button,
+.sidebar-search,
+.quick-icon,
+.quick-actions button,
+.book-card,
+.explore-search,
+.resource-card,
+.home-down {
+  border-color: transparent;
+  background-color: var(--tone-2);
+  box-shadow: none;
+}
+.keep-banner {
+  border-radius: var(--radius-m);
+}
+.subject-question:hover,
+.quick-actions button:hover,
+.quick-icon:hover,
+.shelf-menu-button:hover {
+  background-color: var(--tone-3);
+}
+.book-card {
+  background: transparent;
+}
+.book-card-selected .book-card-cover {
+  outline-color: rgba(226, 184, 110, 0.7);
+}

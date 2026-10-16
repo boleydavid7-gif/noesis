@@ -200,3 +200,11 @@ and a Wrangler dry run. The live health endpoint is
   reading journey Libby exports for a book (Timeline › a book › Export reading journey) as JSON or CSV. Highlights
   come in as highlights; a highlight with a note comes in as a note with the passage as its quote; chapter and
   place are kept, the book is linked when it is in the library, tag `libby`, and ones already there are skipped.
+- Look (`src/design.css`, loaded last from App): Apple's calm and depth with Material 3's structure, in Noesis's key
+  of night blue and one gold light. Tonal surfaces in steps (`--tone-0..4`) instead of outlines, a hairline at most;
+  filled pill for the one main action, tonal pills for the rest; filled fields; a gold-tinted pill marks the current
+  place in the sidebar and the phone bar; the phone bar is translucent (blur). The default wallpaper is a gradient
+  (`--lamplight`: night blue with a gold glow), used wherever no picture is chosen. Books without a cover get a
+  typeset one (`BookCover`: title in serif, a rule, the author, a steady hue from the title). Other Settings surfaces
+  still set `--surface-*`. The warm sibling, Lamplight, is kept for Proairetos (Proairetos `docs/design/LAMPLIGHT.md`).
+- The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".

@@ -47,6 +47,7 @@ import {
   FolderOpen,
 } from 'lucide-react'
 import './App.css'
+import './design.css'
 import {
   hydrateRemoteNotes,
   persistNote,
@@ -238,7 +239,7 @@ const navItems = [
   { label: 'My Library', text: 'Library', icon: Library },
   { label: 'Notes', text: 'Second Brain', icon: Brain },
   { label: 'Review', text: 'Review', icon: RotateCcw },
-  { label: 'Learning Paths', text: 'Rabbit holes', icon: ListChecks },
+  { label: 'Learning Paths', text: 'Rabbit Holes', icon: ListChecks },
   { label: 'Explore', text: 'Explore', icon: Search },
   { label: 'Settings', text: 'Settings', icon: Settings },
 ]
@@ -507,7 +508,7 @@ function App() {
       { id: 'go-notes', label: 'Second Brain', group: 'Go to', keywords: 'notes highlights', run: go('Notes') },
       {
         id: 'go-paths',
-        label: 'Rabbit holes',
+        label: 'Rabbit Holes',
         group: 'Go to',
         keywords: 'learning paths plan study questions',
         run: go('Learning Paths'),
@@ -550,7 +551,7 @@ function App() {
         run: () => (note.bookId ? openNoteLocation(note) : selectNav('Notes')),
       })
     for (const path of paths)
-      list.push({ id: `path-${path.id}`, label: path.title, group: 'Rabbit holes', run: go('Learning Paths') })
+      list.push({ id: `path-${path.id}`, label: path.title, group: 'Rabbit Holes', run: go('Learning Paths') })
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [books, notes, paths, focusState.running])
@@ -2819,7 +2820,7 @@ function App() {
   }
   function pathsPage() {
     return (
-      <Page title="Rabbit holes" subtitle="">
+      <Page title="Rabbit Holes" subtitle="">
         <FreeCopyContext.Provider value={addResource}>
           <SubjectStarter
             onSave={savePlannedPath}
@@ -2913,7 +2914,7 @@ function App() {
           <Metric label="Overall progress" value={`${overallProgress}%`} detail="Across your library" />
           <Metric label="Books started" value={`${readCount}`} detail={`of ${books.length} saved titles`} />
           <Metric label="Notes saved" value={`${notes.length}`} detail="In your Second Brain" />
-          <Metric label="Rabbit holes" value={`${paths.length}`} detail="Created by you" />
+          <Metric label="Rabbit Holes" value={`${paths.length}`} detail="Created by you" />
         </div>
         <div className="progress-list panel-card">
           <h3>Reading progress</h3>
@@ -3721,7 +3722,7 @@ function App() {
             onClick={() => selectNav('Learning Paths')}
           >
             <ListChecks size={17} />
-            <span>Rabbit holes</span>
+            <span>Rabbit Holes</span>
           </button>
           <button className={activeNav === 'Notes' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Notes')}>
             <FileText size={17} />
@@ -4968,7 +4969,7 @@ function PathSection({
     <section className="section-block path-section">
       <div className="section-heading">
         <div>
-          <h2>Rabbit holes</h2>
+          <h2>Rabbit Holes</h2>
         </div>
         {onOpen ? (
           <button className="text-button" onClick={onOpen}>
@@ -4977,7 +4978,7 @@ function PathSection({
         ) : null}
       </div>
       {paths.length === 0 ? (
-        <div className="empty-state">No paths yet.</div>
+        <div className="empty-state">Nothing to fall into yet</div>
       ) : (
         <div className="path-tiles">
           {paths.map((path) => {
