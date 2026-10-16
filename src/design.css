@@ -99,7 +99,6 @@ body {
   border-radius: var(--radius-m);
   background: var(--tone-2);
   box-shadow: none;
-  backdrop-filter: none;
 }
 .panel-card .panel-card,
 .panel-card .rail-card {
@@ -203,8 +202,6 @@ body {
 .mobile-bottom-nav {
   border: 1px solid var(--hair);
   background: color-mix(in oklab, var(--tone-1) 72%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
-  backdrop-filter: blur(22px) saturate(1.4);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 .mobile-bottom-nav button {

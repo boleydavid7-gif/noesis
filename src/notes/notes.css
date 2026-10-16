@@ -26,8 +26,6 @@ body {
   margin: 0 -16px;
   padding: 6px 16px;
   background: color-mix(in srgb, var(--surface-shell, #06101d) 86%, transparent);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
 .notes-topbar-actions {
   display: flex;

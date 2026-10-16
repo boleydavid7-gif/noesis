@@ -49,7 +49,6 @@
   isolation: isolate;
   border-right: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.18);
   background: #06101d;
-  backdrop-filter: blur(22px);
 }
 .sidebar::after {
   position: absolute;
@@ -381,7 +380,6 @@
   border-radius: 16px;
   background: linear-gradient(140deg, rgba(24, 47, 72, 0.8), rgba(8, 24, 40, 0.7));
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.14);
-  backdrop-filter: blur(16px);
 }
 .continue-card {
   display: grid;
@@ -1250,7 +1248,6 @@
   display: flex;
   justify-content: flex-end;
   background: rgba(1, 8, 16, 0.62);
-  backdrop-filter: blur(4px);
 }
 .brain-panel {
   display: flex;
@@ -3074,7 +3071,6 @@ select:focus-visible {
     border-radius: 16px;
     background: rgba(5, 19, 33, 0.9);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(18px);
   }
   .mobile-bottom-nav button {
     display: grid;
@@ -3300,7 +3296,6 @@ body {
   border-radius: 12px;
   background: var(--surface-panel, rgba(11, 24, 35, 0.88));
   box-shadow: 0 24px 55px rgba(0, 0, 0, 0.2);
-  backdrop-filter: none;
 }
 .page-content {
   max-width: 1280px;
@@ -4070,7 +4065,6 @@ body {
   place-items: center;
   padding: 20px;
   background: rgba(1, 8, 16, 0.7);
-  backdrop-filter: blur(5px);
 }
 .utility-panel {
   display: grid;
@@ -8020,7 +8014,6 @@ body {
     border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.3);
     border-radius: 999px;
     background: rgba(8, 20, 34, 0.94);
-    backdrop-filter: blur(8px);
   }
 }
 .drm-sources ul {
@@ -8147,7 +8140,6 @@ body {
   border-radius: 999px;
   background: rgba(8, 20, 34, 0.96);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
 }
 .reader-pick-dot {
   width: 26px;
@@ -9489,8 +9481,6 @@ input[type='radio'] {
   padding: 14px 16px;
   border-radius: 14px;
   background: rgba(5, 11, 18, 0.58);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
 }
 
 .recommended-shelf {
@@ -9809,12 +9799,6 @@ input[type='radio'] {
    as the main text and clearer edges. */
 
 @media (prefers-reduced-transparency: reduce) {
-  *,
-  *::before,
-  *::after {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
   :root:root {
     --panel: rgb(11, 27, 45);
   }

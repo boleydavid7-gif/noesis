@@ -200,8 +200,6 @@
   padding: var(--ll-space-2);
   border-radius: var(--ll-radius-lg);
   background: var(--ll-bar);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
   box-shadow: var(--ll-light-2);
 }
 

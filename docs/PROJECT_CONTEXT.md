@@ -250,3 +250,7 @@ and a Wrangler dry run. The live health endpoint is
   `notes/index.html` a description, canonical address, link-preview tags (`public/social/noesis.png`, 1200×630) and
   WebApplication details (JSON-LD) between `<!-- search -->` markers. Google verification tag already in `index.html`.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".
+
+- Materials (Lamplight): no blur anywhere. Bars are mica (`--ll-mica`, from the scheme: opaque, the room's hue a little
+  stronger than the page, the lamp washing in from above, `--ll-mica-surface` in `src/lamplight/noesis.css`); backdrops are a
+  plain dim. `backdrop-filter` is not used.
