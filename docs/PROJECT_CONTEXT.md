@@ -205,6 +205,7 @@ and a Wrangler dry run. The live health endpoint is
   filled pill for the one main action, tonal pills for the rest; filled fields; a gold-tinted pill marks the current
   place in the sidebar and the phone bar; the phone bar is translucent (blur). The default wallpaper is a gradient
   (`--lamplight`: night blue with a gold glow), used wherever no picture is chosen. Books without a cover get a
-  typeset one (`BookCover`: title in serif, a rule, the author, a steady hue from the title). Other Settings surfaces
-  still set `--surface-*`. The warm sibling, Lamplight, is kept for Proairetos (Proairetos `docs/design/LAMPLIGHT.md`).
+  typeset one (`BookCover`: title in serif, a rule, the author, a steady hue from the title). Settings' accent and
+  background drive every color: `--lamp` is `--accent-mark`, tints use `--lamp-rgb` (`--accent-rgb`), and the
+  tones and wallpaper are mixed from `--surface-shell`, so no color in it is fixed. The warm sibling, Lamplight, is kept for Proairetos (Proairetos `docs/design/LAMPLIGHT.md`).
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".

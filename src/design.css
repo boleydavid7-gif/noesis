@@ -1,26 +1,27 @@
 /* Noesis's look: Apple's calm and depth (translucent bars, large titles, space instead of lines) with Google's
    Material 3 structure (tonal surfaces in steps instead of outlines, pill controls, a clear "you are here"
    indicator), in Noesis's own key: a night-blue study and one gold light, the moment an idea comes clear.
-   (Its warm sibling, Lamplight, is kept for Proairetos.) Loaded last; other surfaces chosen in Settings still set
-   their own --surface-* values. */
+   (Its warm sibling, Lamplight, is kept for Proairetos.) Loaded last; the accent and background chosen in
+   Settings set --accent-* and --surface-*, which every color here follows. */
 
 :root {
-  --lamp: #e2b86e;
-  --lamp-soft: #f0d6a2;
-  --on-lamp: #1a1306;
+  --lamp: var(--accent-mark, #e2b86e);
+  --lamp-rgb: var(--accent-rgb, 226, 184, 110);
+  --lamp-soft: color-mix(in oklab, var(--lamp) 60%, #fff);
+  --on-lamp: color-mix(in oklab, var(--lamp) 12%, #0a0a0a);
   --paper: #eef3fa;
   --paper-2: #aebccd;
   --paper-3: #8394aa;
   --tone-0: var(--surface-deep, #060d16);
   --tone-1: var(--surface-shell, #08111c);
-  --tone-2: var(--surface-card-b, #0f1a27);
-  --tone-3: var(--surface-card-a, #152335);
-  --tone-4: var(--surface-pop, #1b2c41);
+  --tone-2: color-mix(in oklab, var(--tone-1), #fff 4.5%);
+  --tone-3: color-mix(in oklab, var(--tone-1), #fff 8%);
+  --tone-4: color-mix(in oklab, var(--tone-1), #fff 11.5%);
   --hair: rgba(200, 220, 245, 0.075);
   --lamplight:
-    radial-gradient(110% 70% at 20% 0%, rgba(226, 184, 110, 0.2), rgba(226, 184, 110, 0) 55%),
-    radial-gradient(90% 70% at 100% 100%, rgba(90, 130, 190, 0.18), rgba(90, 130, 190, 0) 60%),
-    linear-gradient(180deg, #12223a 0%, #08111c 100%);
+    radial-gradient(110% 70% at 20% 0%, rgba(var(--lamp-rgb), 0.2), rgba(var(--lamp-rgb), 0) 55%),
+    radial-gradient(90% 70% at 100% 100%, color-mix(in oklab, var(--tone-4), #fff 14%), transparent 60%),
+    linear-gradient(180deg, color-mix(in oklab, var(--tone-4), #fff 3%) 0%, var(--tone-1) 100%);
   --radius-l: 22px;
   --radius-m: 16px;
   --radius-s: 12px;
@@ -43,7 +44,7 @@ body {
 /* The shell: one calm canvas with a gold glow at the top. */
 .app-shell {
   background:
-    radial-gradient(70% 45% at 30% -10%, rgba(226, 184, 110, 0.09), rgba(226, 184, 110, 0) 70%), var(--tone-1);
+    radial-gradient(70% 45% at 30% -10%, rgba(var(--lamp-rgb), 0.09), rgba(var(--lamp-rgb), 0) 70%), var(--tone-1);
 }
 .ambient {
   display: none;
@@ -62,7 +63,12 @@ body {
 .sidebar::after {
   background: var(
     --sidebar-shade,
-    linear-gradient(180deg, rgba(6, 13, 22, 0.15) 0%, rgba(6, 13, 22, 0.35) 60%, rgba(6, 13, 22, 0.85) 100%)
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--tone-0) 15%, transparent) 0%,
+      color-mix(in oklab, var(--tone-0) 35%, transparent) 60%,
+      color-mix(in oklab, var(--tone-0) 85%, transparent) 100%
+    )
   );
 }
 .main-nav .nav-item,
@@ -79,7 +85,7 @@ body {
 .main-nav .nav-item-active,
 .main-nav button[aria-current='page'] {
   color: var(--paper);
-  background: rgba(226, 184, 110, 0.16);
+  background: rgba(var(--lamp-rgb), 0.16);
   box-shadow: none;
 }
 .main-nav .nav-item-active svg {
@@ -155,8 +161,8 @@ body {
 .app-shell input:focus-visible,
 .app-shell textarea:focus-visible,
 .app-shell select:focus-visible {
-  border-color: rgba(226, 184, 110, 0.6);
-  box-shadow: 0 0 0 3px rgba(226, 184, 110, 0.14);
+  border-color: rgba(var(--lamp-rgb), 0.6);
+  box-shadow: 0 0 0 3px rgba(var(--lamp-rgb), 0.14);
 }
 
 /* Chips: tonal pills, the chosen one lit. */
@@ -180,17 +186,22 @@ body {
   border: 0;
   border-radius: var(--radius-l);
   background-image:
-    linear-gradient(90deg, rgba(6, 13, 22, 0.72) 0%, rgba(6, 13, 22, 0.35) 55%, rgba(6, 13, 22, 0.05) 100%),
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--tone-0) 72%, transparent) 0%,
+      color-mix(in oklab, var(--tone-0) 35%, transparent) 55%,
+      color-mix(in oklab, var(--tone-0) 5%, transparent) 100%
+    ),
     var(--img-banner, var(--lamplight));
 }
 .home-reading-hero::after {
-  background: radial-gradient(circle, rgba(226, 184, 110, 0.3), rgba(226, 184, 110, 0) 68%);
+  background: radial-gradient(circle, rgba(var(--lamp-rgb), 0.3), rgba(var(--lamp-rgb), 0) 68%);
 }
 
 /* Phone tab bar: Apple's translucent material with Material's pill indicator. */
 .mobile-bottom-nav {
   border: 1px solid var(--hair);
-  background: rgba(10, 19, 31, 0.72);
+  background: color-mix(in oklab, var(--tone-1) 72%, transparent);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
   backdrop-filter: blur(22px) saturate(1.4);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
@@ -200,7 +211,7 @@ body {
 }
 .mobile-bottom-nav .mobile-bottom-active {
   color: var(--paper);
-  background: rgba(226, 184, 110, 0.18);
+  background: rgba(var(--lamp-rgb), 0.18);
 }
 .mobile-bottom-nav .mobile-bottom-active svg {
   color: var(--lamp);
@@ -295,5 +306,18 @@ body {
   background: transparent;
 }
 .book-card-selected .book-card-cover {
-  outline-color: rgba(226, 184, 110, 0.7);
+  outline-color: rgba(var(--lamp-rgb), 0.7);
+}
+
+/* The first-book button is the page's main action: a lit pill like the rest. */
+.hero-empty-reading {
+  border: 0;
+  border-radius: 999px;
+  color: var(--on-lamp);
+  background: var(--lamp);
+  font-size: 14px;
+  font-weight: 600;
+}
+.hero-empty-reading:hover {
+  background: var(--lamp-soft);
 }

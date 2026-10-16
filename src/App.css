@@ -3261,7 +3261,7 @@ body {
 .brand-mark {
   color: var(--gold-soft);
   background: rgba(185, 145, 76, 0.15);
-  border-color: rgba(220, 185, 116, 0.28);
+  border-color: rgba(var(--accent-rgb, 220, 185, 116), 0.28);
 }
 .brand-row strong {
   color: #f4ead7;
@@ -3404,7 +3404,7 @@ body {
   background: rgba(18, 34, 45, 0.72);
 }
 .secondary-button:hover {
-  border-color: rgba(231, 199, 130, 0.58);
+  border-color: rgba(var(--accent-rgb, 231, 199, 130), 0.58);
   color: #fff5df;
   background: rgba(111, 79, 37, 0.3);
 }
@@ -3551,7 +3551,7 @@ body {
   margin-top: 9px;
   overflow: hidden;
   border-radius: 3px;
-  background: rgba(218, 190, 136, 0.14);
+  background: rgba(var(--accent-rgb, 218, 190, 136), 0.14);
 }
 .journey-track span {
   display: block;
@@ -3737,7 +3737,7 @@ body {
 .reader-note-list article {
   padding: 9px;
   border-left: 2px solid rgba(204, 165, 99, 0.72);
-  background: rgba(217, 180, 110, 0.06);
+  background: rgba(var(--accent-rgb, 217, 180, 110), 0.06);
 }
 .reader-note-kind {
   display: flex;
@@ -4290,7 +4290,7 @@ body {
 .reader-wide-note {
   padding: 8px 9px;
   border-left: 2px solid rgba(204, 165, 99, 0.72);
-  background: rgba(217, 180, 110, 0.06);
+  background: rgba(var(--accent-rgb, 217, 180, 110), 0.06);
 }
 .reader-wide-note strong {
   color: #e8d9bf;
@@ -4859,7 +4859,7 @@ body {
   gap: 8px;
   margin-top: 22px;
   padding: 13px 16px;
-  border: 1px dashed rgba(222, 191, 119, 0.45);
+  border: 1px dashed rgba(var(--accent-rgb, 222, 191, 119), 0.45);
   border-radius: 8px;
   color: #f0d08a;
   background: rgba(20, 37, 47, 0.6);
