@@ -18,8 +18,8 @@ describe('color choices', () => {
     for (const accent of Object.values(ACCENTS)) expect(accent.rgb).toMatch(/^\d+, \d+, \d+$/)
   })
   it('accepts the new choices from saved settings', () => {
-    const settings = sanitizeSettings({ appearance: { accent: 'teal', surface: 'wine' } })
-    expect(settings.appearance.accent).toBe('teal')
-    expect(settings.appearance.surface).toBe('wine')
+    const settings = sanitizeSettings({ appearance: { accent: 'tide', surface: 'hearth' } })
+    expect(settings.appearance.accent).toBe('tide')
+    expect(settings.appearance.surface).toBe('hearth')
   })
 })

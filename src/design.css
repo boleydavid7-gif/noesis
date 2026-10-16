@@ -181,7 +181,8 @@ body {
   background: var(--lamp-soft);
 }
 
-/* Home banner: the night-and-gold light by default, a chosen picture when there is one. */
+/* Home banner: the drawn wallpaper (lib/wallpaper.ts, its lamp in place of the old glow) by default, a chosen
+   picture when there is one. */
 .home-reading-hero {
   border: 0;
   border-radius: var(--radius-l);
@@ -192,10 +193,10 @@ body {
       color-mix(in oklab, var(--tone-0) 35%, transparent) 55%,
       color-mix(in oklab, var(--tone-0) 5%, transparent) 100%
     ),
-    var(--img-banner, var(--lamplight));
+    var(--img-banner, var(--lamplight-wide, var(--lamplight)));
 }
 .home-reading-hero::after {
-  background: radial-gradient(circle, rgba(var(--lamp-rgb), 0.3), rgba(var(--lamp-rgb), 0) 68%);
+  display: none;
 }
 
 /* Phone tab bar: Apple's translucent material with Material's pill indicator. */

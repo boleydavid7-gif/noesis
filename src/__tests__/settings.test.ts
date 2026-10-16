@@ -37,10 +37,17 @@ describe('settings', () => {
   })
 
   it('maps appearance settings to root classes and accent variables', () => {
-    const settings = sanitizeSettings({ appearance: { accent: 'green', scenery: false, reduceMotion: true } })
+    const settings = sanitizeSettings({ appearance: { accent: 'sage', scenery: false, reduceMotion: true } })
     const { classes, vars } = rootAppearance(settings)
     expect(classes).toEqual(['no-scenery', 'reduce-motion'])
-    expect(vars['--gold-warm']).toBe(ACCENTS.green.main)
+    expect(vars['--gold-warm']).toBe(ACCENTS.sage.main)
     expect(rootAppearance(DEFAULT_SETTINGS).vars).toEqual({})
+  })
+
+  it('carries colors chosen before the Lamplight palette to the nearest new one', () => {
+    expect(sanitizeSettings({ appearance: { accent: 'blue' } }).appearance.accent).toBe('ink')
+    expect(sanitizeSettings({ appearance: { accent: 'teal' } }).appearance.accent).toBe('tide')
+    expect(sanitizeSettings({ appearance: { accent: 'rose' } }).appearance.accent).toBe('rose')
+    expect(sanitizeSettings({ appearance: { accent: 'nope' } }).appearance.accent).toBe('gold')
   })
 })

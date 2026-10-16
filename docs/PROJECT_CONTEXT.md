@@ -208,4 +208,10 @@ and a Wrangler dry run. The live health endpoint is
   typeset one (`BookCover`: title in serif, a rule, the author, a steady hue from the title). Settings' accent and
   background drive every color: `--lamp` is `--accent-mark`, tints use `--lamp-rgb` (`--accent-rgb`), and the
   tones and wallpaper are mixed from `--surface-shell`, so no color in it is fixed. The warm sibling, Lamplight, is kept for Proairetos (Proairetos `docs/design/LAMPLIGHT.md`).
+- Colors and wallpaper from Lamplight (Proairetos's palette): the accents are Gold (Noesis's own), Ember, Rose, Heather,
+  Ink, Tide, Sage and Pewter (older saved choices move to the nearest: blue to Ink, green to Sage, violet to Heather,
+  orange and red to Ember, teal to Tide); backgrounds add Hearth, Dusk and Clay. The default wallpaper is drawn
+  (`lib/wallpaper.ts`, the same drawing as Proairetos's rooms: a lamp with rings of light and three sweeping bands),
+  made from the page color, the chosen color and the background's hue (`wallpaperColors`), set as `--lamplight` (tall,
+  sidebar) and `--lamplight-wide` (home banner) by App's appearance effect. A chosen picture still replaces it.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".

@@ -4,9 +4,21 @@
 export type ReaderTheme = 'paper' | 'sepia' | 'night' | 'contrast'
 export type ReaderFont = 'book' | 'serif' | 'sans' | 'easy' | 'custom'
 export type SurfaceName =
-  'midnight' | 'charcoal' | 'forest' | 'plum' | 'espresso' | 'ocean' | 'wine' | 'indigo' | 'slate' | 'olive'
+  | 'midnight'
+  | 'hearth'
+  | 'dusk'
+  | 'clay'
+  | 'charcoal'
+  | 'forest'
+  | 'plum'
+  | 'espresso'
+  | 'ocean'
+  | 'wine'
+  | 'indigo'
+  | 'slate'
+  | 'olive'
 export type LetterSpacing = 'normal' | 'wide'
-export type AccentName = 'gold' | 'blue' | 'green' | 'rose' | 'violet' | 'orange' | 'teal' | 'red'
+export type AccentName = 'gold' | 'ember' | 'rose' | 'heather' | 'ink' | 'tide' | 'sage' | 'pewter'
 export type LibrarySortSetting = 'recent' | 'title' | 'progress'
 export type ParagraphStyle = 'book' | 'indent' | 'space'
 export type LineWidth = 'full' | 'comfortable' | 'narrow'
@@ -100,76 +112,86 @@ export const ACCENTS: Record<
     hover: '#d0aa67',
     rgb: '220, 194, 142',
   },
-  blue: {
-    label: 'Blue',
-    main: '#5b9cf0',
-    soft: '#bcd8fb',
-    light: '#78b0f6',
-    fill: '#3f78c8',
-    border: '#6aa3ee',
-    hover: '#5189d8',
-    rgb: '140, 190, 240',
-  },
-  green: {
-    label: 'Green',
-    main: '#6dbf8f',
-    soft: '#c4e8d3',
-    light: '#82cda0',
-    fill: '#4f9a6f',
-    border: '#7cc99c',
-    hover: '#5fae80',
-    rgb: '150, 215, 180',
+  ember: {
+    label: 'Ember',
+    main: '#ffa47a',
+    soft: '#ffcab3',
+    light: '#ffb28e',
+    fill: '#c7805f',
+    border: '#ffa982',
+    hover: '#e6946e',
+    rgb: '255, 164, 122',
   },
   rose: {
     label: 'Rose',
-    main: '#d9808f',
-    soft: '#f3c9d0',
-    light: '#e393a1',
-    fill: '#b8606f',
-    border: '#e08c9a',
-    hover: '#c87080',
-    rgb: '235, 170, 182',
+    main: '#fba0b0',
+    soft: '#fec7cf',
+    light: '#fcaebc',
+    fill: '#c47d89',
+    border: '#fba6b5',
+    hover: '#e2909e',
+    rgb: '251, 160, 176',
   },
-  violet: {
-    label: 'Violet',
-    main: '#a98bf0',
-    soft: '#dccffc',
-    light: '#bba2f5',
-    fill: '#7d5fcf',
-    border: '#b399f2',
-    hover: '#9374e0',
-    rgb: '190, 165, 245',
+  heather: {
+    label: 'Heather',
+    main: '#d8abe2',
+    soft: '#e8cdee',
+    light: '#deb8e6',
+    fill: '#a885b0',
+    border: '#dab0e4',
+    hover: '#c29acb',
+    rgb: '216, 171, 226',
   },
-  orange: {
-    label: 'Orange',
-    main: '#ec9a4e',
-    soft: '#f9d6b0',
-    light: '#f2ae6d',
-    fill: '#c97a2e',
-    border: '#f0a45e',
-    hover: '#dc8a3d',
-    rgb: '240, 175, 110',
+  ink: {
+    label: 'Ink',
+    main: '#9bbeff',
+    soft: '#c3d8ff',
+    light: '#aac8ff',
+    fill: '#7994c7',
+    border: '#a1c2ff',
+    hover: '#8cabe6',
+    rgb: '155, 190, 255',
   },
-  teal: {
-    label: 'Teal',
-    main: '#4fc9bd',
-    soft: '#bdeee9',
-    light: '#6fd6cc',
-    fill: '#2f9f95',
-    border: '#5fd0c5',
-    hover: '#41b8ac',
-    rgb: '130, 220, 210',
+  tide: {
+    label: 'Tide',
+    main: '#71cfd9',
+    soft: '#aee2e8',
+    light: '#86d6df',
+    fill: '#58a1a9',
+    border: '#7ad2db',
+    hover: '#66bac3',
+    rgb: '113, 207, 217',
   },
-  red: {
-    label: 'Red',
-    main: '#e8675f',
-    soft: '#f7c4c0',
-    light: '#ee8079',
-    fill: '#c04540',
-    border: '#ec7770',
-    hover: '#d6544e',
-    rgb: '240, 150, 145',
+  sage: {
+    label: 'Sage',
+    main: '#9ccd9c',
+    soft: '#c3e1c3',
+    light: '#abd4ab',
+    fill: '#7aa07a',
+    border: '#a2d0a2',
+    hover: '#8cb88c',
+    rgb: '156, 205, 156',
   },
+  pewter: {
+    label: 'Pewter',
+    main: '#c5bcb1',
+    soft: '#dcd7d0',
+    light: '#cec6bd',
+    fill: '#9a938a',
+    border: '#c8c0b6',
+    hover: '#b1a99f',
+    rgb: '197, 188, 177',
+  },
+}
+
+// Colors from before Lamplight's palette, carried to the nearest new one.
+const OLD_ACCENTS: Record<string, AccentName> = {
+  blue: 'ink',
+  green: 'sage',
+  violet: 'heather',
+  orange: 'ember',
+  teal: 'tide',
+  red: 'ember',
 }
 
 export const FONT_STACKS: Record<ReaderFont, string | null> = {
@@ -239,15 +261,11 @@ export function sanitizeSettings(input: unknown): Settings {
     },
     appearance: {
       accent: pick(
-        appearance.accent,
-        ['gold', 'blue', 'green', 'rose', 'violet', 'orange', 'teal', 'red'],
+        OLD_ACCENTS[String(appearance.accent)] ?? appearance.accent,
+        Object.keys(ACCENTS) as AccentName[],
         d.appearance.accent,
       ),
-      surface: pick(
-        appearance.surface,
-        ['midnight', 'charcoal', 'forest', 'plum', 'espresso', 'ocean', 'wine', 'indigo', 'slate', 'olive'],
-        d.appearance.surface,
-      ),
+      surface: pick(appearance.surface, Object.keys(SURFACES) as SurfaceName[], d.appearance.surface),
       scenery: bool(appearance.scenery, d.appearance.scenery),
       reduceMotion: bool(appearance.reduceMotion, d.appearance.reduceMotion),
       compact: bool(appearance.compact, d.appearance.compact),
@@ -337,6 +355,9 @@ function surfaceFrom(hue: number, saturation = 1): Record<string, string> {
 // The circle shown in Settings is a bright stand-in for each dark theme, so it can be seen on a dark page.
 export const SURFACE_SWATCH: Record<SurfaceName, string> = {
   midnight: '#4aa3ff',
+  hearth: '#ebb25f',
+  dusk: '#fba0b0',
+  clay: '#ffa47a',
   charcoal: '#a3acb7',
   forest: '#3ecf7a',
   plum: '#c26bff',
@@ -350,6 +371,51 @@ export const SURFACE_SWATCH: Record<SurfaceName, string> = {
 
 export const SURFACES: Record<SurfaceName, { label: string; vars: Record<string, string> }> = {
   midnight: { label: 'Midnight', vars: {} },
+  hearth: {
+    label: 'Hearth',
+    vars: {
+      '--surface-panel': '#1d1914e6',
+      '--surface-shell': '#14100b',
+      '--surface-main-a': '#14100b',
+      '--surface-main-b': '#1d1914',
+      '--surface-ctx-a': '#0d0905',
+      '--surface-ctx-b': '#14100b',
+      '--surface-card-a': '#25211b',
+      '--surface-card-b': '#14100b',
+      '--surface-pop': '#1d1914',
+      '--surface-deep': '#0d0905',
+    },
+  },
+  dusk: {
+    label: 'Dusk',
+    vars: {
+      '--surface-panel': '#1f161ee6',
+      '--surface-shell': '#160d15',
+      '--surface-main-a': '#160d15',
+      '--surface-main-b': '#1f161e',
+      '--surface-ctx-a': '#0f070e',
+      '--surface-ctx-b': '#160d15',
+      '--surface-card-a': '#281e27',
+      '--surface-card-b': '#160d15',
+      '--surface-pop': '#1f161e',
+      '--surface-deep': '#0f070e',
+    },
+  },
+  clay: {
+    label: 'Clay',
+    vars: {
+      '--surface-panel': '#25150ee6',
+      '--surface-shell': '#1b0c06',
+      '--surface-main-a': '#1b0c06',
+      '--surface-main-b': '#25150e',
+      '--surface-ctx-a': '#140602',
+      '--surface-ctx-b': '#1b0c06',
+      '--surface-card-a': '#2e1d16',
+      '--surface-card-b': '#1b0c06',
+      '--surface-pop': '#25150e',
+      '--surface-deep': '#140602',
+    },
+  },
   charcoal: {
     label: 'Charcoal',
     vars: {
@@ -454,5 +520,15 @@ export function rootAppearance(settings: Settings): { classes: string[]; vars: R
           }
         : {}),
     },
+  }
+}
+
+/** The colors Noesis's drawn wallpaper is made from: the page, the chosen color and the background's own hue. */
+export function wallpaperColors(settings: Settings): { page: string; accent: string; hue: string } {
+  const { accent, surface } = settings.appearance
+  return {
+    page: SURFACES[surface].vars['--surface-shell'] ?? '#08111c',
+    accent: accent === 'gold' ? '#e2b86e' : ACCENTS[accent].main,
+    hue: SURFACE_SWATCH[surface],
   }
 }

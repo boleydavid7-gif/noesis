@@ -159,9 +159,11 @@ import {
   rootAppearance,
   settingsStamp,
   SURFACE_VARS,
+  wallpaperColors,
   writeSettings,
   type Settings as AppSettings,
 } from './lib/settings'
+import { noesisWallpaper } from './lib/wallpaper'
 import { dueCards, readReviewCards, writeReviewCards } from './lib/review'
 import { markDeleted, markRemoved, markRestored } from './lib/tombstones'
 import { retrievedContext } from './lib/retrieval'
@@ -715,6 +717,9 @@ function App() {
       root.style.removeProperty(key)
     }
     for (const [key, value] of Object.entries(vars)) root.style.setProperty(key, value)
+    const wall = wallpaperColors(settings)
+    root.style.setProperty('--lamplight', noesisWallpaper(wall.page, wall.accent, wall.hue))
+    root.style.setProperty('--lamplight-wide', noesisWallpaper(wall.page, wall.accent, wall.hue, true))
     applyImages(root)
   }, [settings])
   useEffect(() => {
