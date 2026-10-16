@@ -19,6 +19,8 @@ export type Loan = {
   due: string // YYYY-MM-DD
   renewUrl?: string
   bookId?: string // the book in the Noesis library, when there is one
+  libbyId?: string // the title in Libby, for loans brought in from a connected Libby
+  cover?: string
   renewals?: number
   returnedAt?: string
   added: string

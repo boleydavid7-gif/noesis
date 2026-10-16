@@ -1,5 +1,5 @@
 // Borrowed: loans with their due dates, a way to renew at the library, and the external e-books form.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Check, ExternalLink, Headphones, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { LibraryBook } from './lib/library'
 import {
@@ -23,6 +23,15 @@ import {
 } from './lib/loans'
 import { useChosenLibrary } from './lib/publicLibrary'
 import { cleanLink, linkLabel } from './lib/notesBooks'
+import {
+  connectLibby,
+  libbyDue,
+  onLibbyLinkChanged,
+  readLibbyLink,
+  refreshFromLibby,
+  writeLibbyLink,
+} from './lib/libbyLink'
+import { timeAgo } from './lib/time'
 
 export function useLoans(): [Loan[], (next: Loan[]) => void] {
   const [loans, setLoans] = useState(readLoans)
@@ -56,9 +65,21 @@ function LoanRow({
   const put = (next: Loan) => save(loans.map((item) => (item.id === next.id ? next : item)))
   return (
     <li className={`loan-row${days <= 3 ? ' loan-row-soon' : ''}`}>
-      <span className="loan-icon" aria-hidden="true">
-        <Icon size={16} />
-      </span>
+      {loan.cover ? (
+        <a
+          className="loan-cover"
+          href={loan.renewUrl ?? LIBBY_SHELF}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={`Open “${loan.title}” in Libby`}
+        >
+          <img src={loan.cover} alt="" referrerPolicy="no-referrer" />
+        </a>
+      ) : (
+        <span className="loan-icon" aria-hidden="true">
+          <Icon size={16} />
+        </span>
+      )}
       <div className="loan-body">
         {book && onOpenBook ? (
           <button className="loan-title" onClick={() => onOpenBook(book)}>
@@ -106,28 +127,34 @@ function LoanRow({
                 href={renewAt}
                 target="_blank"
                 rel="noreferrer noopener"
-                onClick={() => setRenewing(true)}
+                onClick={() => {
+                  if (!loan.libbyId) setRenewing(true)
+                }}
               >
                 <RotateCcw size={13} /> Renew
               </a>
             ) : null}
-            {loan.kind !== 'physical' && renewAt !== LIBBY_SHELF ? (
+            {loan.kind !== 'physical' && renewAt !== LIBBY_SHELF && !loan.libbyId ? (
               <a className="text-button" href={LIBBY_SHELF} target="_blank" rel="noreferrer noopener">
                 Open in Libby <ExternalLink size={11} />
               </a>
             ) : null}
-            <button className="text-button" onClick={() => setRenewing(true)}>
-              Renewed…
-            </button>
-            <button
-              className="text-button"
-              onClick={() => {
-                onUndo(`Returned “${loan.title}”.`, loans)
-                put(returned(loan))
-              }}
-            >
-              <Check size={13} /> Returned
-            </button>
+            {loan.libbyId ? null : (
+              <>
+                <button className="text-button" onClick={() => setRenewing(true)}>
+                  Renewed…
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    onUndo(`Returned “${loan.title}”.`, loans)
+                    put(returned(loan))
+                  }}
+                >
+                  <Check size={13} /> Returned
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -172,6 +199,7 @@ export function Borrowed({
           </button>
         )}
       </div>
+      {compact ? null : <LibbyConnect loans={loans} save={save} />}
       {adding ? (
         <LoanForm
           books={books}
@@ -237,6 +265,119 @@ export function Borrowed({
         </div>
       ) : null}
     </section>
+  )
+}
+
+// Libby, connected: loans, due dates and covers come from Libby itself, and update when Borrowed opens (at most
+// every 15 minutes) or on Update.
+function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => void }) {
+  const [link, setLink] = useState(readLibbyLink)
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [leaving, setLeaving] = useState(false)
+  const latest = useRef(loans)
+  latest.current = loans
+  useEffect(() => onLibbyLinkChanged(() => setLink(readLibbyLink())), [])
+  const update = async () => {
+    setBusy(true)
+    const result = await refreshFromLibby(latest.current, save)
+    setBusy(false)
+    setMessage('problem' in result ? result.problem : '')
+  }
+  useEffect(() => {
+    if (libbyDue(readLibbyLink())) void update()
+    // Once, when Borrowed opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  if (!link || link.problem) {
+    return (
+      <div className="libby-connect">
+        {open ? (
+          <form
+            className="libby-connect-form"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              setBusy(true)
+              setMessage('')
+              try {
+                await connectLibby(code)
+                setOpen(false)
+                setCode('')
+                await update()
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : 'That did not work.')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            <p>In Libby, open Menu › Copy To Another Device, then enter the code.</p>
+            <label>
+              Code
+              <input
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="8 digits"
+                autoFocus
+              />
+            </label>
+            <div className="recovery-actions">
+              <button className="primary-button" type="submit" disabled={busy || code.length !== 8}>
+                {busy ? 'Connecting…' : 'Connect'}
+              </button>
+              <button type="button" className="text-button" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="libby-connect-row">
+            <span>{link?.problem ?? 'Bring in your Libby loans and due dates.'}</span>
+            <button className="secondary-button" onClick={() => setOpen(true)}>
+              {link?.problem ? 'Connect again' : 'Connect Libby'}
+            </button>
+          </div>
+        )}
+        {message ? <p className="libby-connect-note">{message}</p> : null}
+      </div>
+    )
+  }
+  return (
+    <div className="libby-connect">
+      <div className="libby-connect-row">
+        <span>Libby{link.checked ? ` · updated ${timeAgo(link.checked)}` : ''}</span>
+        {leaving ? (
+          <>
+            <button
+              className="text-button"
+              onClick={() => {
+                writeLibbyLink(null)
+                setLeaving(false)
+              }}
+            >
+              Disconnect
+            </button>
+            <button className="text-button" onClick={() => setLeaving(false)}>
+              Keep
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="text-button" onClick={() => void update()} disabled={busy}>
+              {busy ? 'Updating…' : 'Update'}
+            </button>
+            <button className="text-button" onClick={() => setLeaving(true)}>
+              Disconnect
+            </button>
+          </>
+        )}
+      </div>
+      {message ? <p className="libby-connect-note">{message}</p> : null}
+    </div>
   )
 }
 

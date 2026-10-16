@@ -8,6 +8,7 @@ import {
   type RatingSource,
 } from './lib/pathPlan'
 import { handlePasskey, sendReviewReminders } from './workerAccount'
+import { connectLibby, libbyLoans, LibbyError } from './workerLibby'
 import {
   cleanDeeperReply,
   cleanQuestionReply,
@@ -100,6 +101,27 @@ async function hasValidSession(request: Request, env: Env): Promise<boolean> {
     return response.ok
   } catch {
     return false
+  }
+}
+
+// Libby: join this device to the reader's Libby with a Copy To Another Device code, or read its loans with the token
+// the device keeps (workerLibby.ts). Nothing is stored here.
+async function libby(request: Request): Promise<Response> {
+  if (rateLimited(request, 'libby', 20)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
+  let body: { action?: unknown; code?: unknown; token?: unknown }
+  try {
+    body = (await request.json()) as typeof body
+  } catch {
+    return json({ error: 'Bad request.' }, 400)
+  }
+  const fetcher = (input: string, init?: RequestInit) => fetchWithTimeout(input, init, 10_000)
+  try {
+    if (body.action === 'connect') return json({ token: await connectLibby(fetcher, String(body.code ?? '').trim()) })
+    if (body.action === 'loans') return json({ loans: await libbyLoans(fetcher, String(body.token ?? '')) })
+    return json({ error: 'Bad request.' }, 400)
+  } catch (error) {
+    if (error instanceof LibbyError) return json({ error: error.message }, error.status)
+    return json({ error: 'Libby did not answer. Try again later.' }, 502)
   }
 }
 
@@ -2143,6 +2165,7 @@ const worker = {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return draftReviewCards(request, env)
     }
+    if (url.pathname === '/api/libby' && request.method === 'POST') return libby(request)
     if (url.pathname === '/api/libraries' && request.method === 'GET') return findLibraries(request)
     if (url.pathname === '/api/library-has' && request.method === 'GET') return libraryHas(request)
     if (url.pathname === '/api/subject' && request.method === 'POST') return startSubject(request, env)

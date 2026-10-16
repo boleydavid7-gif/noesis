@@ -214,4 +214,15 @@ and a Wrangler dry run. The live health endpoint is
   (`lib/wallpaper.ts`, the same drawing as Proairetos's rooms: a lamp with rings of light and three sweeping bands),
   made from the page color, the chosen color and the background's hue (`wallpaperColors`), set as `--lamplight` (tall,
   sidebar) and `--lamplight-wide` (home banner) by App's appearance effect. A chosen picture still replaces it.
+- Connected Libby (Borrowed › Connect Libby): the reader makes a code in Libby (Menu › Copy To Another Device) and
+  Noesis joins their Libby as one more device (Worker `/api/libby`, `src/workerLibby.ts`: `POST /chip?client=dewey`,
+  `POST /chip/clone/code`, the chip again for the joined token, then `GET /chip/sync` on
+  `sentry-read.svc.overdrive.com`; unofficial, the same requests odmpy and the Calibre Libby plugin use, so it can
+  stop working if Libby changes them; nothing kept on the server). The token stays on the device
+  (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans` (`lib/libbyLink.ts`) lays Libby's loans over
+  Borrowed: due dates follow renewals, a hand-typed e-book of the same title is joined, a loan Libby no longer has is
+  marked returned; paper copies are untouched. Each Libby loan shows its cover, which opens the book in Libby
+  (`share.libbyapp.com/title/ID`); Renew opens it too, and the next update brings the new date. Updates when Borrowed
+  opens (at most every 15 minutes) or on Update; a refused token asks to connect again. Not yet tried against the live
+  service.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".
