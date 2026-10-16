@@ -1063,74 +1063,103 @@ function QuestionPage({
           </span>
         ))}
       </nav>
-      <header>
+      <header className="question-head">
         {area ? <span className="question-area">{area.title}</span> : null}
         <h3>{question.text}</h3>
         {question.hook ? <p className="question-hook">{question.hook}</p> : null}
-        <div className="subject-actions">
-          {question.state === 'later' ? (
+        <div className="question-toolbar">
+          {question.state === 'answered' ? (
+            <span className="question-done">
+              <Check size={14} aria-hidden="true" /> Answered
+            </span>
+          ) : (
+            <div className="question-state" role="group" aria-label="When">
+              <button
+                aria-pressed={question.state === 'now'}
+                onClick={() => {
+                  if (question.state === 'now') return
+                  const moved = moveQuestion(subject, question.id, 'now')
+                  if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
+                  else onSave(moved.subject)
+                }}
+              >
+                Now
+              </button>
+              <button
+                aria-pressed={question.state === 'later'}
+                onClick={() => {
+                  if (question.state !== 'later') onSave(moveQuestion(subject, question.id, 'later').subject)
+                }}
+              >
+                Later
+              </button>
+            </div>
+          )}
+          <span className="question-tools">
+            {onAsk ? (
+              <button
+                className="question-tool"
+                onClick={() => onAsk(`${question.text} (${path.title})`)}
+                aria-label="Ask Noema"
+                title="Ask Noema"
+              >
+                <NoemaIcon size={17} />
+              </button>
+            ) : null}
             <button
-              className="secondary-button"
+              className="question-tool"
               onClick={() => {
-                const moved = moveQuestion(subject, question.id, 'now')
-                if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
-                else onSave(moved.subject)
+                onSave(removeQuestion(subject, question.id), 'Question removed.')
+                onBack()
               }}
+              aria-label="Remove this question"
+              title="Remove"
             >
-              Move to Now
+              <Trash2 size={16} />
             </button>
-          ) : null}
-          {question.state === 'now' ? (
-            <button className="text-button" onClick={() => onSave(moveQuestion(subject, question.id, 'later').subject)}>
-              Move to Later
-            </button>
-          ) : null}
-          {onAsk ? (
-            <button className="text-button" onClick={() => onAsk(`${question.text} (${path.title})`)}>
-              <NoemaIcon size={14} /> Ask Noema
-            </button>
-          ) : null}
-          <button
-            className="text-button"
-            onClick={() => {
-              onSave(removeQuestion(subject, question.id), 'Question removed.')
-              onBack()
-            }}
-          >
-            <Trash2 size={13} /> Remove
-          </button>
+          </span>
         </div>
       </header>
 
       {!question.answer ? (
-        <section className="question-block">
-          <label htmlFor="question-guess">
-            <Lightbulb size={14} aria-hidden="true" /> Your guess (optional)
-          </label>
-          <textarea
-            id="question-guess"
-            rows={2}
+        <label className="question-guess">
+          <Lightbulb size={16} aria-hidden="true" />
+          <input
             value={guess}
-            placeholder="What do you think, before looking?"
+            placeholder="Your guess first (optional)"
+            aria-label="Your guess"
             onChange={(event) => setGuess(event.target.value)}
             onBlur={() => {
               if ((question.guess ?? '') !== guess.trim()) change({ guess: guess.trim() || undefined })
             }}
             maxLength={300}
           />
+        </label>
+      ) : null}
+
+      {question.short || loading ? (
+        <section className="q-section">
+          <h4 className="q-label">Answer</h4>
+          <div className="q-card q-answer">
+            {question.short ? (
+              <p>{question.short}</p>
+            ) : (
+              <div className="q-answer-wait" aria-live="polite">
+                <span className="skeleton" />
+                <span className="skeleton" />
+                <span className="skeleton" />
+              </div>
+            )}
+            <small className="q-caption">
+              <NoemaIcon size={12} aria-hidden="true" /> Noema
+            </small>
+          </div>
         </section>
       ) : null}
 
-      {question.short ? (
-        <details className="question-short">
-          <summary>Short answer from Noema</summary>
-          <p>{question.short}</p>
-        </details>
-      ) : null}
-
-      <section className="question-block">
-        <div className="question-block-head">
-          <h4>Explore</h4>
+      <section className="q-section question-block">
+        <div className="q-label-row">
+          <h4 className="q-label">Read, watch, listen</h4>
           {!loading ? (
             <button className="text-button" onClick={() => explore(Boolean(question.picks?.length))}>
               <Search size={13} /> {picks.length ? 'Find others' : 'Find things'}
@@ -1186,162 +1215,168 @@ function QuestionPage({
           ))}
       </section>
 
-      <section className="question-block question-answer">
-        <h4>In your own words</h4>
-        {question.answer && !editing ? (
-          <>
-            <blockquote>{question.answer.text}</blockquote>
-            <div className="subject-actions">
-              <button className="text-button" onClick={() => setEditing(true)}>
-                <Pencil size={13} /> Edit
-              </button>
-              <button
-                className="text-button"
-                onClick={() => {
-                  onSave(reopenQuestion(subject, question.id))
-                  setEditing(true)
-                }}
-              >
-                Open it again
-              </button>
-              {onNote ? (
-                <button className="text-button" onClick={() => onNote(question.text, path.title)}>
-                  Add a note
+      <section className="q-section question-answer">
+        <h4 className="q-label">In your own words</h4>
+        <div className="q-card">
+          {question.answer && !editing ? (
+            <>
+              <blockquote>{question.answer.text}</blockquote>
+              <div className="subject-actions">
+                <button className="text-button" onClick={() => setEditing(true)}>
+                  <Pencil size={13} /> Edit
                 </button>
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              onSave(answerQuestion(subject, question.id, answer, used))
-              setEditing(false)
-              onNotice('Answer kept.')
-            }}
-          >
-            <textarea
-              rows={3}
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              placeholder="A sentence or two, once you know"
-              aria-label="Your answer"
-              maxLength={600}
-            />
-            {sources.length ? (
-              <div className="answer-sources" role="group" aria-label="Where you found it">
-                {sources.map((pick) => (
-                  <button
-                    type="button"
-                    key={pick.id}
-                    aria-pressed={used.includes(pick.id)}
-                    className={used.includes(pick.id) ? 'chip chip-on' : 'chip'}
-                    onClick={() =>
-                      setUsed((list) =>
-                        list.includes(pick.id) ? list.filter((id) => id !== pick.id) : [...list, pick.id],
-                      )
-                    }
-                  >
-                    {pick.title.length > 40 ? `${pick.title.slice(0, 40)}…` : pick.title}
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    onSave(reopenQuestion(subject, question.id))
+                    setEditing(true)
+                  }}
+                >
+                  Open it again
+                </button>
+                {onNote ? (
+                  <button className="text-button" onClick={() => onNote(question.text, path.title)}>
+                    Add a note
                   </button>
-                ))}
+                ) : null}
               </div>
-            ) : null}
-            <div className="subject-actions">
-              <button className="primary-button" type="submit" disabled={!answer.trim()}>
-                Keep answer
-              </button>
-              {question.answer ? (
-                <button type="button" className="text-button" onClick={() => setEditing(false)}>
-                  Cancel
-                </button>
+            </>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                onSave(answerQuestion(subject, question.id, answer, used))
+                setEditing(false)
+                onNotice('Answer kept.')
+              }}
+            >
+              <textarea
+                rows={3}
+                value={answer}
+                onChange={(event) => setAnswer(event.target.value)}
+                placeholder="A sentence or two, once you know"
+                aria-label="Your answer"
+                maxLength={600}
+              />
+              {sources.length ? (
+                <div className="answer-sources" role="group" aria-label="Where you found it">
+                  {sources.map((pick) => (
+                    <button
+                      type="button"
+                      key={pick.id}
+                      aria-pressed={used.includes(pick.id)}
+                      className={used.includes(pick.id) ? 'chip chip-on' : 'chip'}
+                      onClick={() =>
+                        setUsed((list) =>
+                          list.includes(pick.id) ? list.filter((id) => id !== pick.id) : [...list, pick.id],
+                        )
+                      }
+                    >
+                      {pick.title.length > 40 ? `${pick.title.slice(0, 40)}…` : pick.title}
+                    </button>
+                  ))}
+                </div>
               ) : null}
-            </div>
-          </form>
-        )}
+              <div className="subject-actions">
+                <button className="primary-button" type="submit" disabled={!answer.trim()}>
+                  Keep answer
+                </button>
+                {question.answer ? (
+                  <button type="button" className="text-button" onClick={() => setEditing(false)}>
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          )}
+        </div>
       </section>
 
       {question.useIt ? (
-        <section className="question-block question-use">
-          <h4>Use it (optional)</h4>
-          <p>{question.useIt.text}</p>
-          {question.useIt.doneAt ? (
-            <div className="subject-actions">
-              <span className="question-use-done">
-                <Check size={14} aria-hidden="true" /> Done{' '}
-                {new Date(question.useIt.doneAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </span>
-              <button className="text-button" onClick={() => onSave(markUsed(subject, question.id, false))}>
-                Not yet
-              </button>
-            </div>
-          ) : (
-            <div className="subject-actions">
-              <button className="secondary-button" onClick={() => onSave(markUsed(subject, question.id, true))}>
-                <Check size={14} /> Done
-              </button>
-            </div>
-          )}
+        <section className="q-section question-use">
+          <h4 className="q-label">Use it (optional)</h4>
+          <div className="q-card">
+            <p>{question.useIt.text}</p>
+            {question.useIt.doneAt ? (
+              <div className="subject-actions">
+                <span className="question-use-done">
+                  <Check size={14} aria-hidden="true" /> Done{' '}
+                  {new Date(question.useIt.doneAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </span>
+                <button className="text-button" onClick={() => onSave(markUsed(subject, question.id, false))}>
+                  Not yet
+                </button>
+              </div>
+            ) : (
+              <div className="subject-actions">
+                <button className="secondary-button" onClick={() => onSave(markUsed(subject, question.id, true))}>
+                  <Check size={14} /> Done
+                </button>
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
 
-      <section className="question-block question-deeper">
-        <h4>Go deeper</h4>
-        {deeper.length ? (
-          <ul className="deeper-list">
-            {deeper.map((q) => (
-              <li key={q.id}>
-                <button onClick={() => onOpen(q.id)}>
-                  <span>{q.text}</span>
-                  {q.state === 'answered' ? (
-                    <Check size={15} aria-label="Answered" />
-                  ) : deeperFrom(subject, q.id).length ? (
-                    <small>{deeperFrom(subject, q.id).length} further</small>
-                  ) : null}
-                  <ChevronRight size={16} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <form
-          className="deeper-ask"
-          onSubmit={(event) => {
-            event.preventDefault()
-            ask(side)
-          }}
-        >
-          <input
-            value={side}
-            onChange={(event) => setSide(event.target.value)}
-            placeholder="What do you want to know next?"
-            aria-label="Your next question"
-            maxLength={200}
-            enterKeyHint="go"
-          />
-          <button className="primary-button" type="submit" disabled={!side.trim()} aria-label="Go down">
-            <ArrowDown size={16} />
-          </button>
-        </form>
-        {(() => {
-          const offered = [
-            ...(question.followUp && !known(question.followUp) ? [question.followUp] : []),
-            ...ideas.filter((idea) => idea !== question.followUp),
-          ]
-          return offered.length ? (
-            <div className="deeper-ideas">
-              {offered.map((idea) => (
-                <button key={idea} className="deeper-idea" onClick={() => ask(idea)}>
-                  {idea}
-                </button>
+      <section className="q-section question-deeper">
+        <h4 className="q-label">Go deeper</h4>
+        <div className="q-card">
+          {deeper.length ? (
+            <ul className="deeper-list">
+              {deeper.map((q) => (
+                <li key={q.id}>
+                  <button onClick={() => onOpen(q.id)}>
+                    <span>{q.text}</span>
+                    {q.state === 'answered' ? (
+                      <Check size={15} aria-label="Answered" />
+                    ) : deeperFrom(subject, q.id).length ? (
+                      <small>{deeperFrom(subject, q.id).length} further</small>
+                    ) : null}
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </li>
               ))}
-            </div>
-          ) : null
-        })()}
-        <button className="text-button deeper-more" onClick={() => void dig()} disabled={digging}>
-          <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'Other ideas' : 'Need an idea?'}
-        </button>
-        {digError ? <p className="weather-error">{digError}</p> : null}
+            </ul>
+          ) : null}
+          <form
+            className="deeper-ask"
+            onSubmit={(event) => {
+              event.preventDefault()
+              ask(side)
+            }}
+          >
+            <input
+              value={side}
+              onChange={(event) => setSide(event.target.value)}
+              placeholder="What do you want to know next?"
+              aria-label="Your next question"
+              maxLength={200}
+              enterKeyHint="go"
+            />
+            <button className="primary-button" type="submit" disabled={!side.trim()} aria-label="Go down">
+              <ArrowDown size={16} />
+            </button>
+          </form>
+          {(() => {
+            const offered = [
+              ...(question.followUp && !known(question.followUp) ? [question.followUp] : []),
+              ...ideas.filter((idea) => idea !== question.followUp),
+            ]
+            return offered.length ? (
+              <div className="deeper-ideas">
+                {offered.map((idea) => (
+                  <button key={idea} className="deeper-idea" onClick={() => ask(idea)}>
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            ) : null
+          })()}
+          <button className="text-button deeper-more" onClick={() => void dig()} disabled={digging}>
+            <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'Other ideas' : 'Need an idea?'}
+          </button>
+          {digError ? <p className="weather-error">{digError}</p> : null}
+        </div>
       </section>
     </article>
   )

@@ -11651,3 +11651,232 @@ button.loan-title {
   gap: 6px;
   margin-top: 10px;
 }
+
+/* ---------- The question page, laid out like Apple's grouped pages and Material's cards ----------
+   One hierarchy: a quiet trail, a large title, then sections with a small label above a soft filled card.
+   Cards are filled, not outlined, because the page already sits inside a bordered panel (no box in a box).
+   Spacing follows an 8-point grid: 32 between sections, 8 from a label to its card, 18 inside a card. */
+.question-page {
+  gap: 32px;
+}
+.question-trail {
+  margin-bottom: -12px;
+  font-size: 0.85rem;
+}
+.question-head {
+  display: grid;
+  gap: 10px;
+}
+.question-head h3 {
+  font-size: clamp(1.6rem, 5.5vw, 2rem);
+  line-height: 1.2;
+}
+.question-head .question-hook {
+  font-size: 1rem;
+}
+.question-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.question-state {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.question-state button {
+  min-width: 72px;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+.question-state button[aria-pressed='true'] {
+  color: #10202f;
+  background: var(--gold-soft, #ead4a2);
+}
+.question-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold-soft, #ead4a2);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.question-tools {
+  display: inline-flex;
+  gap: 8px;
+}
+.question-tool {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #dbe6f1;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+.question-tool:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.question-guess {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -12px;
+  padding: 4px 6px 4px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--muted);
+}
+.question-guess input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 0;
+  background: transparent;
+}
+.question-guess input:focus-visible {
+  box-shadow: none;
+}
+.q-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.q-label,
+.question-page .q-label {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.q-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 4px;
+}
+.q-label-row .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.q-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.q-card > :first-child {
+  margin-top: 0;
+}
+.q-card > :last-child {
+  margin-bottom: 0;
+}
+.q-answer p {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+.q-answer-wait {
+  display: grid;
+  gap: 10px;
+}
+.q-answer-wait .skeleton {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+}
+.q-answer-wait .skeleton:last-child {
+  width: 60%;
+}
+.q-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.q-card textarea,
+.q-card input {
+  width: 100%;
+}
+.q-card .subject-actions {
+  margin: 0;
+}
+.question-answer blockquote {
+  margin: 0;
+}
+.question-page .pick-list {
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.question-page .pick-group {
+  display: grid;
+  gap: 8px;
+}
+.question-page .pick-group h5 {
+  margin: 4px 0 0 4px;
+}
+.question-page .pick-loading {
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.q-card .deeper-list {
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.q-card .deeper-ideas,
+.q-card .deeper-more {
+  margin-top: 0;
+}
+.q-card .deeper-more {
+  justify-self: start;
+}
+@media (max-width: 480px) {
+  .q-card {
+    padding: 16px;
+  }
+  .question-state button {
+    min-width: 64px;
+  }
+}
+.q-section.question-use {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.question-use .q-card {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.07);
+}
+.question-use .q-card p {
+  font-size: 1rem;
+}
