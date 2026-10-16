@@ -45,6 +45,9 @@ import {
   UserRound,
   X,
   FolderOpen,
+  LayoutGrid,
+  Grid2x2,
+  List,
 } from 'lucide-react'
 import './App.css'
 import './design.css'
@@ -2748,6 +2751,7 @@ function App() {
           <Borrowed books={books} onOpenBook={openSavedBook} onRemoveBook={deleteBook} />
           <BookSection
             title="On this device"
+            views
             books={filteredBooks.filter((book) => book.format !== 'external')}
             onOpen={openSavedBook}
             onDelete={deleteBook}
@@ -4396,6 +4400,30 @@ function ShelfPicker({
   )
 }
 
+// How the books on this device are shown: covers in a grid, large covers, or a list. Kept on this device.
+type BookView = 'grid' | 'large' | 'list'
+const BOOK_VIEW_KEY = 'noesis:library-view:v1'
+const BOOK_VIEWS: Array<{ id: BookView; label: string; Icon: typeof LayoutGrid }> = [
+  { id: 'grid', label: 'Grid', Icon: LayoutGrid },
+  { id: 'large', label: 'Large', Icon: Grid2x2 },
+  { id: 'list', label: 'List', Icon: List },
+]
+function readBookView(): BookView {
+  try {
+    const value = localStorage.getItem(BOOK_VIEW_KEY)
+    return value === 'large' || value === 'list' ? value : 'grid'
+  } catch {
+    return 'grid'
+  }
+}
+function writeBookView(view: BookView) {
+  try {
+    localStorage.setItem(BOOK_VIEW_KEY, view)
+  } catch {
+    // Storage blocked: the choice lasts for this visit.
+  }
+}
+
 function BookSection({
   books,
   onOpen,
@@ -4409,10 +4437,12 @@ function BookSection({
   onIntent,
   onFavorite,
   onRead,
+  views = false,
   title = 'My library',
   importLabel = 'Import',
   emptyText = 'No books yet. Import a book file, or look in Explore.',
 }: {
+  views?: boolean
   title?: string
   importLabel?: string
   emptyText?: string
@@ -4431,100 +4461,176 @@ function BookSection({
 }) {
   const wide = useWideScreen()
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [chosenView, setChosenView] = useState<BookView>(readBookView)
+  const view: BookView = views ? chosenView : 'grid'
+  const choose = (next: BookView) => {
+    setChosenView(next)
+    writeBookView(next)
+  }
   // On a wide screen a click shows the book's details beside the shelf; Open reads it.
   const split = Boolean(detailPane) && wide
   const preview = split ? (books.find((book) => book.id === previewId) ?? books[0]) : undefined
+  const open = (book: LibraryBook) => (split && book.format !== 'external' ? setPreviewId(book.id) : onOpen(book))
+  const actions = (book: LibraryBook) => (
+    <>
+      {onFavorite ? (
+        <button
+          className={'book-fav' + (book.favorite ? ' book-fav-on' : '')}
+          onClick={() => onFavorite(book)}
+          aria-label={book.favorite ? `Remove ${book.title} from favorites` : `Add ${book.title} to favorites`}
+          aria-pressed={Boolean(book.favorite)}
+        >
+          <Heart size={14} fill={book.favorite ? 'currentColor' : 'none'} />
+        </button>
+      ) : null}
+      {onShelves ? (
+        <ShelfPicker
+          book={book}
+          all={shelves ?? []}
+          onChange={onShelves}
+          onSeries={onSeries}
+          onEdit={onEdit}
+          onRead={onRead}
+        />
+      ) : null}
+      {onDelete ? (
+        <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
+          <Trash2 size={13} />
+        </button>
+      ) : null}
+    </>
+  )
   return (
     <section className={'section-block library-section' + (split ? ' library-split' : '')}>
       <div className="section-heading">
         <div>
           <h2>{title}</h2>
         </div>
-        {onImport ? (
-          <button className="text-button" onClick={onImport}>
-            {importLabel} {importLabel === 'Import' ? <Upload size={14} /> : <Plus size={14} />}
-          </button>
-        ) : null}
+        <div className="section-tools">
+          {views && books.length ? (
+            <div className="view-switch" role="radiogroup" aria-label="View">
+              {BOOK_VIEWS.map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={view === id}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => choose(id)}
+                >
+                  <Icon size={16} />
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {onImport ? (
+            <button className="text-button" onClick={onImport}>
+              {importLabel} {importLabel === 'Import' ? <Upload size={14} /> : <Plus size={14} />}
+            </button>
+          ) : null}
+        </div>
       </div>
       {books.length === 0 ? (
         <div className="empty-state">{emptyText}</div>
       ) : (
         <div className="library-split-body">
-          <div className="book-grid">
-            {books.map((book) => (
-              <div className={'book-card-wrap' + (preview?.id === book.id ? ' book-card-selected' : '')} key={book.id}>
-                <button
-                  className="book-card"
-                  onClick={() => (split && book.format !== 'external' ? setPreviewId(book.id) : onOpen(book))}
-                  title={
-                    book.format === 'external' && book.externalUrl
-                      ? `Open at ${linkLabel(book.externalUrl)}`
-                      : undefined
-                  }
+          {view === 'list' ? (
+            <ul className="book-list">
+              {books.map((book) => (
+                <li className={'book-row' + (preview?.id === book.id ? ' book-row-selected' : '')} key={book.id}>
+                  <button className="book-row-main" onClick={() => open(book)}>
+                    <span className="book-row-cover">
+                      <BookCover book={book} compact />
+                    </span>
+                    <span className="book-row-text">
+                      <strong>{book.title}</strong>
+                      <span>{book.author}</span>
+                      {book.format === 'external' ? null : (
+                        <span className="book-row-progress" aria-hidden="true">
+                          <span style={{ width: `${Math.round(book.progress)}%` }} />
+                        </span>
+                      )}
+                    </span>
+                    <span className="book-row-state">
+                      {book.finished ? (
+                        <>
+                          <Check size={13} /> Read
+                        </>
+                      ) : book.progress > 0 ? (
+                        `${Math.round(book.progress)}%`
+                      ) : (
+                        'New'
+                      )}
+                    </span>
+                  </button>
+                  <span className="book-row-actions">{actions(book)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className={'book-grid' + (view === 'large' ? ' book-grid-large' : '')}>
+              {books.map((book) => (
+                <div
+                  className={'book-card-wrap' + (preview?.id === book.id ? ' book-card-selected' : '')}
+                  key={book.id}
                 >
-                  <div className="book-card-cover">
-                    <BookCover book={book} compact />
-                    {book.format === 'external' ? null : <ProgressRing value={book.progress} />}
-                    {book.cloudAt ? (
-                      <span className="book-cloud-mark" title="Synced to your cloud" aria-label="Synced to your cloud">
-                        <Cloud size={12} />
-                      </span>
-                    ) : null}
-                    {book.finished ? (
-                      <span className="book-read-mark" title="Read" aria-label="Read">
-                        <Check size={13} />
-                      </span>
-                    ) : null}
-                    {book.format === 'external' ? (
-                      <span className="book-card-badge">
-                        {book.store ?? 'External'} <ExternalLink size={10} />
-                      </span>
-                    ) : book.accessType === 'borrow' ? (
-                      <span className="book-card-badge">Borrowed</span>
-                    ) : book.format === 'resource' ? (
-                      <span className="book-card-badge">Source</span>
-                    ) : null}
-                  </div>
-                  <div className="book-card-title">{book.title}</div>
-                  <div className="book-card-author">{book.author}</div>
-                  {book.review ? (
-                    <div className="book-card-review" title={book.review.line}>
-                      {'★'.repeat(book.review.stars)}
-                      {'☆'.repeat(5 - book.review.stars)}
-                      {book.review.line ? <span> {book.review.line}</span> : null}
-                    </div>
-                  ) : null}
-                </button>
-                {onFavorite ? (
                   <button
-                    className={'book-fav' + (book.favorite ? ' book-fav-on' : '')}
-                    onClick={() => onFavorite(book)}
-                    aria-label={
-                      book.favorite ? `Remove ${book.title} from favorites` : `Add ${book.title} to favorites`
+                    className="book-card"
+                    onClick={() => open(book)}
+                    title={
+                      book.format === 'external' && book.externalUrl
+                        ? `Open at ${linkLabel(book.externalUrl)}`
+                        : undefined
                     }
-                    aria-pressed={Boolean(book.favorite)}
                   >
-                    <Heart size={14} fill={book.favorite ? 'currentColor' : 'none'} />
+                    <div className="book-card-cover">
+                      <BookCover book={book} compact />
+                      {book.format === 'external' ? null : <ProgressRing value={book.progress} />}
+                      {book.cloudAt ? (
+                        <span
+                          className="book-cloud-mark"
+                          title="Synced to your cloud"
+                          aria-label="Synced to your cloud"
+                        >
+                          <Cloud size={12} />
+                        </span>
+                      ) : null}
+                      {book.finished ? (
+                        <span className="book-read-mark" title="Read" aria-label="Read">
+                          <Check size={13} />
+                        </span>
+                      ) : null}
+                      {book.format === 'external' ? (
+                        <span className="book-card-badge">
+                          {book.store ?? 'External'} <ExternalLink size={10} />
+                        </span>
+                      ) : book.accessType === 'borrow' ? (
+                        <span className="book-card-badge">Borrowed</span>
+                      ) : book.format === 'resource' ? (
+                        <span className="book-card-badge">Source</span>
+                      ) : null}
+                    </div>
+                    <div className="book-card-title">{book.title}</div>
+                    <div className="book-card-author">{book.author}</div>
+                    {view === 'large' && book.format !== 'external' ? (
+                      <div className="book-card-progress" aria-hidden="true">
+                        <span style={{ width: `${Math.round(book.progress)}%` }} />
+                      </div>
+                    ) : null}
+                    {book.review ? (
+                      <div className="book-card-review" title={book.review.line}>
+                        {'★'.repeat(book.review.stars)}
+                        {'☆'.repeat(5 - book.review.stars)}
+                        {book.review.line ? <span> {book.review.line}</span> : null}
+                      </div>
+                    ) : null}
                   </button>
-                ) : null}
-                {onShelves ? (
-                  <ShelfPicker
-                    book={book}
-                    all={shelves ?? []}
-                    onChange={onShelves}
-                    onSeries={onSeries}
-                    onEdit={onEdit}
-                    onRead={onRead}
-                  />
-                ) : null}
-                {onDelete ? (
-                  <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
-                    <Trash2 size={13} />
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
+                  {actions(book)}
+                </div>
+              ))}
+            </div>
+          )}
           {preview ? (
             <aside className="book-detail panel-card" aria-label="Book details">
               <div className="book-detail-cover">

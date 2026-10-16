@@ -233,4 +233,9 @@ and a Wrangler dry run. The live health endpoint is
   `com.overdrive.mobile.android.libby` with the web page as fallback; iPhone follows the link in place so the app can
   take it); computers open a new tab. The old Libby card on the Library page is gone (Open Libby sits in Borrowed's
   Libby line; Search Libby stays in Explore).
+- Library views (On this device; `BookSection` `views`): Grid (the cover grid), Large (big covers with a calm shadow and a
+  thin progress line) and List (one grouped list: small cover, title, author, a progress line, 30% / New / Read, then
+  favorite, shelves and remove; hairlines start after the cover). Chosen with a segmented switch in the section
+  heading (`.view-switch`, iOS proportions with the lamp-tinted selection), kept on the device in
+  `noesis:library-view:v1`. The detail pane beside the shelf works in all three on computers.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".

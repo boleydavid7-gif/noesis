@@ -410,3 +410,231 @@ a.text-button {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Library views (On this device): a segmented switch like iOS's, with Material's tinted selection. */
+.section-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.view-switch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(200, 220, 245, 0.07);
+}
+.view-switch button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--paper-3);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.view-switch button[aria-checked='true'] {
+  color: var(--lamp);
+  background: var(--tone-4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.view-switch button:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 1px;
+}
+
+/* Large: big covers, a calm shadow, a thin line for how far along. */
+.library-section .book-grid-large {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 32px 24px;
+}
+.library-section .book-grid-large .book-card-cover {
+  height: auto;
+  aspect-ratio: 2 / 3;
+  padding-bottom: 0;
+}
+.book-grid-large .book-cover-compact {
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+}
+.book-grid-large .book-card-title {
+  margin-top: 12px;
+  font-size: 16px;
+}
+.book-card-progress {
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: rgba(200, 220, 245, 0.1);
+  overflow: hidden;
+}
+.book-card-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lamp);
+}
+@media (max-width: 720px) {
+  .library-section .book-grid-large {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 16px;
+  }
+}
+
+/* List: one grouped list, small covers, hairlines that start after the cover. */
+.book-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius-m);
+  background: var(--tone-2);
+  overflow: hidden;
+}
+.book-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.book-row + .book-row::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 74px;
+  height: 1px;
+  background: var(--hair);
+  content: '';
+}
+.book-row-selected {
+  background: rgba(var(--lamp-rgb), 0.08);
+}
+.book-row-main {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 6px 10px 16px;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+.book-row-main:hover {
+  background: rgba(200, 220, 245, 0.035);
+}
+.book-row-cover {
+  display: block;
+  width: 44px;
+}
+.book-row-cover .book-cover {
+  width: 44px;
+  height: 66px;
+  padding: 5px 4px;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.book-row-cover .made-title {
+  font-size: 7px;
+  -webkit-line-clamp: 4;
+}
+.book-row-cover .made-author,
+.book-row-cover .made-rule {
+  display: none;
+}
+.book-row-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.book-row-text strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.book-row-text > span:not(.book-row-progress) {
+  overflow: hidden;
+  color: var(--paper-2);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.book-row-progress {
+  display: block;
+  max-width: 160px;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: rgba(200, 220, 245, 0.1);
+  overflow: hidden;
+}
+.book-row-progress span {
+  display: block;
+  height: 100%;
+  background: var(--lamp);
+}
+.book-row-state {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--paper-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.book-row-actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding-right: 10px;
+}
+.book-row-actions .book-fav,
+.book-row-actions .book-delete,
+.book-row-actions .shelf-picker {
+  position: relative;
+  inset: auto;
+  opacity: 0.85;
+}
+.book-row-actions .book-fav,
+.book-row-actions .book-delete,
+.book-row-actions .book-shelf-button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  color: var(--paper-2);
+  background: transparent;
+}
+.book-row-actions .book-fav-on {
+  color: #ff7a8a;
+}
+.book-row-actions .shelf-picker-pop {
+  right: 0;
+  left: auto;
+}
+@media (max-width: 520px) {
+  .book-row-main {
+    padding-left: 12px;
+    gap: 12px;
+  }
+}
+.book-row-actions .book-shelf-button {
+  opacity: 1;
+}
+.book-grid-large .progress-ring {
+  display: none;
+}
+.book-grid-large .book-read-mark {
+  left: auto;
+  right: 10px;
+  bottom: 10px;
+}
