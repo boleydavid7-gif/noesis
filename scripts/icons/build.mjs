@@ -1,5 +1,6 @@
 /*
- * Noesis's icon, drawn on the same system as the Proairetos family's: a 1024 canvas, a tile lit from the top, one
+ * Noesis's icon, drawn on the same system as the Proairetos family's: a 1024 canvas, a tile lit by Lamplight's lamp
+ * from the upper right (a glow and one faint ring; shadows fall down-left), one
  * solid glyph on shared keylines inside the circle a maskable crop keeps (radius 410). The glyph is the open book
  * with an olive branch from the first logo, redrawn as clean shapes. GLYPH (also used inside the app by NoesisMark)
  * is the single source.
@@ -56,11 +57,12 @@ export function iconSvg(shape = 'square', name = TILE_NAME) {
     <linearGradient id="noesis-tile-${name}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="${tile.from}"/><stop offset="0.55" stop-color="${tile.mid}"/><stop offset="1" stop-color="${tile.to}"/></linearGradient>
     <radialGradient id="noesis-light-${name}" cx="78%" cy="18%" r="60%"><stop offset="0" stop-color="#fff6dc" stop-opacity=".45"/><stop offset="1" stop-color="#fff6dc" stop-opacity="0"/></radialGradient>
     <clipPath id="noesis-clip-${name}"><rect width="1024" height="1024" rx="${rx}"/></clipPath>
-    <filter id="noesis-lift-${name}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".25"/></filter>
+    <filter id="noesis-lift-${name}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="-10" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".25"/></filter>
   </defs>
   <g clip-path="url(#noesis-clip-${name})">
     <rect width="1024" height="1024" fill="url(#noesis-tile-${name})"/>
     <rect width="1024" height="1024" fill="url(#noesis-light-${name})"/>
+    <circle cx="799" cy="184" r="250" fill="none" stroke="#fff6dc" stroke-opacity=".1" stroke-width="6"/>
     <path d="M0 250 C260 200 460 300 640 470 C760 580 880 640 1024 650 V1024 H0 Z" fill="${tile.hillLight}" opacity=".18"/>
     <path d="M0 560 C220 520 420 600 600 700 C760 790 900 800 1024 760 V1024 H0 Z" fill="${tile.hill}" opacity=".35"/>
     <path d="M0 900 C260 840 520 880 760 950 C860 980 950 990 1024 980 V1024 H0 Z" fill="${tile.hill}" opacity=".35"/>
