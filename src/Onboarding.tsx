@@ -107,7 +107,7 @@ const PAGES: Page[] = [
         icon: ArrowDown,
         tone: 'indigo',
         title: 'Go deeper',
-        text: 'Every question leads to the next ones, as far as you want.',
+        text: 'Ask what you want to know next, as far as you want.',
       },
       {
         icon: Library,

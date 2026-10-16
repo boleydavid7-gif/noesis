@@ -19,6 +19,7 @@ import {
   Play,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   Wrench,
 } from 'lucide-react'
@@ -1003,6 +1004,23 @@ function QuestionPage({
   const deeper = deeperFrom(subject, question.id)
   const [digging, setDigging] = useState(false)
   const [digError, setDigError] = useState('')
+  const [ideas, setIdeas] = useState<string[]>([])
+  const known = (text: string) => subject.questions.some((q) => q.text.toLowerCase() === text.trim().toLowerCase())
+  // Going down is the reader's own question: it is added under this one and opened at once.
+  function ask(text: string) {
+    const words = text.trim()
+    if (!words) return
+    const current = latest.current.subject
+    const there = current.questions.find((q) => q.text.toLowerCase() === words.toLowerCase())
+    if (there) return onOpen(there.id)
+    const next = goDeeper(current, question.id, [words])
+    const added = deeperFrom(next, question.id).find((q) => q.text.toLowerCase() === words.toLowerCase())
+    onSave(next)
+    setSide('')
+    setIdeas([])
+    if (added) onOpen(added.id)
+  }
+  // Ideas from Noema are only shown; nothing is kept until one is chosen.
   async function dig() {
     setDigging(true)
     setDigError('')
@@ -1014,16 +1032,16 @@ function QuestionPage({
         level: subject.level,
         trail: trail.map((step) => step.text),
       })
-      const next = goDeeper(latest.current.subject, question.id, found)
-      if (next === latest.current.subject) setDigError('Nothing new further down this time.')
-      else onSave(next)
+      const fresh = found.filter((text) => !known(text))
+      if (!fresh.length) setDigError('Nothing new this time.')
+      setIdeas(fresh)
     } catch (reason) {
       setDigError(
         reason instanceof AuthRequiredError
-          ? 'Sign in to go deeper.'
+          ? 'Sign in for ideas.'
           : reason instanceof Error
             ? reason.message
-            : 'Noema could not go deeper right now.',
+            : 'Noema could not find ideas right now.',
       )
     } finally {
       setDigging(false)
@@ -1286,42 +1304,44 @@ function QuestionPage({
             ))}
           </ul>
         ) : null}
-        {question.followUp && !subject.questions.some((q) => q.text === question.followUp) ? (
-          <button
-            className="secondary-button question-follow"
-            onClick={() => onSave(goDeeper(subject, question.id, [question.followUp!]))}
-          >
-            <Plus size={14} /> {question.followUp}
-          </button>
-        ) : null}
-        <div className="subject-actions">
-          <button className="primary-button" onClick={() => void dig()} disabled={digging}>
-            <ArrowDown size={14} /> {digging ? 'Digging…' : deeper.length ? 'Find more' : 'Go deeper'}
-          </button>
-        </div>
-        {digError ? <p className="weather-error">{digError}</p> : null}
         <form
-          className="subject-add"
+          className="deeper-ask"
           onSubmit={(event) => {
             event.preventDefault()
-            const next = goDeeper(subject, question.id, [side])
-            if (next !== subject) {
-              onSave(next)
-              setSide('')
-            }
+            ask(side)
           }}
         >
           <input
             value={side}
             onChange={(event) => setSide(event.target.value)}
-            placeholder="Your own question"
-            aria-label="Your own question"
+            placeholder="What do you want to know next?"
+            aria-label="Your next question"
             maxLength={200}
+            enterKeyHint="go"
           />
-          <button className="secondary-button" type="submit" disabled={!side.trim()}>
-            Add
+          <button className="primary-button" type="submit" disabled={!side.trim()} aria-label="Go down">
+            <ArrowDown size={16} />
           </button>
         </form>
+        {(() => {
+          const offered = [
+            ...(question.followUp && !known(question.followUp) ? [question.followUp] : []),
+            ...ideas.filter((idea) => idea !== question.followUp),
+          ]
+          return offered.length ? (
+            <div className="deeper-ideas">
+              {offered.map((idea) => (
+                <button key={idea} className="deeper-idea" onClick={() => ask(idea)}>
+                  {idea}
+                </button>
+              ))}
+            </div>
+          ) : null
+        })()}
+        <button className="text-button deeper-more" onClick={() => void dig()} disabled={digging}>
+          <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'Other ideas' : 'Need an idea?'}
+        </button>
+        {digError ? <p className="weather-error">{digError}</p> : null}
       </section>
     </article>
   )

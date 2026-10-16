@@ -11607,3 +11607,47 @@ button.loan-title {
   width: 100%;
   padding-left: 36px;
 }
+.deeper-ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.deeper-ask input {
+  min-height: 46px;
+  border-radius: 14px;
+}
+.deeper-ask .primary-button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  min-height: 46px;
+  padding: 0;
+  border-radius: 14px;
+}
+.deeper-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.deeper-idea {
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.deeper-idea:hover {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.6);
+}
+.deeper-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}

@@ -178,7 +178,8 @@ and a Wrangler dry run. The live health endpoint is
   up (loops stop), `deeperFrom` the ones under it, `inTreeOrder` nests them in an area's Later list, and removing a
   question moves the ones under it up a level. The Worker's `/api/question` with `part: 'deeper'` (and the `trail`)
   asks Noema for three narrower questions (`goDeeperFrom`, 300 tokens, 15 s). The question page shows the trail at
-  the top and a "Go deeper" list with "Go deeper" / "Find more" and "Your own question"; Home offers "Back down the
+  the top; Go deeper leads with the reader's own question ("What do you want to know next?"), which is added under
+  this one and opened at once; "Need an idea?" shows Noema's three as chips, kept only when one is chosen; Home offers "Back down the
   rabbit hole" with the deepest open question (`deepestOpen`).
 - Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
   days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
