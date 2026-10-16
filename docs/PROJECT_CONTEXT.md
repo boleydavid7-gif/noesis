@@ -200,6 +200,13 @@ and a Wrangler dry run. The live health endpoint is
   reading journey Libby exports for a book (Timeline › a book › Export reading journey) as JSON or CSV. Highlights
   come in as highlights; a highlight with a note comes in as a note with the passage as its quote; chapter and
   place are kept, the book is linked when it is in the library, tag `libby`, and ones already there are skipped.
+- Lamplight, the family's design system, in its deep (premium) cut (`src/lamplight/`, copied from Proairetos's `src/lamplight/`;
+  change it there first): `scheme.ts` makes every color from a room seed (the chosen background) and a lamp seed (the chosen color),
+  each moved until it reads 7:1 / 4.5:1 on every surface; `noesis.ts` maps the 13 backgrounds to rooms and the 8 colors to lamps
+  (Gold is Noesis's own) and sets Noesis's color names (`--tone-*`, `--paper*`, `--lamp`, `--accent-*`, `--surface-*`) plus `--ll-*`
+  through `rootAppearance`; `tokens.css`, `components.css`, `motion.css` and `noesis.css` (the premium finish: a sheen along the top of
+  surfaces, the lamp pill holding its own light, finer hairlines, tonal chips and secondary buttons, filled fields, Lucide icons at
+  1.7 with the current one lit) load after `design.css`. Tests: `src/__tests__/lamplight.test.ts` (every background × color readable).
 - Look (`src/design.css`, loaded last from App): Apple's calm and depth with Material 3's structure, in Noesis's key
   of night blue and one gold light. Tonal surfaces in steps (`--tone-0..4`) instead of outlines, a hairline at most;
   filled pill for the one main action, tonal pills for the rest; filled fields; a gold-tinted pill marks the current

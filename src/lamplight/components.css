@@ -1,0 +1,241 @@
+/* Lamplight, copied from Proairetos (src/lamplight/components.css); change it there first and copy it here. */
+/*
+ * Lamplight's components, built only from the tokens (tokens.css, and the colors scheme.ts makes). Any app can use
+ * them; the public guide (/lamplight/) shows each one. One lit action per screen: `.ll-button` is the lamp; the rest
+ * are tonal or plain.
+ */
+
+/* ---------- Buttons ---------- */
+.ll-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ll-space-2);
+  min-height: 44px;
+  padding: 0 var(--ll-space-5);
+  border: 0;
+  border-radius: var(--ll-radius-pill);
+  background: var(--ll-lamp-fill);
+  color: var(--ll-on-lamp);
+  font: var(--ll-type-label);
+  font-size: var(--text-md, 1rem);
+  text-decoration: none;
+  box-shadow: var(--ll-lamp-light);
+  cursor: pointer;
+}
+
+.ll-button--tonal {
+  background: var(--ll-glow);
+  color: var(--ll-lamp);
+  box-shadow: none;
+}
+
+.ll-button--plain {
+  background: transparent;
+  color: var(--ll-lamp);
+  box-shadow: none;
+  padding: 0 var(--ll-space-3);
+}
+
+.ll-button--remove {
+  background: transparent;
+  color: var(--ll-remove);
+  box-shadow: none;
+}
+
+.ll-button:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* ---------- Surfaces ---------- */
+.ll-card {
+  padding: var(--ll-space-4);
+  border-radius: var(--ll-radius-md);
+  background: var(--ll-card);
+  color: var(--ll-ink);
+  box-shadow: var(--ll-light-1);
+}
+
+.ll-card--inset {
+  background: var(--ll-inset);
+  box-shadow: none;
+}
+
+.ll-card--raised {
+  background: var(--ll-raised);
+  box-shadow: var(--ll-light-2);
+}
+
+/* ---------- A grouped list (iOS-style): rows with an icon tile and hairlines that start after it ---------- */
+.ll-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--ll-radius-md);
+  background: var(--ll-card);
+  box-shadow: var(--ll-light-1);
+  overflow: hidden;
+}
+
+.ll-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ll-space-3);
+  min-height: 52px;
+  padding: var(--ll-space-2) var(--ll-space-4);
+  color: var(--ll-ink);
+  font: var(--ll-type-body);
+}
+
+.ll-row + .ll-row {
+  box-shadow:
+    inset calc(var(--ll-space-4) + 30px + var(--ll-space-3)) 0 0 var(--ll-card),
+    inset 0 1px 0 var(--ll-hair);
+}
+
+.ll-row__tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ll-radius-xs);
+  background: var(--ll-glow);
+  color: var(--ll-lamp);
+}
+
+.ll-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ll-row__detail {
+  color: var(--ll-ink-3);
+  font: var(--ll-type-label);
+  font-weight: 400;
+}
+
+/* ---------- Switch ---------- */
+.ll-switch {
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  border: 0;
+  border-radius: var(--ll-radius-pill);
+  background: var(--ll-raised);
+  cursor: pointer;
+  transition: background var(--ll-calm) var(--ll-ease-out);
+}
+
+.ll-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform var(--ll-calm) var(--ll-ease-out);
+}
+
+.ll-switch[aria-checked='true'] {
+  background: var(--ll-lamp-fill);
+}
+
+.ll-switch[aria-checked='true']::after {
+  transform: translateX(20px);
+}
+
+/* ---------- Fields: filled, no border until focus; focus is a ring of the lamp ---------- */
+.ll-field {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--ll-space-4);
+  border: 0;
+  border-radius: var(--ll-radius-sm);
+  background: var(--ll-inset);
+  color: var(--ll-ink);
+  font: var(--ll-type-body);
+}
+
+.ll-field::placeholder {
+  color: var(--ll-ink-3);
+}
+
+.ll-field:focus {
+  outline: none;
+  box-shadow: var(--ll-focus);
+}
+
+/* ---------- Chips and a segmented choice ---------- */
+.ll-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--ll-space-4);
+  border: 1px solid var(--ll-hair);
+  border-radius: var(--ll-radius-pill);
+  background: transparent;
+  color: var(--ll-ink-2);
+  font: var(--ll-type-label);
+  cursor: pointer;
+}
+
+.ll-chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--ll-glow);
+  color: var(--ll-lamp);
+}
+
+/* ---------- The bar: translucent, where you are marked by the lamp ---------- */
+.ll-bar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: var(--ll-space-2);
+  border-radius: var(--ll-radius-lg);
+  background: var(--ll-bar);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--ll-light-2);
+}
+
+.ll-bar__item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--ll-space-2) 0;
+  border: 0;
+  border-radius: var(--ll-radius-sm);
+  background: transparent;
+  color: var(--ll-ink-3);
+  font: var(--ll-type-caption);
+  cursor: pointer;
+}
+
+.ll-bar__item[aria-current='page'] {
+  background: var(--ll-glow);
+  color: var(--ll-lamp);
+}
+
+/* ---------- A sheet ---------- */
+.ll-sheet {
+  padding: var(--ll-space-5);
+  border-radius: var(--ll-radius-lg) var(--ll-radius-lg) 0 0;
+  background: var(--ll-raised);
+  color: var(--ll-ink);
+  box-shadow: var(--ll-light-3);
+}
+
+.ll-sheet__grip {
+  width: 36px;
+  height: 5px;
+  margin: 0 auto var(--ll-space-4);
+  border-radius: var(--ll-radius-pill);
+  background: var(--ll-hair);
+}

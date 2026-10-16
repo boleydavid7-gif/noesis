@@ -51,6 +51,10 @@ import {
 } from 'lucide-react'
 import './App.css'
 import './design.css'
+import './lamplight/tokens.css'
+import './lamplight/components.css'
+import './lamplight/motion.css'
+import './lamplight/noesis.css'
 import {
   hydrateRemoteNotes,
   persistNote,

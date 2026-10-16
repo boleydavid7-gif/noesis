@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCENTS, DEFAULT_SETTINGS, rootAppearance, sanitizeSettings, updateSetting } from '../lib/settings'
+import { DEFAULT_SETTINGS, rootAppearance, sanitizeSettings, updateSetting } from '../lib/settings'
 
 describe('settings', () => {
   it('returns defaults for missing or corrupt storage', () => {
@@ -40,8 +40,10 @@ describe('settings', () => {
     const settings = sanitizeSettings({ appearance: { accent: 'sage', scenery: false, reduceMotion: true } })
     const { classes, vars } = rootAppearance(settings)
     expect(classes).toEqual(['no-scenery', 'reduce-motion'])
-    expect(vars['--gold-warm']).toBe(ACCENTS.sage.main)
-    expect(rootAppearance(DEFAULT_SETTINGS).vars).toEqual({})
+    // Every color is made by Lamplight's scheme from the chosen color and background.
+    expect(vars['--gold-warm']).toBe(vars['--ll-lamp'])
+    expect(vars['--gold-warm']).not.toBe(rootAppearance(DEFAULT_SETTINGS).vars['--gold-warm'])
+    expect(rootAppearance(DEFAULT_SETTINGS).vars['--tone-1']).toMatch(/^#[0-9a-f]{6}$/)
   })
 
   it('carries colors chosen before the Lamplight palette to the nearest new one', () => {

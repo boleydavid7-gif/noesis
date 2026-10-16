@@ -1,0 +1,146 @@
+/*
+ * Noesis in Lamplight, on the premium side. The colors come from the scheme's deep cut (noesis.ts); this layer
+ * gives Noesis's own pieces Lamplight's shape, light and motion, finished a step further than the family: surfaces
+ * with a faint sheen along their top, a lamp pill that holds its own light, finer hairlines, and icons drawn at
+ * Lamplight's weight that light up where you are. Loaded after design.css; :root-prefixed so it wins.
+ */
+
+:root {
+  /* The premium light: deeper shade under a surface, and a sheen where the lamp catches its top edge. */
+  --nx-sheen: linear-gradient(
+    180deg,
+    rgba(var(--ll-ink-rgb, 238, 243, 250), 0.035),
+    rgba(var(--ll-ink-rgb, 238, 243, 250), 0) 42%
+  );
+  --ll-light-1: inset 0 1px 0 rgba(var(--ll-ink-rgb, 238, 243, 250), 0.06), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ll-light-2: inset 0 1px 0 rgba(var(--ll-ink-rgb, 238, 243, 250), 0.07), 0 14px 34px -18px rgba(0, 0, 0, 0.7);
+  --ll-light-3:
+    inset 0 1px 0 rgba(var(--ll-ink-rgb, 238, 243, 250), 0.08), 0 30px 70px -28px rgba(0, 0, 0, 0.8),
+    0 0 0 1px var(--ll-hair);
+}
+
+/* ---------- Surfaces: lit along the top, resting on the page ---------- */
+:root :is(.panel-card, .rail-card) {
+  border-color: var(--ll-hair);
+  border-radius: var(--ll-radius-md);
+  background: var(--nx-sheen), var(--ll-card);
+  box-shadow: var(--ll-light-1);
+}
+
+:root .panel-card :is(.panel-card, .rail-card) {
+  background: var(--ll-inset);
+  box-shadow: none;
+}
+
+:root .empty-state {
+  border-radius: var(--ll-radius-md);
+  background: rgba(var(--ll-ink-rgb), 0.03);
+  box-shadow: inset 0 0 0 1px var(--ll-hair);
+}
+
+/* ---------- The one lit action: the lamp's pill holds its own light ---------- */
+:root :is(.primary-button, .hero-empty-reading) {
+  border-radius: var(--ll-radius-pill);
+  color: var(--ll-on-lamp);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%), var(--ll-lamp-fill);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    var(--ll-lamp-light);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+
+:root .primary-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), var(--ll-lamp-fill);
+}
+
+:root .primary-button:disabled {
+  box-shadow: none;
+}
+
+/* Everything else is tonal, with one hairline. */
+:root .secondary-button {
+  border-radius: var(--ll-radius-pill);
+  background: rgba(var(--ll-ink-rgb), 0.055);
+  box-shadow: inset 0 0 0 1px var(--ll-hair);
+}
+
+:root .secondary-button:hover:not(:disabled) {
+  background: rgba(var(--ll-ink-rgb), 0.09);
+}
+
+:root .text-button {
+  color: var(--ll-lamp);
+}
+
+/* ---------- Chips: chosen is tonal, so the lamp stays the one light ---------- */
+:root .chip {
+  border-radius: var(--ll-radius-pill);
+  background: rgba(var(--ll-ink-rgb), 0.05);
+  color: var(--ll-ink-2);
+}
+
+:root
+  :is(
+    .shelf-chips button[aria-selected='true'],
+    .shelf-chips .shelf-chip-active,
+    .pick-filter button[aria-selected='true'],
+    .chip-on
+  ) {
+  background: var(--ll-glow);
+  color: var(--ll-lamp);
+}
+
+/* ---------- Where you are: a soft pill of the lamp's light ---------- */
+:root :is(.main-nav .nav-item-active, .main-nav button[aria-current='page']) {
+  background: var(--ll-glow);
+  color: var(--ll-ink);
+  box-shadow: inset 0 0 0 1px rgba(var(--ll-lamp-rgb), 0.18);
+}
+
+/* ---------- Fields: filled, the lamp's ring on focus ---------- */
+:root
+  .app-shell
+  :is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']),
+    textarea,
+    select
+  ) {
+  border-color: transparent;
+  border-radius: var(--ll-radius-sm);
+  background: var(--ll-inset);
+}
+
+:root .app-shell :is(input, textarea, select):focus-visible,
+:root :where(button, a, summary, [role='switch'], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--ll-focus);
+}
+
+/* ---------- Icons: Lamplight's weight; the one for where you are is lit from inside ---------- */
+:root .lucide {
+  stroke-width: 1.7;
+}
+
+:root :is([aria-current='page'], .nav-item-active, .mobile-bottom-active, [aria-selected='true']) .lucide {
+  fill: rgba(var(--ll-lamp-rgb), 0.2);
+}
+
+/* ---------- Type: the serif titles sit a touch tighter, as set type does at size ---------- */
+:root :is(h1, h2) {
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Bars and sheets: glass with depth ---------- */
+:root .mobile-bottom-nav {
+  background: var(--ll-bar);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 var(--ll-hair),
+    0 -12px 30px -18px rgba(0, 0, 0, 0.6);
+}
+
+:root :is(dialog, [role='dialog']) {
+  box-shadow: var(--ll-light-3);
+}

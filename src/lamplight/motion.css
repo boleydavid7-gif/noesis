@@ -1,0 +1,92 @@
+/* Lamplight, copied from Proairetos (src/lamplight/motion.css); change it there first and copy it here. */
+/*
+ * Motion as light. Where Material answers a touch with a ripple, Lamplight answers with light: a pressed control
+ * brightens at once, its edge catching the lamp, and dims slowly when let go, the way a filament fades. Sheets
+ * dim the room around them and leave the lamp's light at the top. Opacity, filter and shadow only, never layout;
+ * with reduced motion the durations are zero (tokens.css), so the light simply comes and goes.
+ */
+
+:where(
+  button,
+  [role='button'],
+  [role='switch'],
+  a.button-main,
+  .button-main,
+  .button-quiet,
+  .chip,
+  .ll-button,
+  .ll-chip,
+  .ll-row,
+  .row,
+  .place-row,
+  .settings-row
+) {
+  transition: filter var(--ll-dim) var(--ll-ease-light);
+}
+
+:where(
+    button,
+    [role='button'],
+    [role='switch'],
+    a.button-main,
+    .button-main,
+    .button-quiet,
+    .chip,
+    .ll-button,
+    .ll-chip,
+    .ll-row,
+    .row,
+    .place-row,
+    .settings-row
+  ):active:not(:disabled) {
+  filter: brightness(1.12) drop-shadow(0 0 10px rgba(var(--ll-lamp-rgb, 230, 179, 102), 0.35));
+  transition-duration: var(--ll-quick);
+}
+
+/* In daylight a brighter surface would wash out; the lamp's edge alone carries the press. */
+:root[data-theme='light']
+  :where(
+    button,
+    [role='button'],
+    [role='switch'],
+    a.button-main,
+    .button-main,
+    .button-quiet,
+    .chip,
+    .ll-button,
+    .ll-chip,
+    .ll-row,
+    .row,
+    .place-row,
+    .settings-row
+  ):active:not(:disabled) {
+  filter: drop-shadow(0 0 8px rgba(var(--ll-lamp-rgb, 217, 163, 82), 0.45));
+}
+
+/* A sheet dims the room; the lamp's light stays at the top of what is left. */
+.sheet::backdrop,
+.ll-dim {
+  background:
+    radial-gradient(120% 60% at 70% 0%, rgba(var(--ll-lamp-rgb, 230, 179, 102), 0.1), transparent 60%),
+    rgba(var(--ll-page-rgb, 4, 5, 6), 0.68);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+      button,
+      [role='button'],
+      [role='switch'],
+      a.button-main,
+      .button-main,
+      .button-quiet,
+      .chip,
+      .ll-button,
+      .ll-chip,
+      .ll-row,
+      .row,
+      .place-row,
+      .settings-row
+    ):active:not(:disabled) {
+    filter: none;
+  }
+}

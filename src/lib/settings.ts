@@ -1,3 +1,4 @@
+import { noesisScheme, noesisVars } from '../lamplight/noesis'
 // User preferences, stored locally. Every value here is read by the app, so a
 // setting that appears in the Settings page changes behavior.
 
@@ -494,41 +495,27 @@ export function updateSetting<S extends keyof Settings, K extends keyof Settings
   return { ...settings, [section]: { ...settings[section], [key]: value } }
 }
 
-// What the document root needs so appearance settings take effect everywhere.
-// Gold is the stylesheet's own default, so it sets no variables at all.
+// The scheme (Lamplight, deep cut) for the chosen color and background.
+export function appearanceScheme(settings: Settings) {
+  const { accent, surface } = settings.appearance
+  return noesisScheme(accent, surface, SURFACES[surface].vars['--surface-shell'])
+}
+
+// What the document root needs so appearance settings take effect everywhere: every color is made by Lamplight's
+// scheme from the chosen color (the lamp) and background (the room), checked for contrast.
 export function rootAppearance(settings: Settings): { classes: string[]; vars: Record<string, string> } {
-  const accent = ACCENTS[settings.appearance.accent]
-  const custom = settings.appearance.accent !== 'gold'
   return {
     classes: [
       settings.appearance.scenery ? '' : 'no-scenery',
       settings.appearance.reduceMotion ? 'reduce-motion' : '',
       settings.appearance.compact ? 'compact' : '',
     ].filter(Boolean),
-    vars: {
-      ...SURFACES[settings.appearance.surface].vars,
-      ...(custom
-        ? {
-            '--gold-warm': accent.main,
-            '--gold-soft': accent.soft,
-            '--accent-light': accent.light,
-            '--accent-fill': accent.fill,
-            '--accent-border': accent.border,
-            '--accent-hover': accent.hover,
-            '--accent-rgb': accent.rgb,
-            '--accent-mark': accent.main,
-          }
-        : {}),
-    },
+    vars: noesisVars(appearanceScheme(settings)),
   }
 }
 
 /** The colors Noesis's drawn wallpaper is made from: the page, the chosen color and the background's own hue. */
 export function wallpaperColors(settings: Settings): { page: string; accent: string; hue: string } {
-  const { accent, surface } = settings.appearance
-  return {
-    page: SURFACES[surface].vars['--surface-shell'] ?? '#08111c',
-    accent: accent === 'gold' ? '#e2b86e' : ACCENTS[accent].main,
-    hue: SURFACE_SWATCH[surface],
-  }
+  const scheme = appearanceScheme(settings)
+  return { page: scheme.page, accent: scheme.lamp, hue: SURFACE_SWATCH[settings.appearance.surface] }
 }
