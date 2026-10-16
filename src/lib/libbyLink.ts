@@ -97,6 +97,7 @@ export function mergeLibbyLoans(loans: Loan[], fromLibby: LibbyLoan[], now = new
       due: day(item.due),
       lender: item.library,
       renewUrl: item.link,
+      readUrl: item.read,
       cover: item.cover,
       libbyId: item.id,
     }
@@ -114,6 +115,7 @@ export function mergeLibbyLoans(loans: Loan[], fromLibby: LibbyLoan[], now = new
       before.due !== fields.due ||
       before.cover !== fields.cover ||
       before.renewUrl !== fields.renewUrl ||
+      before.readUrl !== fields.readUrl ||
       before.libbyId !== fields.libbyId ||
       Boolean(before.returnedAt)
     if (changed)

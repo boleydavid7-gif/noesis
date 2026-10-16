@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   activeLoans,
+  bookForLoan,
+  isLibbyBook,
+  libbyBooksWithoutLoan,
   dueSoon,
   dueText,
   LIBBY_SHELF,
@@ -51,5 +54,23 @@ describe('loans', () => {
     expect(renewed(first, '2026-12-01').renewals).toBe(2)
     expect(returned(first).returnedAt).toBeTruthy()
     expect(weeksFrom('2026-10-15', 3)).toBe('2026-11-05')
+  })
+})
+
+describe('Libby books under Borrowed', () => {
+  const libby = { id: 'b1', title: 'The Overstory', format: 'external' as const, store: 'Libby' }
+  const kindle = { id: 'b2', title: 'Dune', format: 'external' as const, store: 'Kindle' }
+  const byLink = { id: 'b3', title: 'Circe', format: 'external' as const, externalUrl: 'https://libbyapp.com/shelf' }
+  const loan = newLoan({ title: 'the overstory', kind: 'ebook', due: '2026-10-30' })
+
+  it('knows a Libby e-book by its store or its link', () => {
+    expect([libby, kindle, byLink].map(isLibbyBook)).toEqual([true, false, true])
+  })
+
+  it('joins a loan to the Libby e-book of the same title, and lists the rest without a due date', () => {
+    expect(bookForLoan(loan, [kindle, libby])).toBe(libby)
+    expect(bookForLoan({ ...loan, kind: 'physical' }, [libby])).toBeUndefined()
+    expect(libbyBooksWithoutLoan([libby, kindle, byLink], [loan])).toEqual([byLink])
+    expect(libbyBooksWithoutLoan([libby], [{ ...loan, returnedAt: '2026-10-01' }])).toEqual([libby])
   })
 })

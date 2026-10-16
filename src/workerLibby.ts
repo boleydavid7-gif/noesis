@@ -26,6 +26,7 @@ export type LibbyLoan = {
   cover?: string
   library?: string
   libraryKey?: string
+  read?: string // opens the loan in Libby's reader
   link: string
 }
 
@@ -173,6 +174,9 @@ export function loansFromSync(sync: Record<string, unknown>): LibbyLoan[] {
         library,
         libraryKey,
         link: `https://share.libbyapp.com/title/${id}`,
+        read: /^\d+$/.test(String(loan.cardId ?? ''))
+          ? `https://libbyapp.com/open/loan/${String(loan.cardId)}/${id}`
+          : undefined,
       },
     ]
   })

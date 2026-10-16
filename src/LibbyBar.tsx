@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, Search } from 'lucide-react'
 import { useChosenLibrary } from './lib/publicLibrary'
-import { LIBBY_SHELF, libbyLibrary, libbySearch } from './lib/libby'
+import { LIBBY_SHELF, libbyLibrary, libbyLinkProps, libbySearch } from './lib/libby'
 
 const open = (url: string) => window.open(url, '_blank', 'noopener,noreferrer')
 
@@ -49,7 +49,7 @@ export function SearchLibbyLink({ query }: { query: string }) {
   const library = useChosenLibrary()
   if (!library?.libbyKey || !query.trim()) return null
   return (
-    <a className="text-button" href={libbySearch(library, query)} target="_blank" rel="noopener noreferrer">
+    <a className="text-button" {...libbyLinkProps(libbySearch(library, query))}>
       Search Libby for “{query.trim()}” <ExternalLink size={13} />
     </a>
   )

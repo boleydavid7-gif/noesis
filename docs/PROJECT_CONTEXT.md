@@ -225,6 +225,12 @@ and a Wrangler dry run. The live health endpoint is
   server. The token stays on the device (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans`
   (`lib/libbyLink.ts`) lays Libby's loans over Borrowed: due dates follow renewals, a hand-typed e-book of the same
   title is joined, a loan Libby no longer has is marked returned; paper copies are untouched. Each Libby loan shows its
-  cover, which opens the book in Libby (`share.libbyapp.com/title/ID`); Renew opens it too. Updates when Borrowed opens
-  (at most every 15 minutes) or on Update; a refused token asks to connect again.
+  cover and Read, which open the loan in Libby's reader (`libbyapp.com/open/loan/CARD/ID`); Renew opens its page
+  (`share.libbyapp.com/title/ID`). Updates when Borrowed opens
+  (at most every 15 minutes) or on Update; a refused token asks to connect again. Libby e-books added by hand sit under
+  Borrowed too (`isLibbyBook`), joined to their loan by title (`bookForLoan`) or listed without a due date; External
+  e-books leaves them out. Libby links open the Libby app on phones (`libbyLinkProps`: Android intent link to
+  `com.overdrive.mobile.android.libby` with the web page as fallback; iPhone follows the link in place so the app can
+  take it); computers open a new tab. The old Libby card on the Library page is gone (Open Libby sits in Borrowed's
+  Libby line; Search Libby stays in Explore).
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".

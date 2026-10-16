@@ -394,3 +394,19 @@ body {
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* Links that act as buttons look like the buttons beside them. */
+a.primary-button,
+a.secondary-button,
+a.text-button {
+  text-decoration: none;
+}
+.libby-connect-row {
+  row-gap: 4px;
+}
+.libby-connect-row > span {
+  flex: 1 1 8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

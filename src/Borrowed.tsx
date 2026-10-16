@@ -6,9 +6,11 @@ import {
   LIBBY_SHELF,
   LOAN_KINDS,
   activeLoans,
+  bookForLoan,
   daysLeft,
   dueSoon,
   dueText,
+  libbyBooksWithoutLoan,
   localDay,
   newLoan,
   onLoansChanged,
@@ -32,6 +34,13 @@ import {
   writeLibbyLink,
 } from './lib/libbyLink'
 import { timeAgo } from './lib/time'
+import { libbyLinkProps } from './lib/libby'
+
+// Libby pages open the Libby app where the phone has it (lib/libby.ts); other links open a new tab.
+const linkTo = (url: string) =>
+  /^https:\/\/([\w-]+\.)?libbyapp\.com\//.test(url)
+    ? libbyLinkProps(url)
+    : { href: url, target: '_blank', rel: 'noreferrer noopener' }
 
 export function useLoans(): [Loan[], (next: Loan[]) => void] {
   const [loans, setLoans] = useState(readLoans)
@@ -68,10 +77,8 @@ function LoanRow({
       {loan.cover ? (
         <a
           className="loan-cover"
-          href={loan.renewUrl ?? LIBBY_SHELF}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={`Open “${loan.title}” in Libby`}
+          {...linkTo(loan.readUrl ?? loan.renewUrl ?? LIBBY_SHELF)}
+          aria-label={`Read “${loan.title}” in Libby`}
         >
           <img src={loan.cover} alt="" referrerPolicy="no-referrer" />
         </a>
@@ -121,12 +128,15 @@ function LoanRow({
           </form>
         ) : (
           <div className="loan-actions">
+            {loan.readUrl ? (
+              <a className="primary-button" {...linkTo(loan.readUrl)}>
+                <BookOpen size={13} /> Read
+              </a>
+            ) : null}
             {renewAt ? (
               <a
                 className="secondary-button"
-                href={renewAt}
-                target="_blank"
-                rel="noreferrer noopener"
+                {...linkTo(renewAt)}
                 onClick={() => {
                   if (!loan.libbyId) setRenewing(true)
                 }}
@@ -135,7 +145,7 @@ function LoanRow({
               </a>
             ) : null}
             {loan.kind !== 'physical' && renewAt !== LIBBY_SHELF && !loan.libbyId ? (
-              <a className="text-button" href={LIBBY_SHELF} target="_blank" rel="noreferrer noopener">
+              <a className="text-button" {...linkTo(LIBBY_SHELF)}>
                 Open in Libby <ExternalLink size={11} />
               </a>
             ) : null}
@@ -166,10 +176,12 @@ function LoanRow({
 export function Borrowed({
   books,
   onOpenBook,
+  onRemoveBook,
   compact = false,
 }: {
   books: LibraryBook[]
   onOpenBook?: (book: LibraryBook) => void
+  onRemoveBook?: (book: LibraryBook) => void
   compact?: boolean
 }) {
   const [loans, save] = useLoans()
@@ -186,7 +198,9 @@ export function Borrowed({
     .filter((loan) => loan.returnedAt)
     .sort((a, b) => (b.returnedAt ?? '').localeCompare(a.returnedAt ?? ''))
   if (compact && !shown.length) return null
-  const bookFor = (loan: Loan) => books.find((book) => book.id === loan.bookId)
+  const bookFor = (loan: Loan) => bookForLoan(loan, books)
+  // Libby e-books kept in the library with no open loan (added by hand, or read before Libby was connected).
+  const libbyOnly = compact ? [] : libbyBooksWithoutLoan(books, loans)
   return (
     <section className={`section-block borrowed${compact ? ' borrowed-compact' : ''}`} aria-label="Borrowed">
       <div className="section-heading">
@@ -225,9 +239,42 @@ export function Borrowed({
             />
           ))}
         </ul>
-      ) : compact ? null : (
+      ) : compact || libbyOnly.length ? null : (
         <p className="context-empty">Nothing borrowed. Add a loan to keep its due date here.</p>
       )}
+      {libbyOnly.length ? (
+        <ul className="loan-list">
+          {libbyOnly.map((book) => (
+            <li key={book.id} className="loan-row">
+              <span className="loan-icon" aria-hidden="true">
+                <BookOpen size={16} />
+              </span>
+              <div className="loan-body">
+                {onOpenBook ? (
+                  <button className="loan-title" onClick={() => onOpenBook(book)}>
+                    {book.title}
+                  </button>
+                ) : (
+                  <strong className="loan-title">{book.title}</strong>
+                )}
+                <small>
+                  {[book.author !== 'Unknown author' ? book.author : '', 'Libby'].filter(Boolean).join(' · ')}
+                </small>
+                <div className="loan-actions">
+                  <a className="text-button" {...linkTo(book.externalUrl ?? LIBBY_SHELF)}>
+                    Open in Libby <ExternalLink size={11} />
+                  </a>
+                  {onRemoveBook ? (
+                    <button className="text-button" onClick={() => onRemoveBook(book)}>
+                      <Trash2 size={13} /> Remove
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {!compact && past.length ? (
         <details className="loan-past">
           <summary>Returned ({past.length})</summary>
@@ -352,7 +399,7 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
   return (
     <div className="libby-connect">
       <div className="libby-connect-row">
-        <span>Libby{link.checked ? ` · updated ${timeAgo(link.checked)}` : ''}</span>
+        <span>Libby{link.checked ? ` · ${timeAgo(link.checked)}` : ''}</span>
         {leaving ? (
           <>
             <button
@@ -373,6 +420,9 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
             <button className="text-button" onClick={() => void update()} disabled={busy}>
               {busy ? 'Updating…' : 'Update'}
             </button>
+            <a className="text-button" {...linkTo(LIBBY_SHELF)}>
+              Open Libby <ExternalLink size={11} />
+            </a>
             <button className="text-button" onClick={() => setLeaving(true)}>
               Disconnect
             </button>

@@ -45,6 +45,7 @@ describe('Libby bridge', () => {
         library: 'Los Angeles Public Library',
         libraryKey: 'lapl',
         link: 'https://share.libbyapp.com/title/1234567',
+        read: 'https://libbyapp.com/open/loan/9/1234567',
       },
     ])
     expect(loansFromSync({})).toEqual([])
@@ -188,6 +189,7 @@ describe('Libby loans in Borrowed', () => {
       libbyId: '1234567',
       cover: 'https://img1.od-cdn.com/ImageType-100/x.jpg',
       renewUrl: 'https://share.libbyapp.com/title/1234567',
+      readUrl: 'https://libbyapp.com/open/loan/9/1234567',
       lender: 'Los Angeles Public Library',
     })
     expect(loan.due).toMatch(/^2026-10-3[01]$/)

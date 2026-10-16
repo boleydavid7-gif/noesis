@@ -132,8 +132,8 @@ import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
 import { AddExternalBook, Borrowed } from './Borrowed'
-import { LibbyBar, SearchLibbyLink } from './LibbyBar'
-import { newLoan, readLoans, writeLoans } from './lib/loans'
+import { SearchLibbyLink } from './LibbyBar'
+import { isLibbyBook, newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
 import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
 import { exploreInto, isExploring, questionsToPrepare, type EditSubject } from './lib/subjectExplore'
@@ -2745,8 +2745,7 @@ function App() {
                 ) : null
               })()
             : null}
-          <LibbyBar />
-          <Borrowed books={books} onOpenBook={openSavedBook} />
+          <Borrowed books={books} onOpenBook={openSavedBook} onRemoveBook={deleteBook} />
           <BookSection
             title="On this device"
             books={filteredBooks.filter((book) => book.format !== 'external')}
@@ -2806,7 +2805,7 @@ function App() {
           ) : null}
           <BookSection
             title="External e-books"
-            books={filteredBooks.filter((book) => book.format === 'external')}
+            books={filteredBooks.filter((book) => book.format === 'external' && !isLibbyBook(book))}
             onOpen={openSavedBook}
             onDelete={deleteBook}
             onEdit={editBook}
@@ -2817,7 +2816,7 @@ function App() {
             onRead={setBookRead}
             onImport={() => setAddingExternal(true)}
             importLabel="Add an external e-book"
-            emptyText="E-books you read in Kindle, Libby, Apple Books or anywhere else. Add one to keep it with your library."
+            emptyText="E-books you read in Kindle, Apple Books or anywhere else. Add one to keep it with your library."
           />
         </div>
       </Page>

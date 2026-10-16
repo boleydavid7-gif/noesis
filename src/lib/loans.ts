@@ -2,6 +2,7 @@
 // has the same list. Renewing happens at the library (Libby, the library's catalog, or a link the reader sets);
 // Noesis opens the right page and records the new date.
 import type { LibrarySystem } from './publicLibrary'
+import type { LibraryBook } from './library'
 
 export type LoanKind = 'ebook' | 'audiobook' | 'physical'
 export const LOAN_KINDS: Array<{ id: LoanKind; label: string }> = [
@@ -21,6 +22,7 @@ export type Loan = {
   bookId?: string // the book in the Noesis library, when there is one
   libbyId?: string // the title in Libby, for loans brought in from a connected Libby
   cover?: string
+  readUrl?: string // opens the loan in Libby's reader
   renewals?: number
   returnedAt?: string
   added: string
@@ -129,4 +131,33 @@ export function weeksFrom(today: string, weeks: number): string {
   const date = atNoon(today)
   date.setDate(date.getDate() + weeks * 7)
   return localDay(date)
+}
+
+// An e-book kept in the library as read in Libby: it sits under Borrowed, not with the other external e-books.
+export const isLibbyBook = (book: Pick<LibraryBook, 'format' | 'store' | 'externalUrl'>) =>
+  book.format === 'external' &&
+  (book.store === 'Libby' || /^https:\/\/([\w-]+\.)?libbyapp\.com\//.test(book.externalUrl ?? ''))
+
+const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/** The library book a loan is for: the one it was linked to, else a Libby e-book with the same title. */
+export function bookForLoan<B extends Pick<LibraryBook, 'id' | 'title' | 'format' | 'store' | 'externalUrl'>>(
+  loan: Pick<Loan, 'bookId' | 'title' | 'kind'>,
+  books: B[],
+): B | undefined {
+  return (
+    books.find((book) => book.id === loan.bookId) ??
+    (loan.kind === 'physical'
+      ? undefined
+      : books.find((book) => isLibbyBook(book) && sameTitle(book.title, loan.title)))
+  )
+}
+
+/** Libby e-books in the library with no open loan: shown under Borrowed without a due date. */
+export function libbyBooksWithoutLoan<B extends Pick<LibraryBook, 'id' | 'title' | 'format' | 'store' | 'externalUrl'>>(
+  books: B[],
+  loans: Loan[],
+): B[] {
+  const open = activeLoans(loans)
+  return books.filter((book) => isLibbyBook(book) && !open.some((loan) => bookForLoan(loan, [book])))
 }
