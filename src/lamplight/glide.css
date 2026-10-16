@@ -1,0 +1,346 @@
+/*
+ * Noesis's motion between places (glide.ts), the premium cut of Lamplight 1.3. Loaded last.
+ *
+ * - One light marks where you are, in the dock and the sidebar, and slides to the new place on a lively spring.
+ * - Pages slide in the direction of travel; the dock, sidebar and bar hold still while they do.
+ * - On phones the sidebar drawer glides in on a spring while the page steps back into the room.
+ * - On phones the top bar stays: clear over the page at rest, mica with a hairline once the page scrolls, its large
+ *   title settling smaller; the dock steps aside reading down and comes back on the way up.
+ * Motion turned down (the phone's setting or Noesis's own) keeps every change, without the travel.
+ */
+
+/* The shell clips rather than hides its overflow: the same look, without becoming a scroll box of its own, so the
+   phone's top bar can stay at the top of the page. */
+:root .app-shell {
+  overflow: clip;
+}
+
+/* ---------- The traveling light ---------- */
+/* The light sits behind the host's places; the dock is already placed (fixed), the sidebar list becomes the frame. */
+:root .nx-glide-host {
+  isolation: isolate;
+}
+
+:root .main-nav.nx-glide-host {
+  position: relative;
+}
+
+:root .nx-glide {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 0;
+  width: var(--glide-w, 0);
+  height: var(--glide-h, 0);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 60%),
+    var(--ll-glow, rgba(230, 179, 102, 0.16));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(var(--ll-lamp-rgb, 230, 179, 102), 0.2),
+    0 8px 22px -12px rgba(var(--ll-lamp-rgb, 230, 179, 102), 0.55);
+  opacity: var(--glide-on, 0);
+  transform: translate(var(--glide-x, 0), var(--glide-y, 0));
+  pointer-events: none;
+}
+
+:root .nx-glide-ready > .nx-glide {
+  transition:
+    transform 520ms var(--ll-spring-lively),
+    width 520ms var(--ll-spring-lively),
+    height 520ms var(--ll-spring-lively),
+    opacity var(--ll-calm) var(--ll-ease-out);
+}
+
+/* The light replaces each place's own background; the place keeps its lit ink and icon. */
+:root .app-shell .main-nav.nx-glide-host .nav-item-active,
+:root .app-shell .mobile-bottom-nav.nx-glide-host .mobile-bottom-active {
+  background: transparent;
+  box-shadow: none;
+}
+
+:root .mobile-bottom-nav.nx-glide-host > .nx-glide {
+  border-radius: 12px;
+}
+
+:root .main-nav.nx-glide-host > .nx-glide {
+  border-radius: 10px;
+}
+
+/* The place's icon rises a hair as the light arrives, and settles back as it leaves. */
+:root :is(.mobile-bottom-nav, .main-nav) button .lucide {
+  transition:
+    transform 420ms var(--ll-spring-lively),
+    fill var(--ll-calm) var(--ll-ease-out);
+}
+
+:root .mobile-bottom-nav .mobile-bottom-active .lucide {
+  transform: translateY(-1px) scale(1.08);
+}
+
+:root .main-nav .nav-item-active .lucide {
+  transform: scale(1.06);
+}
+
+/* ---------- Pages slide toward where they sit ---------- */
+:root .page-content {
+  view-transition-name: nx-page;
+}
+
+:root .sidebar {
+  view-transition-name: nx-sidebar;
+}
+
+:root .mobile-bottom-nav {
+  view-transition-name: nx-dock;
+}
+
+:root .topbar {
+  view-transition-name: nx-top;
+}
+
+/* The bars hold still: their live state shows at once, so the dock's light is seen traveling. */
+::view-transition-old(nx-sidebar),
+::view-transition-old(nx-dock) {
+  display: none;
+}
+
+::view-transition-new(nx-sidebar),
+::view-transition-new(nx-dock) {
+  animation: none;
+}
+
+::view-transition-group(nx-top) {
+  animation-duration: 260ms;
+}
+
+::view-transition-old(nx-page),
+::view-transition-new(nx-page) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ll-spring);
+  animation-fill-mode: both;
+}
+
+::view-transition-group(nx-page) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ll-spring);
+}
+
+:root[data-nav-dir='forward']::view-transition-old(nx-page) {
+  animation-name: nx-leave-left;
+}
+
+:root[data-nav-dir='forward']::view-transition-new(nx-page) {
+  animation-name: nx-enter-right;
+}
+
+:root[data-nav-dir='back']::view-transition-old(nx-page) {
+  animation-name: nx-leave-right;
+}
+
+:root[data-nav-dir='back']::view-transition-new(nx-page) {
+  animation-name: nx-enter-left;
+}
+
+/* The page leaving dims and drifts a little; the one arriving comes the full way, so the eye follows it in. */
+@keyframes nx-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(64px);
+  }
+}
+
+@keyframes nx-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-64px);
+  }
+}
+
+@keyframes nx-leave-left {
+  to {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.985);
+  }
+}
+
+@keyframes nx-leave-right {
+  to {
+    opacity: 0;
+    transform: translateX(28px) scale(0.985);
+  }
+}
+
+/* ---------- Phones: the drawer, the top bar, the dock ---------- */
+@media (max-width: 900px) {
+  /* The drawer glides in on a spring and the page steps back into the room behind it. */
+  :root .sidebar {
+    transition:
+      transform 520ms var(--ll-spring),
+      box-shadow 520ms var(--ll-ease-out);
+    will-change: transform;
+  }
+
+  :root .sidebar:not(.sidebar-open) {
+    transition-timing-function: var(--ll-ease-in-out);
+    transition-duration: 320ms;
+  }
+
+  :root .page-content,
+  :root .topbar {
+    transition:
+      transform 520ms var(--ll-spring),
+      filter 520ms var(--ll-ease-out);
+    transform-origin: 0% 40%;
+  }
+
+  :root .app-shell:has(.sidebar-open) :is(.page-content, .topbar) {
+    filter: brightness(0.72);
+    transform: translateX(26px) scale(0.965);
+  }
+
+  :root .mobile-scrim {
+    animation: nx-scrim-in 320ms var(--ll-ease-out) both;
+  }
+
+  /* Its places arrive one after another, a few milliseconds apart. */
+  :root .sidebar-open .main-nav .nav-item {
+    animation: nx-place-in 480ms var(--ll-spring) both;
+  }
+
+  :root .sidebar-open .main-nav .nav-item:nth-of-type(2) {
+    animation-delay: 30ms;
+  }
+
+  :root .sidebar-open .main-nav .nav-item:nth-of-type(3) {
+    animation-delay: 60ms;
+  }
+
+  :root .sidebar-open .main-nav .nav-item:nth-of-type(4) {
+    animation-delay: 90ms;
+  }
+
+  :root .sidebar-open .main-nav .nav-item:nth-of-type(5) {
+    animation-delay: 120ms;
+  }
+
+  :root .sidebar-open .main-nav .nav-item:nth-of-type(n + 6) {
+    animation-delay: 150ms;
+  }
+
+  /* The top bar stays with you: clear at rest, mica once the page moves under it. */
+  :root .topbar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    min-height: calc(env(safe-area-inset-top) + 64px);
+    margin-inline: -20px;
+    padding: env(safe-area-inset-top) 16px 0;
+  }
+
+  :root .topbar::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: var(--ll-mica-surface, var(--ll-page));
+    box-shadow:
+      inset 0 -1px 0 var(--ll-hair),
+      0 12px 16px -6px var(--ll-mica, #0c1622);
+    opacity: 0;
+    transition: opacity var(--ll-calm) var(--ll-ease-out);
+    will-change: opacity;
+    pointer-events: none;
+  }
+
+  :root.nx-scrolled .topbar::before {
+    opacity: 1;
+  }
+
+  /* The app's mark sits before the title, as in the family's bars. */
+  :root .topbar-mark {
+    display: inline-flex;
+    flex: none;
+  }
+
+  /* The large title settles into the bar: one transform, so nothing reflows while scrolling. */
+  :root .topbar .greeting h1 {
+    transform-origin: 0% 50%;
+    transition: transform 420ms var(--ll-spring);
+  }
+
+  :root.nx-scrolled .topbar .greeting h1 {
+    transform: scale(0.74);
+  }
+
+  /* The dock steps aside reading down a page and comes back on the way up. */
+  :root .mobile-bottom-nav {
+    transition: translate 520ms var(--ll-spring);
+    will-change: translate;
+  }
+
+  :root.nx-tucked .mobile-bottom-nav {
+    translate: 0 calc(100% + 28px);
+  }
+}
+
+@media (max-width: 620px) {
+  :root .topbar {
+    margin-inline: -13px;
+    padding-inline: 13px;
+  }
+}
+
+@media (min-width: 901px) {
+  :root .topbar-mark {
+    display: none;
+  }
+}
+
+@keyframes nx-place-in {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+
+@keyframes nx-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------- Motion turned down: every change, none of the travel ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root .nx-glide-ready > .nx-glide,
+  :root .sidebar,
+  :root .page-content,
+  :root .topbar,
+  :root .topbar .greeting h1,
+  :root .mobile-bottom-nav {
+    transition: none;
+  }
+
+  :root .sidebar-open .main-nav .nav-item,
+  :root .mobile-scrim {
+    animation: none;
+  }
+}
+
+:root.reduce-motion .nx-glide-ready > .nx-glide,
+:root.reduce-motion :is(.sidebar, .page-content, .topbar, .topbar .greeting h1, .mobile-bottom-nav) {
+  transition: none;
+}
+
+:root.reduce-motion :is(.sidebar-open .main-nav .nav-item, .mobile-scrim) {
+  animation: none;
+}
+
+/* High contrast: the light becomes an outline in the system's highlight. */
+@media (forced-colors: active) {
+  :root .nx-glide {
+    border: 2px solid Highlight;
+    background: none;
+  }
+}

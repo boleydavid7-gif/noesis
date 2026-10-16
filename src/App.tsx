@@ -55,6 +55,8 @@ import './lamplight/tokens.css'
 import './lamplight/components.css'
 import './lamplight/motion.css'
 import './lamplight/noesis.css'
+import './lamplight/glide.css'
+import { pageDirection, useGlide, useScrollBars } from './lamplight/glide'
 import {
   hydrateRemoteNotes,
   persistNote,
@@ -382,8 +384,18 @@ function App() {
     }
   })
   const [activeNav, setActiveNavNow] = useState('Home')
-  // Moving between pages cross-fades where the browser can (View Transitions), unless motion is turned down.
-  const setActiveNav = useCallback((next: string) => moveTo(() => setActiveNavNow(next)), [])
+  const shownNav = useRef(activeNav)
+  shownNav.current = activeNav
+  // Moving between pages slides toward where the new place sits (View Transitions), unless motion is turned down.
+  const setActiveNav = useCallback(
+    (next: string) => moveTo(() => setActiveNavNow(next), pageDirection(shownNav.current, next)),
+    [],
+  )
+  const mainNav = useRef<HTMLElement>(null)
+  const dockNav = useRef<HTMLElement>(null)
+  useGlide(mainNav, '.nav-item-active', activeNav)
+  useGlide(dockNav, '.mobile-bottom-active', activeNav)
+  useScrollBars()
   const [libraryQuery, setLibraryQuery] = useState('')
   const [librarySort, setLibrarySort] = useState<LibrarySort>(() => settings.library.defaultSort)
   const [resourceQuery, setResourceQuery] = useState('')
@@ -3590,7 +3602,8 @@ function App() {
               <X size={18} />
             </button>
           </div>
-          <nav className="main-nav" aria-label="Main navigation">
+          <nav ref={mainNav} className="main-nav nx-glide-host" aria-label="Main navigation">
+            <span className="nx-glide" aria-hidden="true" />
             {navItems
               .filter(({ label }) => {
                 if (label === 'Review') return hasCards || activeNav === 'Review'
@@ -3662,6 +3675,9 @@ function App() {
           >
             <Menu size={20} />
           </button>
+          <span className="topbar-mark" aria-hidden="true">
+            <NoesisMark size={24} color="var(--mark-accent, #d5ab61)" />
+          </span>
           <div className="greeting">
             <h1>
               {activeNav === 'Home' ? 'Noesis' : (navItems.find((item) => item.label === activeNav)?.text ?? activeNav)}
@@ -3717,7 +3733,8 @@ function App() {
           </div>
         ) : null}
         <div className="page-content">{page}</div>
-        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        <nav ref={dockNav} className="mobile-bottom-nav nx-glide-host" aria-label="Mobile navigation">
+          <span className="nx-glide" aria-hidden="true" />
           <button className={activeNav === 'Home' ? 'mobile-bottom-active' : ''} onClick={() => selectNav('Home')}>
             <Home size={17} />
             <span>Home</span>

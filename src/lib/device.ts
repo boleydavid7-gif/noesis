@@ -127,11 +127,16 @@ export function oneAtATime<T>(name: string, work: () => Promise<T>): Promise<T> 
 }
 
 /**
- * Changes the page inside a view transition, so the old page cross-fades into the new one (Safari 18+, Chrome).
- * Without support, or with motion turned down (the phone's setting or Noesis's own), it changes at once.
+ * Changes the page inside a view transition (Safari 18+, Chrome). With a direction the page slides that way (the
+ * next place comes in from the right, an earlier one from the left); without one it cross-fades. Without support,
+ * or with motion turned down (the phone's setting or Noesis's own), it changes at once.
  */
-export function moveTo(change: () => void): void {
-  const start = (document as Document & { startViewTransition?: (update: () => void) => unknown }).startViewTransition
+export function moveTo(change: () => void, direction?: 'forward' | 'back'): void {
+  const start = (
+    document as Document & {
+      startViewTransition?: (update: () => void) => { finished?: Promise<unknown> } | undefined
+    }
+  ).startViewTransition
   const still =
     document.documentElement.classList.contains('reduce-motion') ||
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -139,9 +144,16 @@ export function moveTo(change: () => void): void {
     change()
     return
   }
+  const root = document.documentElement
+  if (direction) root.dataset.navDir = direction
+  else delete root.dataset.navDir
   try {
-    start.call(document, () => flushSync(change))
+    const moving = start.call(document, () => flushSync(change))
+    void moving?.finished?.finally(() => {
+      if (root.dataset.navDir === direction) delete root.dataset.navDir
+    })
   } catch {
+    delete root.dataset.navDir
     change()
   }
 }

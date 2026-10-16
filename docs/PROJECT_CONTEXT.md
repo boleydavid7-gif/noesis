@@ -254,3 +254,12 @@ and a Wrangler dry run. The live health endpoint is
 - Materials (Lamplight): no blur anywhere. Bars are mica (`--ll-mica`, from the scheme: opaque, the room's hue a little
   stronger than the page, the lamp washing in from above, `--ll-mica-surface` in `src/lamplight/noesis.css`); backdrops are a
   plain dim. `backdrop-filter` is not used.
+- Motion between places (`src/lamplight/glide.ts`, `glide.css`, loaded last): one light marks where you are in the dock
+  and the sidebar (`useGlide`: a `.nx-glide` span in each nav, placed from the current item's box and sliding on
+  `--ll-spring-lively`; springs are in `tokens.css`). Pages slide in the direction of travel (`pageDirection` by nav
+  order, `moveTo(change, direction)` sets `data-nav-dir` for the view transition; `.page-content` is `nx-page`, the
+  dock and sidebar hold still). On phones the drawer glides in on a spring while the page steps back (scaled and dimmed),
+  its places arriving in turn; the top bar is sticky (`.app-shell` uses `overflow: clip`, since `hidden` would trap it),
+  clear at rest with the mark before the title, mica and a hairline once the page scrolls (`nx-scrolled`), the title
+  settling by one transform; the dock steps aside reading down and comes back on the way up, at the top or the foot
+  (`nx-tucked`, `useScrollBars`, which reads only the scroll). Motion turned down keeps every change without travel.
