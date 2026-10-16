@@ -975,10 +975,7 @@ function QuestionPage({
   const loading = useSyncExternalStore(subscribeExploring, () => isExploring(question.id))
   const failure = useSyncExternalStore(subscribeExploring, () => exploreError(question.id))
   const error =
-    failure ||
-    (!loading && question.picks && question.picks.length === 0
-      ? 'Nothing could be confirmed this time. Try again later.'
-      : '')
+    failure || (!loading && question.picks && question.picks.length === 0 ? 'Nothing found. Try again later.' : '')
   function explore(fresh = false) {
     const reading = library.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
     void exploreInto(
@@ -1033,7 +1030,7 @@ function QuestionPage({
         trail: trail.map((step) => step.text),
       })
       const fresh = found.filter((text) => !known(text))
-      if (!fresh.length) setDigError('Nothing new this time.')
+      if (!fresh.length) setDigError('Nothing new.')
       setIdeas(fresh)
     } catch (reason) {
       setDigError(
@@ -1041,7 +1038,7 @@ function QuestionPage({
           ? 'Sign in for ideas.'
           : reason instanceof Error
             ? reason.message
-            : 'Noema could not find ideas right now.',
+            : 'No ideas right now.',
       )
     } finally {
       setDigging(false)
@@ -1126,7 +1123,7 @@ function QuestionPage({
           <Lightbulb size={16} aria-hidden="true" />
           <input
             value={guess}
-            placeholder="Your guess first (optional)"
+            placeholder="Your guess"
             aria-label="Your guess"
             onChange={(event) => setGuess(event.target.value)}
             onBlur={() => {
@@ -1159,10 +1156,10 @@ function QuestionPage({
 
       <section className="q-section question-block">
         <div className="q-label-row">
-          <h4 className="q-label">Read, watch, listen</h4>
+          <h4 className="q-label">Explore</h4>
           {!loading ? (
             <button className="text-button" onClick={() => explore(Boolean(question.picks?.length))}>
-              <Search size={13} /> {picks.length ? 'Find others' : 'Find things'}
+              <Search size={13} /> {picks.length ? 'More' : 'Find'}
             </button>
           ) : null}
         </div>
@@ -1171,7 +1168,7 @@ function QuestionPage({
             <span className="skeleton" />
             <span className="skeleton" />
             <span className="skeleton" />
-            <small>Finding and checking links…</small>
+            <small>Finding…</small>
           </div>
         ) : null}
         {error ? <p className="weather-error">{error}</p> : null}
@@ -1232,7 +1229,7 @@ function QuestionPage({
                     setEditing(true)
                   }}
                 >
-                  Open it again
+                  Reopen
                 </button>
                 {onNote ? (
                   <button className="text-button" onClick={() => onNote(question.text, path.title)}>
@@ -1247,14 +1244,14 @@ function QuestionPage({
                 event.preventDefault()
                 onSave(answerQuestion(subject, question.id, answer, used))
                 setEditing(false)
-                onNotice('Answer kept.')
+                onNotice('Saved.')
               }}
             >
               <textarea
                 rows={3}
                 value={answer}
                 onChange={(event) => setAnswer(event.target.value)}
-                placeholder="A sentence or two, once you know"
+                placeholder="Your answer"
                 aria-label="Your answer"
                 maxLength={600}
               />
@@ -1279,7 +1276,7 @@ function QuestionPage({
               ) : null}
               <div className="subject-actions">
                 <button className="primary-button" type="submit" disabled={!answer.trim()}>
-                  Keep answer
+                  Save
                 </button>
                 {question.answer ? (
                   <button type="button" className="text-button" onClick={() => setEditing(false)}>
@@ -1294,7 +1291,7 @@ function QuestionPage({
 
       {question.useIt ? (
         <section className="q-section question-use">
-          <h4 className="q-label">Use it (optional)</h4>
+          <h4 className="q-label">Use it</h4>
           <div className="q-card">
             <p>{question.useIt.text}</p>
             {question.useIt.doneAt ? (
@@ -1348,7 +1345,7 @@ function QuestionPage({
             <input
               value={side}
               onChange={(event) => setSide(event.target.value)}
-              placeholder="What do you want to know next?"
+              placeholder="Next question"
               aria-label="Your next question"
               maxLength={200}
               enterKeyHint="go"
@@ -1373,7 +1370,7 @@ function QuestionPage({
             ) : null
           })()}
           <button className="text-button deeper-more" onClick={() => void dig()} disabled={digging}>
-            <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'Other ideas' : 'Need an idea?'}
+            <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'More ideas' : 'Ideas'}
           </button>
           {digError ? <p className="weather-error">{digError}</p> : null}
         </div>
