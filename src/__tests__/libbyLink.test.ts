@@ -70,7 +70,6 @@ describe('Libby bridge', () => {
       '/chip?client=dewey',
       '/chip/clone/code',
       '/chip?client=dewey',
-      '/chip/sync',
     ])
     expect(new Headers(calls[1].init?.headers).get('authorization')).toBe('Bearer first')
     expect(JSON.parse(String(calls[1].init?.body))).toEqual({ code: '12345678' })
@@ -107,14 +106,32 @@ describe('Libby bridge', () => {
     ).rejects.toThrow('Libby did not answer (starting, 503).')
   })
 
-  it('counts the device joined when the card shows up, whatever Libby replied to the code', async () => {
+  it('keeps the device when Libby says cloned, even before the card reaches it', async () => {
     const fetcher = fakeFetch([
       [200, { identity: 'first' }],
       [200, { result: 'cloned' }],
       [200, { identity: 'joined' }],
-      [200, SYNC],
     ])
     await expect(connectLibby(fetcher, '12345678')).resolves.toMatchObject({ token: 'joined' })
+  })
+
+  it('on any other reply, counts the device joined once the card shows up', async () => {
+    const fetcher = fakeFetch([
+      [200, { identity: 'first' }],
+      [200, { result: 'ok' }],
+      [200, { identity: 'joined' }],
+      [200, { result: 'synchronized', cards: [] }],
+      [200, SYNC],
+    ])
+    await expect(connectLibby(fetcher, '12345678', async () => undefined)).resolves.toMatchObject({
+      token: 'joined',
+    })
+  })
+
+  it('says what Libby sent when a joined device has no card yet', async () => {
+    await expect(libbyLoans(fakeFetch([[200, { result: 'synchronized', loans: [] }]]), 'tok')).rejects.toThrow(
+      'Connected, but Libby sent no library card yet (result, loans, synchronized). Try Update in a minute.',
+    )
   })
 
   it('says plainly when the code is wrong or Libby refuses the token', async () => {
@@ -126,8 +143,11 @@ describe('Libby bridge', () => {
           [200, { result: 'invalid_code' }],
           [200, { identity: 'first' }],
           [200, { result: 'synchronized', cards: [] }],
+          [200, { result: 'synchronized', cards: [] }],
+          [200, { result: 'synchronized', cards: [] }],
         ]),
         '12345678',
+        async () => undefined,
       ),
     ).rejects.toThrow('did not work. Codes last about a minute; make a new one. Libby said: invalid_code.')
     const refused = await libbyLoans(fakeFetch([[401, {}]]), 'old').catch((error: LibbyError) => error)

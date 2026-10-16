@@ -86,7 +86,11 @@ const identity = (chip: Record<string, unknown>, step: Step) => {
  * Joins this device to the reader's Libby with the 8-digit code from Copy To Another Device. Returns the token and
  * the address that answered, which later requests use.
  */
-export async function connectLibby(fetcher: Fetcher, code: string): Promise<{ token: string; host: string }> {
+export async function connectLibby(
+  fetcher: Fetcher,
+  code: string,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms)),
+): Promise<{ token: string; host: string }> {
   if (!/^\d{8}$/.test(code)) throw new LibbyError('Enter the 8-digit code from Libby.', 400)
   let first = ''
   let host = ''
@@ -101,23 +105,30 @@ export async function connectLibby(fetcher: Fetcher, code: string): Promise<{ to
     }
   }
   if (!host) throw problem
-  // Libby's reply to the code is not a reliable sign (it can read as a refusal after Libby has accepted the code),
-  // so whether the device joined is judged by whether a library card shows up afterwards.
   const cloned = await call(fetcher, host, '/chip/clone/code', 'joining', {
     method: 'POST',
     token: first,
     body: { code },
   })
+  const said = typeof cloned.result === 'string' ? cloned.result.slice(0, 60) : ''
   // The token changes once the device is joined.
   const token = identity(
     await call(fetcher, host, '/chip?client=dewey', 'finishing', { method: 'POST', token: first }),
     'finishing',
   )
-  const synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
-  if (!Array.isArray(synced.cards) || synced.cards.length === 0) {
-    const said = typeof cloned.result === 'string' ? ` Libby said: ${cloned.result.slice(0, 60)}.` : ''
-    throw new LibbyError(`That code did not work. Codes last about a minute; make a new one.${said}`, 400)
+  // Libby says "cloned" (or "success") when it took the code; the card can take a moment to reach the new device,
+  // so a joined device is kept even if the card has not shown up yet, and the loans step says so.
+  if (said === 'cloned' || said === 'success') return { token, host }
+  // Any other reply: the device counts as joined only if a library card shows up.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt) await wait(1_500)
+    const synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
+    if (Array.isArray(synced.cards) && synced.cards.length) return { token, host }
   }
+  throw new LibbyError(
+    `That code did not work. Codes last about a minute; make a new one.${said ? ` Libby said: ${said}.` : ''}`,
+    400,
+  )
   return { token, host }
 }
 
@@ -168,5 +179,15 @@ export function loansFromSync(sync: Record<string, unknown>): LibbyLoan[] {
 export async function libbyLoans(fetcher: Fetcher, token: string, host = LIBBY_HOSTS[0]): Promise<LibbyLoan[]> {
   if (!token || token.length > 4_000) throw new LibbyError('Libby asked to connect again.', 401)
   if (!LIBBY_HOSTS.includes(host)) host = LIBBY_HOSTS[0]
-  return loansFromSync(await call(fetcher, host, '/chip/sync', 'loans', { token }))
+  const synced = await call(fetcher, host, '/chip/sync', 'loans', { token })
+  // Joined, but Libby has not given this device the library card: say what came back, so it can be looked into.
+  if (!Array.isArray(synced.cards) || synced.cards.length === 0) {
+    const keys = Object.keys(synced).slice(0, 8).join(', ') || 'nothing'
+    const result = typeof synced.result === 'string' ? `, ${synced.result.slice(0, 40)}` : ''
+    throw new LibbyError(
+      `Connected, but Libby sent no library card yet (${keys}${result}). Try Update in a minute.`,
+      502,
+    )
+  }
+  return loansFromSync(synced)
 }
