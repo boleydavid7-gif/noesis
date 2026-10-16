@@ -1,5 +1,5 @@
-// The bridge to Libby's own service, the way Libby's "Copy To Another Device" adds a device: Noesis becomes a new
-// Libby device, shows Libby's code, and once the reader enters it in their signed-in Libby, reads the loans. Libby offers no public API, so this follows the requests the
+// The bridge to Libby's own service, the way Libby's "Copy To Another Device" adds a device: Noesis becomes one more
+// device on the reader's Libby, then reads its loans. Libby offers no public API, so this follows the requests the
 // open-source Libby tools use (odmpy, the Calibre Libby plugin); it can stop working if Libby changes them.
 // Nothing is kept here: the device holds its own Libby token and sends it with each request.
 
@@ -37,7 +37,7 @@ export class LibbyError extends Error {
   }
 }
 
-type Step = 'starting' | 'code' | 'checking' | 'loans'
+type Step = 'starting' | 'joining' | 'finishing' | 'checking' | 'loans'
 
 async function call(
   fetcher: Fetcher,
@@ -63,6 +63,11 @@ async function call(
   // turning the request away.
   if (step === 'loans' && (response.status === 401 || response.status === 403))
     throw new LibbyError('Libby asked to connect again.', 401)
+  if (
+    (step === 'joining' && (response.status === 400 || response.status === 404)) ||
+    (step === 'checking' && (response.status === 401 || response.status === 403))
+  )
+    throw new LibbyError('That code did not work. Codes last about a minute; make a new one.', 400)
   if (!response.ok) throw new LibbyError(`Libby did not answer (${step}, ${response.status}).`, 502)
   try {
     return (await response.json()) as Record<string, unknown>
@@ -78,16 +83,21 @@ const identity = (chip: Record<string, unknown>, step: Step) => {
 }
 
 /**
- * Starts joining: Noesis becomes a new Libby device and asks Libby for a code to show. The reader enters it in
- * their signed-in Libby (Menu › Copy To Another Device), which copies their library cards to this device.
+ * Joins this device to the reader's Libby with the 8-digit code from Copy To Another Device. Returns the token and
+ * the address that answered, which later requests use.
  */
-export async function startLibbyCode(fetcher: Fetcher): Promise<{ token: string; host: string; code: string }> {
-  let token = ''
+export async function connectLibby(
+  fetcher: Fetcher,
+  code: string,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms)),
+): Promise<{ token: string; host: string }> {
+  if (!/^\d{8}$/.test(code)) throw new LibbyError('Enter the 8-digit code from Libby.', 400)
+  let first = ''
   let host = ''
   let problem: unknown
   for (const each of LIBBY_HOSTS) {
     try {
-      token = identity(await call(fetcher, each, '/chip?client=dewey', 'starting', { method: 'POST' }), 'starting')
+      first = identity(await call(fetcher, each, '/chip?client=dewey', 'starting', { method: 'POST' }), 'starting')
       host = each
       break
     } catch (error) {
@@ -95,58 +105,33 @@ export async function startLibbyCode(fetcher: Fetcher): Promise<{ token: string;
     }
   }
   if (!host) throw problem
-  const made = await call(fetcher, host, '/chip/clone/code', 'code', { token })
-  const code = String(made.code ?? '').replace(/\D/g, '')
-  if (code.length < 6 || code.length > 10) {
-    const keys = Object.keys(made).slice(0, 8).join(', ') || 'nothing'
-    throw new LibbyError(`Libby did not answer (code, sent ${keys}).`, 502)
-  }
-  return { token, host, code }
-}
-
-/**
- * Whether the reader's Libby has copied its cards over yet. The token is refreshed each time (it changes once the
- * device holds the cards); `joined` turns true when a library card shows up.
- */
-export async function checkLibbyCode(
-  fetcher: Fetcher,
-  token: string,
-  host: string,
-): Promise<{ joined: boolean; token: string; seen: string }> {
-  if (!token || token.length > 4_000) throw new LibbyError('Get a new code.', 400)
-  if (!LIBBY_HOSTS.includes(host)) host = LIBBY_HOSTS[0]
-  // What Libby says about the code itself, shown while waiting so a stuck join can be looked into.
-  let codeSaid: string
-  try {
-    codeSaid = said(await call(fetcher, host, '/chip/clone/code', 'checking', { token }))
-  } catch (error) {
-    codeSaid =
-      error instanceof LibbyError ? error.message.replace(/^Libby did not answer \(checking, /, '(') : 'no reply'
-  }
-  const fresh = identity(
-    await call(fetcher, host, '/chip?client=dewey', 'checking', { method: 'POST', token }),
-    'checking',
+  const cloned = await call(fetcher, host, '/chip/clone/code', 'joining', {
+    method: 'POST',
+    token: first,
+    body: { code },
+  })
+  const said = typeof cloned.result === 'string' ? cloned.result.slice(0, 60) : ''
+  // The token changes once the device is joined.
+  const token = identity(
+    await call(fetcher, host, '/chip?client=dewey', 'finishing', { method: 'POST', token: first }),
+    'finishing',
   )
-  let synced = await call(fetcher, host, '/chip/sync', 'checking', { token: fresh })
-  if (!cardsIn(synced) && fresh !== token) synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
-  const cards = cardsIn(synced)
-  return {
-    joined: cards > 0,
-    token: fresh,
-    seen: `code: ${codeSaid}; sync: ${said(synced)}; cards: ${cards}${fresh === token ? '' : '; new token'}`,
+  // The device counts as joined once a library card shows up (it can take a moment to arrive).
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt) await wait(1_500)
+    const synced = await call(fetcher, host, '/chip/sync', 'checking', { token })
+    if (Array.isArray(synced.cards) && synced.cards.length) return { token, host }
   }
-}
-
-const cardsIn = (synced: Record<string, unknown>) => (Array.isArray(synced.cards) ? synced.cards.length : 0)
-
-// A short, safe description of a Libby reply: its result word and the names of its fields, never their values.
-function said(reply: Record<string, unknown>): string {
-  const result = typeof reply.result === 'string' ? `${reply.result.slice(0, 30)} ` : ''
-  const keys = Object.keys(reply)
-    .filter((key) => key !== 'result')
-    .slice(0, 10)
-    .join(', ')
-  return `${result}[${keys || 'nothing'}]`
+  // Libby took the code, but the Libby that made it has no library card: a code from a signed-out Libby.
+  if (said === 'cloned' || said === 'success')
+    throw new LibbyError(
+      'That Libby has no library card. Make the code in the Libby you are signed in to: Menu › Copy To Another Device › Sonos Speakers.',
+      400,
+    )
+  throw new LibbyError(
+    `That code did not work. Codes last about a minute; make a new one.${said ? ` Libby said: ${said}.` : ''}`,
+    400,
+  )
 }
 
 const text = (value: unknown, max = 300) => (typeof value === 'string' ? value.trim().slice(0, max) : '')

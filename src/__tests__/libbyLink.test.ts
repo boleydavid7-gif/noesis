@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkLibbyCode, libbyLoans, loansFromSync, LibbyError, startLibbyCode } from '../workerLibby'
+import { connectLibby, libbyLoans, loansFromSync, LibbyError } from '../workerLibby'
 import { libbyDue, mergeLibbyLoans } from '../lib/libbyLink'
 import { newLoan, type Loan } from '../lib/loans'
 
@@ -50,27 +50,30 @@ describe('Libby bridge', () => {
     expect(loansFromSync({})).toEqual([])
   })
 
-  it('starts as a new device and gets a code from Libby to show', async () => {
+  it('joins with the code: a device, the clone, then the joined device token', async () => {
     const calls: Call[] = []
     const fetcher = fakeFetch(
       [
         [200, { identity: 'first' }],
-        [200, { code: '12345678', expiry: 1760000000 }],
+        [200, { result: 'success' }],
+        [200, { identity: 'joined' }],
+        [200, SYNC],
       ],
       calls,
     )
-    await expect(startLibbyCode(fetcher)).resolves.toEqual({
-      token: 'first',
+    await expect(connectLibby(fetcher, '12345678')).resolves.toEqual({
+      token: 'joined',
       host: 'https://sentry.libbyapp.com',
-      code: '12345678',
     })
+    expect(new Headers(calls[0].init?.headers).get('origin')).toBe('https://libbyapp.com')
     expect(calls.map((call) => call.url.replace('https://sentry.libbyapp.com', ''))).toEqual([
       '/chip?client=dewey',
       '/chip/clone/code',
+      '/chip?client=dewey',
+      '/chip/sync',
     ])
-    expect(calls[1].init?.method ?? 'GET').toBe('GET')
     expect(new Headers(calls[1].init?.headers).get('authorization')).toBe('Bearer first')
-    expect(new Headers(calls[0].init?.headers).get('origin')).toBe('https://libbyapp.com')
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({ code: '12345678' })
   })
 
   it('tries the older address when the new one turns the request away, and keeps the one that answered', async () => {
@@ -79,68 +82,94 @@ describe('Libby bridge', () => {
       [
         [403, {}],
         [200, { identity: 'first' }],
-        [200, { code: '87654321' }],
+        [200, { result: 'success' }],
+        [200, { identity: 'joined' }],
+        [200, SYNC],
       ],
       calls,
     )
-    await expect(startLibbyCode(fetcher)).resolves.toMatchObject({
+    await expect(connectLibby(fetcher, '12345678')).resolves.toEqual({
+      token: 'joined',
       host: 'https://sentry-read.svc.overdrive.com',
-      code: '87654321',
     })
+    expect(calls[1].url).toBe('https://sentry-read.svc.overdrive.com/chip?client=dewey')
   })
 
-  it('names the step and what came back when Libby does not answer', async () => {
+  it('names the step and the answer when Libby does not answer', async () => {
     await expect(
-      startLibbyCode(
+      connectLibby(
         fakeFetch([
           [403, {}],
           [503, {}],
         ]),
+        '12345678',
       ),
     ).rejects.toThrow('Libby did not answer (starting, 503).')
-    await expect(
-      startLibbyCode(
-        fakeFetch([
-          [200, { identity: 'first' }],
-          [200, { result: 'nope' }],
-        ]),
-      ),
-    ).rejects.toThrow('Libby did not answer (code, sent result).')
   })
 
-  it('waits until the reader’s Libby has copied a library card over, and says what Libby reports', async () => {
-    const waiting = await checkLibbyCode(
-      fakeFetch([
-        [200, { code: '12345678', expiry: 1 }],
-        [200, { identity: 'second' }],
-        [200, { result: 'synchronized', cards: [] }],
-        [200, { result: 'synchronized', cards: [] }],
-      ]),
-      'first',
-      'https://sentry.libbyapp.com',
-    )
-    expect(waiting).toEqual({
-      joined: false,
-      token: 'second',
-      seen: 'code: [code, expiry]; sync: synchronized [cards]; cards: 0; new token',
+  it('joins when Libby says cloned and the card arrives a moment later', async () => {
+    const fetcher = fakeFetch([
+      [200, { identity: 'first' }],
+      [200, { result: 'cloned' }],
+      [200, { identity: 'joined' }],
+      [200, { result: 'synchronized', cards: [] }],
+      [200, SYNC],
+    ])
+    await expect(connectLibby(fetcher, '12345678', async () => undefined)).resolves.toMatchObject({
+      token: 'joined',
     })
-    const joined = await checkLibbyCode(
-      fakeFetch([
-        [404, {}],
-        [200, { identity: 'third' }],
-        [200, SYNC],
-      ]),
-      'second',
-      'https://sentry.libbyapp.com',
-    )
-    expect(joined).toMatchObject({ joined: true, token: 'third' })
-    expect(joined.seen).toContain('code: (404).')
   })
 
-  it('says what Libby sent when a joined device has no card yet, and asks to connect again when refused', async () => {
+  it('says so when the code came from a Libby with no library card (signed out)', async () => {
+    const empty: [number, unknown] = [200, { result: 'synchronized', cards: [] }]
+    const fetcher = fakeFetch([
+      [200, { identity: 'first' }],
+      [200, { result: 'cloned' }],
+      [200, { identity: 'joined' }],
+      empty,
+      empty,
+      empty,
+    ])
+    await expect(connectLibby(fetcher, '12345678', async () => undefined)).rejects.toThrow(
+      'That Libby has no library card. Make the code in the Libby you are signed in to',
+    )
+  })
+
+  it('on any other reply, counts the device joined once the card shows up', async () => {
+    const fetcher = fakeFetch([
+      [200, { identity: 'first' }],
+      [200, { result: 'ok' }],
+      [200, { identity: 'joined' }],
+      [200, { result: 'synchronized', cards: [] }],
+      [200, SYNC],
+    ])
+    await expect(connectLibby(fetcher, '12345678', async () => undefined)).resolves.toMatchObject({
+      token: 'joined',
+    })
+  })
+
+  it('says what Libby sent when a joined device has no card yet', async () => {
     await expect(libbyLoans(fakeFetch([[200, { result: 'synchronized', loans: [] }]]), 'tok')).rejects.toThrow(
       'Connected, but Libby sent no library card yet (result, loans, synchronized). Try Update in a minute.',
     )
+  })
+
+  it('says plainly when the code is wrong or Libby refuses the token', async () => {
+    await expect(connectLibby(fakeFetch([]), '123')).rejects.toThrow('8-digit')
+    await expect(
+      connectLibby(
+        fakeFetch([
+          [200, { identity: 'first' }],
+          [200, { result: 'invalid_code' }],
+          [200, { identity: 'first' }],
+          [200, { result: 'synchronized', cards: [] }],
+          [200, { result: 'synchronized', cards: [] }],
+          [200, { result: 'synchronized', cards: [] }],
+        ]),
+        '12345678',
+        async () => undefined,
+      ),
+    ).rejects.toThrow('did not work. Codes last about a minute; make a new one. Libby said: invalid_code.')
     const refused = await libbyLoans(fakeFetch([[401, {}]]), 'old').catch((error: LibbyError) => error)
     expect(refused).toBeInstanceOf(LibbyError)
     expect((refused as LibbyError).status).toBe(401)

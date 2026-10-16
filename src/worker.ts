@@ -8,7 +8,7 @@ import {
   type RatingSource,
 } from './lib/pathPlan'
 import { handlePasskey, sendReviewReminders } from './workerAccount'
-import { checkLibbyCode, libbyLoans, LibbyError, startLibbyCode } from './workerLibby'
+import { connectLibby, libbyLoans, LibbyError } from './workerLibby'
 import {
   cleanDeeperReply,
   cleanQuestionReply,
@@ -104,10 +104,10 @@ async function hasValidSession(request: Request, env: Env): Promise<boolean> {
   }
 }
 
-// Libby: get a code for the reader to enter in their signed-in Libby, check whether it copied the cards over, or read
-// the loans with the token the device keeps (workerLibby.ts). Nothing is stored here.
+// Libby: join this device to the reader's Libby with a Copy To Another Device code, or read its loans with the token
+// the device keeps (workerLibby.ts). Nothing is stored here.
 async function libby(request: Request): Promise<Response> {
-  if (rateLimited(request, 'libby', 60)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
+  if (rateLimited(request, 'libby', 20)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
   let body: { action?: unknown; code?: unknown; token?: unknown; host?: unknown }
   try {
     body = (await request.json()) as typeof body
@@ -116,9 +116,7 @@ async function libby(request: Request): Promise<Response> {
   }
   const fetcher = (input: string, init?: RequestInit) => fetchWithTimeout(input, init, 10_000)
   try {
-    if (body.action === 'code') return json(await startLibbyCode(fetcher))
-    if (body.action === 'check')
-      return json(await checkLibbyCode(fetcher, String(body.token ?? ''), String(body.host ?? '')))
+    if (body.action === 'connect') return json(await connectLibby(fetcher, String(body.code ?? '').trim()))
     if (body.action === 'loans')
       return json({
         loans: await libbyLoans(fetcher, String(body.token ?? ''), body.host ? String(body.host) : undefined),

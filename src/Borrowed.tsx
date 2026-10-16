@@ -24,14 +24,12 @@ import {
 import { useChosenLibrary } from './lib/publicLibrary'
 import { cleanLink, linkLabel } from './lib/notesBooks'
 import {
-  checkLibbyCode,
-  libbyCode,
+  connectLibby,
   libbyDue,
   onLibbyLinkChanged,
   readLibbyLink,
   refreshFromLibby,
   writeLibbyLink,
-  type LibbyCode,
 } from './lib/libbyLink'
 import { timeAgo } from './lib/time'
 
@@ -274,8 +272,8 @@ export function Borrowed({
 // every 15 minutes) or on Update.
 function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => void }) {
   const [link, setLink] = useState(readLibbyLink)
-  const [waiting, setWaiting] = useState<LibbyCode | null>(null)
-  const [seen, setSeen] = useState('')
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [leaving, setLeaving] = useState(false)
@@ -293,80 +291,60 @@ function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => 
     // Once, when Borrowed opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  // While a code is showing, ask every 3 seconds whether Libby has copied the cards over (for up to 5 minutes).
-  useEffect(() => {
-    if (!waiting) return
-    let current = waiting
-    let stopped = false
-    const started = Date.now()
-    const timer = window.setInterval(async () => {
-      if (stopped) return
-      if (Date.now() - started > 5 * 60_000) {
-        window.clearInterval(timer)
-        setWaiting(null)
-        setMessage('The code ran out. Get a new code.')
-        return
-      }
-      try {
-        const next = await checkLibbyCode(current)
-        if (stopped) return
-        if ('code' in next) {
-          current = next
-          if (Date.now() - started > 20_000 && next.seen) setSeen(next.seen)
-        } else {
-          window.clearInterval(timer)
-          setWaiting(null)
-          setMessage('')
-          await update()
-        }
-      } catch {
-        // Tried again on the next tick.
-      }
-    }, 3_000)
-    return () => {
-      stopped = true
-      window.clearInterval(timer)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiting])
-  const getCode = async () => {
-    setBusy(true)
-    setMessage('')
-    try {
-      setSeen('')
-      setWaiting(await libbyCode())
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Libby did not answer.')
-    } finally {
-      setBusy(false)
-    }
-  }
-  if (waiting) {
-    return (
-      <div className="libby-connect">
-        <p>In your Libby, open Menu › Copy To Another Device and enter this code.</p>
-        <strong className="libby-code" aria-live="polite">
-          {waiting.code}
-        </strong>
-        <div className="libby-connect-row">
-          <span>Waiting for Libby…</span>
-          <button className="text-button" onClick={() => setWaiting(null)}>
-            Cancel
-          </button>
-        </div>
-        {seen ? <small className="libby-seen">Libby: {seen}</small> : null}
-      </div>
-    )
-  }
   if (!link || link.problem) {
     return (
       <div className="libby-connect">
-        <div className="libby-connect-row">
-          <span>{link?.problem ?? 'Bring in your Libby loans and due dates.'}</span>
-          <button className="secondary-button" onClick={() => void getCode()} disabled={busy}>
-            {busy ? 'Getting a code…' : link?.problem ? 'Connect again' : 'Connect Libby'}
-          </button>
-        </div>
+        {open ? (
+          <form
+            className="libby-connect-form"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              setBusy(true)
+              setMessage('')
+              try {
+                await connectLibby(code)
+                setOpen(false)
+                setCode('')
+                await update()
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : 'That did not work.')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            <p>
+              In the Libby you are signed in to, open Menu › Copy To Another Device › Sonos Speakers, then enter the
+              code it shows.
+            </p>
+            <label>
+              Code
+              <input
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="8 digits"
+                autoFocus
+              />
+            </label>
+            <div className="recovery-actions">
+              <button className="primary-button" type="submit" disabled={busy || code.length !== 8}>
+                {busy ? 'Connecting…' : 'Connect'}
+              </button>
+              <button type="button" className="text-button" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="libby-connect-row">
+            <span>{link?.problem ?? 'Bring in your Libby loans and due dates.'}</span>
+            <button className="secondary-button" onClick={() => setOpen(true)}>
+              {link?.problem ? 'Connect again' : 'Connect Libby'}
+            </button>
+          </div>
+        )}
         {message ? <p className="libby-connect-note">{message}</p> : null}
       </div>
     )
