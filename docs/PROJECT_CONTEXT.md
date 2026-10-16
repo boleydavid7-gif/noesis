@@ -238,4 +238,8 @@ and a Wrangler dry run. The live health endpoint is
   favorite, shelves and remove; hairlines start after the cover). Chosen with a segmented switch in the section
   heading (`.view-switch`, iOS proportions with the lamp-tinted selection), kept on the device in
   `noesis:library-view:v1`. The detail pane beside the shelf works in all three on computers.
+- Search: `public/robots.txt`, `public/sitemap.xml` (noesis.proairetos.com: /, /about/, /notes/, privacy, terms), a
+  static About page (`public/about/`, real text for search engines, on `legal.css`), and in `index.html` and
+  `notes/index.html` a description, canonical address, link-preview tags (`public/social/noesis.png`, 1200×630) and
+  WebApplication details (JSON-LD) between `<!-- search -->` markers. Google verification tag already in `index.html`.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".
