@@ -63,14 +63,25 @@ async function ask(body: Record<string, string>): Promise<Record<string, unknown
   return data
 }
 
-export async function connectLibby(code: string): Promise<LibbyLink> {
-  const data = await ask({ action: 'connect', code: code.replace(/\D/g, '') })
-  if (typeof data.token !== 'string') throw new Error('Libby did not answer. Try again later.')
-  const link = {
-    token: data.token,
-    host: typeof data.host === 'string' ? data.host : undefined,
-    connected: new Date().toISOString(),
-  }
+export type LibbyCode = { code: string; token: string; host: string }
+
+/** Asks Libby for a code to show; the reader enters it in their signed-in Libby. */
+export async function libbyCode(): Promise<LibbyCode> {
+  const data = await ask({ action: 'code' })
+  if (typeof data.code !== 'string' || typeof data.token !== 'string' || typeof data.host !== 'string')
+    throw new Error('Libby did not answer. Try again later.')
+  return { code: data.code, token: data.token, host: data.host }
+}
+
+/**
+ * Checks once whether the reader's Libby has copied its cards to this device. When it has, the connection is
+ * saved; otherwise the waiting code comes back with its refreshed token.
+ */
+export async function checkLibbyCode(waiting: LibbyCode): Promise<LibbyLink | LibbyCode> {
+  const data = await ask({ action: 'check', token: waiting.token, host: waiting.host })
+  const token = typeof data.token === 'string' ? data.token : waiting.token
+  if (!data.joined) return { ...waiting, token }
+  const link = { token, host: waiting.host, connected: new Date().toISOString() }
   writeLibbyLink(link)
   return link
 }

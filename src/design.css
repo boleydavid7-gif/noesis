@@ -367,6 +367,18 @@ body {
   margin: 0;
   color: var(--paper-2);
 }
+.libby-connect > p {
+  margin: 0;
+  color: var(--paper-2);
+}
+.libby-code {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  user-select: all;
+}
 .libby-connect-form input {
   max-width: 12rem;
   letter-spacing: 0.12em;

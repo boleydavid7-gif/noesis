@@ -214,16 +214,17 @@ and a Wrangler dry run. The live health endpoint is
   (`lib/wallpaper.ts`, the same drawing as Proairetos's rooms: a lamp with rings of light and three sweeping bands),
   made from the page color, the chosen color and the background's hue (`wallpaperColors`), set as `--lamplight` (tall,
   sidebar) and `--lamplight-wide` (home banner) by App's appearance effect. A chosen picture still replaces it.
-- Connected Libby (Borrowed › Connect Libby): the reader makes a code in Libby (Menu › Copy To Another Device) and
-  Noesis joins their Libby as one more device (Worker `/api/libby`, `src/workerLibby.ts`: `POST /chip?client=dewey`,
-  `POST /chip/clone/code`, the chip again for the joined token, then `GET /chip/sync` on
-  `sentry.libbyapp.com`, then `sentry-read.svc.overdrive.com` if that one turns it away, with headers like Libby's own web app; the address that answered is kept with the token; joining counts as done when Libby replies "cloned" (or "success"), else once a library card shows up in a sync
-  (three tries); a joined device with no card yet says so on the loans step, naming what Libby sent; errors name the step and status, e.g. "Libby did not answer (starting, 403)"; unofficial, the same requests odmpy and the Calibre Libby plugin use, so it can
-  stop working if Libby changes them; nothing kept on the server). The token stays on the device
-  (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans` (`lib/libbyLink.ts`) lays Libby's loans over
-  Borrowed: due dates follow renewals, a hand-typed e-book of the same title is joined, a loan Libby no longer has is
-  marked returned; paper copies are untouched. Each Libby loan shows its cover, which opens the book in Libby
-  (`share.libbyapp.com/title/ID`); Renew opens it too, and the next update brings the new date. Updates when Borrowed
-  opens (at most every 15 minutes) or on Update; a refused token asks to connect again. Not yet tried against the live
-  service.
+- Connected Libby (Borrowed › Connect Libby): Noesis becomes a new Libby device and shows Libby's code; the reader
+  enters it in their signed-in Libby (Menu › Copy To Another Device, the same way a Sonos speaker is added), which
+  copies their library cards to Noesis. Worker `/api/libby` (`src/workerLibby.ts`): `code` = `POST /chip?client=dewey`
+  then `GET /chip/clone/code`; `check` = `POST /chip` with the token (refreshed) then `GET /chip/sync`, joined once a
+  card shows up (Borrowed asks every 3 s for up to 5 minutes); `loans` = `GET /chip/sync`. Hosts `sentry.libbyapp.com`,
+  then `sentry-read.svc.overdrive.com`; headers like Libby's own web app; errors name the step and what came back.
+  (The first version typed a code from Libby into Noesis, which copies the wrong way: Noesis's empty device onto
+  Libby.) Unofficial, so it can stop working if Libby changes it; nothing kept on the server. The token stays on the
+  device (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans` (`lib/libbyLink.ts`) lays Libby's loans
+  over Borrowed: due dates follow renewals, a hand-typed e-book of the same title is joined, a loan Libby no longer has
+  is marked returned; paper copies are untouched. Each Libby loan shows its cover, which opens the book in Libby
+  (`share.libbyapp.com/title/ID`); Renew opens it too. Updates when Borrowed opens (at most every 15 minutes) or on
+  Update; a refused token asks to connect again.
 - The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".
