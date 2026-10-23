@@ -1,10 +1,18 @@
 import { oneAtATime } from './device'
 import { getAuthClient, isAnonymousUser } from './auth'
-import { loadEpubFile, readLibraryBooks, saveBookText, writeLibraryBooks, type LibraryBook } from './library'
+import { readLibraryBooks, saveBookText, writeLibraryBooks, type LibraryBook } from './library'
 import { parseEpub } from './epub'
 import { sanitizeSettings, type Settings } from './settings'
 import { mergeDiary, readDiary, writeDiary, type DiaryEntry } from './diary'
 import { mergeBundles, sanitizeBundle, type SyncBundle } from './syncData'
+import { cloudBookPath, inConnectedCloud, markUploaded } from './cloudSync'
+import {
+  cloudConnectionUsable,
+  freshCloudConnection,
+  readCloudConnections,
+  writeCloudFile,
+  type CloudConnection,
+} from './cloudProviders'
 import {
   applyTombstones,
   mergeTombstones,
@@ -91,17 +99,51 @@ async function writeRemoteManifest(userId: string, books: LibraryBook[], tombsto
   if (result.error) throw new Error(`Supabase could not save your book library: ${result.error.message}`)
 }
 
-// Returns true when the book's file is now in the cloud.
-async function uploadLocalBook(userId: string, book: LibraryBook): Promise<boolean> {
-  if (book.format !== 'epub' && book.format !== 'pdf') return true
-  const bytes = await loadEpubFile(book.id).catch(() => null)
-  if (!bytes) return false
-  const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
-  const result = await getAuthClient()
-    .storage.from(BUCKET)
-    .upload(bookPath(userId, book), new Blob([bytes], { type: contentType }), { upsert: true, contentType })
-  if (result.error) throw new Error(`Supabase could not save ${book.title}: ${result.error.message}`)
-  return true
+const isFile = (book: LibraryBook) => book.format === 'epub' || book.format === 'pdf'
+
+/** The person's own connected clouds (Google Drive, OneDrive, Dropbox) that this account may use. */
+function ownClouds(userId: string): CloudConnection[] {
+  return readCloudConnections().filter(
+    (connection) => (!connection.ownerUserId || connection.ownerUserId === userId) && cloudConnectionUsable(connection),
+  )
+}
+
+/**
+ * Book files the first versions kept in the site's storage: removed when the book is already in a connected cloud or
+ * the library folder (or was deleted), moved into the first connected cloud otherwise, and left where they are while
+ * the person has no cloud connected (they are still read from there). Books are large, so they never go to the site's
+ * storage any more; that would fill it for everyone.
+ */
+async function releaseAccountBooks(userId: string, books: LibraryBook[]): Promise<void> {
+  const storage = getAuthClient().storage.from(BUCKET)
+  const folder = `${userId}/library/books`
+  const listed = await storage.list(folder, { limit: 1000 })
+  if (listed.error || !listed.data?.length) return
+  const clouds = ownClouds(userId)
+  for (const file of listed.data) {
+    const id = file.name.replace(/\.(epub|pdf)$/i, '')
+    const book = books.find((each) => each.id === id)
+    const path = `${folder}/${file.name}`
+    try {
+      if (book && !book.fromFolder && !inConnectedCloud(clouds, book.id)) {
+        if (!clouds.length) continue
+        const download = await storage.download(path)
+        if (download.error) continue
+        const connection = await freshCloudConnection(clouds[0])
+        const contentType = book.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
+        await writeCloudFile(
+          connection,
+          cloudBookPath(book),
+          new Blob([await download.data.arrayBuffer()], { type: contentType }),
+          contentType,
+        )
+        markUploaded(clouds[0], book.id)
+      }
+      await storage.remove([path])
+    } catch {
+      // That cloud could not be reached: tried again next time.
+    }
+  }
 }
 
 /** A small file of the person's own (their font) kept in the account's storage. */
@@ -151,9 +193,8 @@ export async function indexDownloadedBook(book: LibraryBook, bytes: ArrayBuffer)
 }
 
 /**
- * Sync the signed-in user's book catalog and individual book files through
- * Supabase Storage. This is intentionally separate from external cloud
- * providers, so a normal Noesis account can restore books without setup.
+ * Syncs the signed-in user's book catalog (a small list) through the account's storage. The books' files travel
+ * through the person's own connected cloud (cloudSync.ts) or their library folder, never the site's storage.
  */
 async function syncAccountLibraryHere(localBooks: LibraryBook[]): Promise<LibraryBook[]> {
   const user = await signedInUser()
@@ -167,14 +208,15 @@ async function syncAccountLibraryHere(localBooks: LibraryBook[]): Promise<Librar
   )
   writeTombstones(tombstones)
   await writeRemoteManifest(user.id, books, tombstones)
-  const inCloud = new Set<string>()
-  // A file already uploaded (here or on another device) is not sent again.
-  for (const book of books) {
-    if (book.cloudAt) inCloud.add(book.id)
-    else if (await uploadLocalBook(user.id, book)) inCloud.add(book.id)
-  }
+  await releaseAccountBooks(user.id, books).catch(() => undefined)
+  const clouds = ownClouds(user.id)
+  const inCloud = new Set(
+    books
+      .filter((book) => book.cloudAt || !isFile(book) || book.fromFolder || inConnectedCloud(clouds, book.id))
+      .map((book) => book.id),
+  )
   const stamp = new Date().toISOString()
-  // A book counts as synced once its file is in the cloud, or for links, once its entry is.
+  // A book counts as synced once its file is in the person's cloud or library folder, or for links, once its entry is.
   // Files themselves come down only when a book is opened (see bookFiles.ts).
   const marked = books.map((book) =>
     inCloud.has(book.id) ? { ...book, cloudAt: book.cloudAt ?? stamp } : { ...book, cloudAt: undefined },

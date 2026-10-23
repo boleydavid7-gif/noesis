@@ -3148,11 +3148,14 @@ function App() {
       ? 'Changes stay on this device until you reconnect.'
       : !signedIn
         ? 'Create an account or sign in so your books and notes can follow you to other devices.'
-        : lastSyncedAt
-          ? `Last sync: ${timeAgo(lastSyncedAt)}${settings.backup.autoSync ? '' : ' · automatic sync is off'}`
-          : settings.backup.autoSync
-            ? 'Your first sync will run shortly.'
-            : 'Automatic sync is off. Use Sync now.'
+        : !cloudConnections.some((item) => item.ownerUserId === authUserId && cloudConnectionUsable(item)) &&
+            books.some((book) => (book.format === 'epub' || book.format === 'pdf') && !book.cloudAt && !book.fromFolder)
+          ? 'Your list of books and notes syncs. To open the books themselves on another device, connect Google Drive, Dropbox or OneDrive.'
+          : lastSyncedAt
+            ? `Last sync: ${timeAgo(lastSyncedAt)}${settings.backup.autoSync ? '' : ' · automatic sync is off'}`
+            : settings.backup.autoSync
+              ? 'Your first sync will run shortly.'
+              : 'Automatic sync is off. Use Sync now.'
     return (
       <>
         <section className={`sync-status panel-card${protectedNow ? '' : ' sync-status-warn'}`}>

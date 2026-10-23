@@ -78,6 +78,24 @@ function readUploaded(connection: CloudConnection): Set<string> {
   }
 }
 
+/** Notes that a book's file is in this cloud's Noesis folder, so it is not sent again. */
+export function markUploaded(connection: CloudConnection, bookId: string): void {
+  const uploaded = readUploaded(connection)
+  uploaded.add(bookId)
+  try {
+    localStorage.setItem(uploadedKey(connection), JSON.stringify([...uploaded]))
+  } catch {
+    // Without the note, the book is simply sent again next time.
+  }
+}
+
+/** Whether a connected cloud already holds the book's file (sent from this device). */
+export function inConnectedCloud(connections: CloudConnection[], bookId: string): boolean {
+  return connections.some((connection) => readUploaded(connection).has(bookId))
+}
+
+export const cloudBookPath = (book: LibraryBook) => `books/${book.id}.${extensionFor(book)}`
+
 /** The book's file from a connected cloud's Noesis folder, or null when it is not there. */
 export async function downloadCloudBook(connection: CloudConnection, book: LibraryBook): Promise<ArrayBuffer | null> {
   if (book.format !== 'epub' && book.format !== 'pdf') return null
