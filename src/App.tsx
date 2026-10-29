@@ -125,6 +125,7 @@ import { excerpt, searchLibrary, searchPhrase, type LibraryHit } from './lib/lib
 import { onDeviceMeaning } from './lib/meaning'
 import { embedOnDevice } from './lib/embeddings'
 import { downloadBlob, renderQuoteCard } from './lib/quoteCard'
+import { DailyHighlightsCard } from './DailyHighlights'
 import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
@@ -446,7 +447,6 @@ function App() {
   const [readerSearch, setReaderSearch] = useState('')
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
-  const [shuffle, setShuffle] = useState(0)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -2524,25 +2524,27 @@ function App() {
             }
           />
         ) : null}
-        {settings.library.goal.enabled || (learner && settings.library.resurface && notes.length > 0) ? (
+        {settings.library.resurface && notes.length > 0 ? (
+          <DailyHighlightsCard
+            notes={notes}
+            count={settings.library.dailyCount}
+            onOpenInBook={openNoteLocation}
+            onMakeCard={(note) => {
+              setReviewStartNote(note.id)
+              selectNav('Review')
+            }}
+            onQuoteCard={(note, text) => {
+              const source = note.bookTitle ? `${note.bookTitle}${note.author ? ` · ${note.author}` : ''}` : note.source
+              void renderQuoteCard(text, source)
+                .then((blob) => downloadBlob(blob, 'noesis-quote.png'))
+                .catch((reason) => showNotice(reason instanceof Error ? reason.message : 'Could not make the card.'))
+            }}
+            onNotice={showNotice}
+          />
+        ) : null}
+        {settings.library.goal.enabled ? (
           <div className="home-extras">
-            {learner && settings.library.resurface && notes.length > 0 ? (
-              <ResurfaceCard
-                notes={notes}
-                shuffle={shuffle}
-                onShuffle={() => setShuffle((value) => value + 1)}
-                onOpenNote={openNoteLocation}
-                onOpenPage={() => selectNav('Notes')}
-                onHide={() => {
-                  updateSettings({ ...settings, library: { ...settings.library, resurface: false } })
-                  showNotice('Hidden. You can turn it back on in Settings → Library.')
-                }}
-                onNotice={showNotice}
-              />
-            ) : null}
-            {settings.library.goal.enabled ? (
-              <GoalCard books={books} goal={settings.library.goal} onEdit={() => openSettings('library')} />
-            ) : null}
+            <GoalCard books={books} goal={settings.library.goal} onEdit={() => openSettings('library')} />
           </div>
         ) : null}
         {learner ? (
@@ -4847,60 +4849,6 @@ function RevisitCard({
           </li>
         ))}
       </ul>
-    </section>
-  )
-}
-
-function ResurfaceCard({
-  notes,
-  shuffle,
-  onShuffle,
-  onOpenNote,
-  onOpenPage,
-  onHide,
-  onNotice,
-}: {
-  notes: Note[]
-  shuffle: number
-  onShuffle: () => void
-  onOpenNote: (note: Note) => void
-  onOpenPage: () => void
-  onHide: () => void
-  onNotice: (message: string) => void
-}) {
-  const [day] = useState(() => Math.floor(Date.now() / 86_400_000))
-  const pool = notes.filter((note) => note.body.trim().length >= 40 && !isBookmark(note))
-  if (pool.length === 0) return null
-  // One note per day, and "Another" moves along the list.
-  const note = pool[(day + shuffle) % pool.length]
-  const source = note.bookTitle ? `${note.bookTitle}${note.chapter ? ` · ${note.chapter}` : ''}` : note.source
-  const makeCard = async () => {
-    try {
-      downloadBlob(await renderQuoteCard(note.body, source), 'noesis-quote.png')
-    } catch (reason) {
-      onNotice(reason instanceof Error ? reason.message : 'Could not make the card.')
-    }
-  }
-  return (
-    <section className="resurface-card panel-card" aria-label="From your notes">
-      <blockquote>{note.body.length > 320 ? `${note.body.slice(0, 320)}…` : note.body}</blockquote>
-      <small>{source}</small>
-      <div className="resurface-actions">
-        <button className="text-button" onClick={() => (note.bookId ? onOpenNote(note) : onOpenPage())}>
-          {note.bookId ? 'Open in book' : 'Open'}
-        </button>
-        {pool.length > 1 ? (
-          <button className="text-button" onClick={onShuffle}>
-            Another
-          </button>
-        ) : null}
-        <button className="text-button" onClick={() => void makeCard()}>
-          Quote card
-        </button>
-        <button className="text-button" onClick={onHide}>
-          Hide
-        </button>
-      </div>
     </section>
   )
 }

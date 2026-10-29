@@ -286,6 +286,7 @@ export const PREFERENCE_KEYS = [
   'noesis:public-library:v1',
   'noesis:notes-books:v1',
   'noesis:loans:v1',
+  'noesis:highlight-review:v1',
 ]
 const PREFS_NAME = 'data/preferences.json'
 const PREFS_META = 'noesis:preferences-meta'

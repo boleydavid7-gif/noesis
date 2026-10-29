@@ -50,7 +50,8 @@ export type Settings = {
     defaultSort: LibrarySortSetting
     indexText: boolean
     confirmDelete: boolean
-    resurface: boolean
+    resurface: boolean // daily highlights on Home
+    dailyCount: number // how many highlights a day: 3, 5 or 10
     goal: { enabled: boolean; target: number; period: GoalPeriod }
   }
   backup: { autoSync: boolean }
@@ -91,6 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
     indexText: true,
     confirmDelete: true,
     resurface: true,
+    dailyCount: 5,
     goal: { enabled: false, target: 12, period: 'year' },
   },
   backup: { autoSync: true },
@@ -276,6 +278,7 @@ export function sanitizeSettings(input: unknown): Settings {
       indexText: bool(library.indexText, d.library.indexText),
       confirmDelete: bool(library.confirmDelete, d.library.confirmDelete),
       resurface: bool(library.resurface, d.library.resurface),
+      dailyCount: [3, 5, 10].includes(Number(library.dailyCount)) ? Number(library.dailyCount) : d.library.dailyCount,
       goal: {
         enabled: bool(goal.enabled, d.library.goal.enabled),
         target: Math.round(num(goal.target, 1, 365, d.library.goal.target)),

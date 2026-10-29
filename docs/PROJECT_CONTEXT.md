@@ -249,3 +249,14 @@ and a Wrangler dry run. The live health endpoint is
   118px above and 84px below the words (`applyReadingStyle`), and the chapter bar's "N of M" opens the contents (an
   unseen select). Pages without a language get the book's, so justified text hyphenates; paragraphs use
   `text-wrap: pretty`.
+- Daily highlights (`lib/dailyHighlights.ts`, `DailyHighlights.tsx`, `highlights.css`; Settings > Library "Daily
+  highlights" = `library.resurface`, "Highlights a day" 3/5/10 = `library.dailyCount`): a Home card with today's few and
+  a full-screen review, one at a time (swipe, arrow keys, Next). The pool is highlights and notes written about a
+  passage (`highlightPool`; bookmarks and scraps under 15 characters left out). Each comes back after 0, 7, 21, 45, 90,
+  then 180 days by times seen; More often halves the wait (at least 3 days), Less often doubles it, Not again leaves it
+  out (`waitFor`). A day's choice (`chooseForDay`: longest overdue first, never seen counts as overdue, More often a
+  little ahead, at most two from one book while others wait, a steady per-day jitter) is kept in `today` until
+  tomorrow; a highlight counts as seen when shown (`markSeen`, once a day) and the end marks the day read. State in
+  `noesis:highlight-review:v1`, synced with the other small preferences (`accountLibrary.ts`). From a highlight: Open
+  in book, Review card (the Review page's drafting, `reviewStartNote`) and Quote card. It replaced the old one-note
+  ResurfaceCard and shows in both modes.

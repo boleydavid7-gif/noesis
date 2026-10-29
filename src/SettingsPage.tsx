@@ -558,13 +558,27 @@ function LibrarySection({
             label="Index book text"
           />
         </Row>
-        <Row title="Notes on Home">
+        <Row title="Daily highlights">
           <Toggle
             checked={settings.library.resurface}
             onChange={(value) => set('library', 'resurface', value)}
-            label="Show a saved note on Home"
+            label="Daily highlights on Home"
           />
         </Row>
+        {settings.library.resurface ? (
+          <Row title="Highlights a day">
+            <Segmented
+              label="Highlights a day"
+              value={String(settings.library.dailyCount)}
+              onChange={(value) => set('library', 'dailyCount', Number(value))}
+              options={[
+                { value: '3', label: '3' },
+                { value: '5', label: '5' },
+                { value: '10', label: '10' },
+              ]}
+            />
+          </Row>
+        ) : null}
         <Row title="Reading goal">
           <Toggle
             checked={settings.library.goal.enabled}

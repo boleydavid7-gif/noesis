@@ -1,0 +1,253 @@
+/* Daily highlights: the Home card and the full-screen review (DailyHighlights.tsx). The passage is the page: set in
+   a book serif, large, with the book beneath it; everything else is quiet. */
+.daily-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.daily-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.daily-card-head strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.daily-card-head small {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(var(--lamp-rgb, 226, 184, 110), 0.16);
+  color: var(--lamp, #e2b86e);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+.daily-card blockquote {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--paper, #eef3fa);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.15rem;
+  line-height: 1.45;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.daily-card-source {
+  color: var(--muted, #aebccd);
+  font-size: 0.85rem;
+}
+.daily-card-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lamp, #e2b86e);
+  font-weight: 600;
+}
+.daily-card-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: default;
+}
+.daily-card-done span {
+  display: grid;
+  gap: 2px;
+}
+.daily-card-done small {
+  color: var(--muted, #aebccd);
+}
+
+/* The review: one passage at a time over the whole screen. */
+body.daily-open {
+  overflow: hidden;
+}
+.daily-review {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background:
+    radial-gradient(80% 50% at 70% 0%, rgba(var(--lamp-rgb, 226, 184, 110), 0.1), transparent 70%),
+    var(--tone-1, #08111c);
+  color: var(--paper, #eef3fa);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior: contain;
+  animation: daily-in 0.28s ease-out;
+}
+@keyframes daily-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+.daily-review-bar {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+.daily-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.daily-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong, rgba(200, 220, 245, 0.16));
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+.daily-dots span.past {
+  background: rgba(var(--lamp-rgb, 226, 184, 110), 0.45);
+}
+.daily-dots span.on {
+  width: 18px;
+  background: var(--lamp, #e2b86e);
+}
+.daily-count {
+  color: var(--muted, #aebccd);
+  font-size: 0.85rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.daily-review-page {
+  display: grid;
+  align-content: center;
+  gap: 22px;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 12px 24px 24px;
+  overflow-y: auto;
+  animation: daily-page 0.32s ease-out;
+}
+@keyframes daily-page {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+.daily-quote {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+}
+.daily-quote::before {
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--mark, var(--lamp, #e2b86e));
+  content: '';
+}
+.daily-quote blockquote {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.35rem, 5.2vw, 1.75rem);
+  line-height: 1.45;
+  text-wrap: pretty;
+  hyphens: auto;
+}
+.daily-comment {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-s, 12px);
+  background: var(--tone-2, rgba(255, 255, 255, 0.04));
+  color: var(--paper-2, #aebccd);
+  line-height: 1.5;
+}
+.daily-quote figcaption {
+  display: grid;
+  gap: 2px;
+}
+.daily-quote figcaption strong {
+  font-weight: 600;
+}
+.daily-quote figcaption span {
+  color: var(--muted, #aebccd);
+  font-size: 0.9rem;
+}
+.daily-often {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.daily-often button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong, rgba(200, 220, 245, 0.16));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.daily-often button[aria-pressed='true'] {
+  border-color: transparent;
+  background: rgba(var(--lamp-rgb, 226, 184, 110), 0.18);
+  color: var(--lamp, #e2b86e);
+}
+.daily-next {
+  min-height: 1.2em;
+  margin: -12px 0 0;
+  color: var(--muted, #aebccd);
+  font-size: 0.85rem;
+}
+.daily-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.daily-actions .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+.daily-review-foot {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 10px 24px 16px;
+}
+.daily-review-foot .primary-button {
+  min-height: 48px;
+  border-radius: 999px;
+}
+.daily-end {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.daily-end h2 {
+  margin: 0;
+  font-family: var(--display, inherit);
+  font-size: 1.6rem;
+}
+.daily-end p {
+  margin: 0 0 8px;
+  color: var(--muted, #aebccd);
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-review,
+  .daily-review-page {
+    animation: none;
+  }
+}
