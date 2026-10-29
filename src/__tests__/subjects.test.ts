@@ -217,10 +217,6 @@ describe('library lines', () => {
   it('says what is there in plain words', () => {
     expect(copyLine({ format: 'print', available: true, url: 'x' })).toBe('On the shelf: in now')
     expect(copyLine({ format: 'print', available: false, held: 2, url: 'x' })).toBe('On the shelf: all out · 2 waiting')
-    expect(copyLine({ format: 'ebook', available: false, waitDays: 53, url: 'x' })).toBe(
-      'E-book in Libby: wait about 8 weeks',
-    )
-    expect(copyLine({ format: 'audiobook', available: true, url: 'x' })).toBe('Audiobook in Libby: available now')
   })
 })
 

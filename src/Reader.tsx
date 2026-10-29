@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -61,6 +61,7 @@ import { cleanChapterLabel } from './lib/chapterLabel'
 import { useNowPlaying, useWakeLock } from './lib/device'
 import { languageName, myLanguage, translatePassage, translateHere } from './lib/translate'
 import { PdfReader } from './PdfReader'
+import './readerPhone.css'
 import { StudyPanel, type StudyInfo } from './StudyPanel'
 import { BookNotesBrowser } from './BookNotesBrowser'
 import { isBookmark, sameSpot } from './lib/bookmarks'
@@ -72,6 +73,9 @@ import { FONT_STACKS, READER_COLORS, type ReaderTheme, type Settings } from './l
 type Note = BrainNote
 type SearchHit = { cfi: string; excerpt: string; chapter: string }
 const MAX_SEARCH_HITS = 40
+// Phones get the full-screen reader with controls laid over the page (readerPhone.css).
+const PHONE_READER = '(max-width: 899px)'
+const onPhone = () => typeof window !== 'undefined' && window.matchMedia(PHONE_READER).matches
 export type NoteAction = 'highlight' | 'note' | 'question' | 'reflect' | 'connect'
 export type ReaderNoteHandler = (text: string, kind?: NoteAction, location?: BrainNoteLocation) => void
 
@@ -178,7 +182,10 @@ function applyReadingStyle(
   if (reading.justify) {
     paragraph['text-align'] = 'justify !important'
     paragraph['hyphens'] = 'auto !important'
+    paragraph['-webkit-hyphens'] = 'auto !important'
   }
+  // Lines break more evenly where the browser can (fewer lone words at a paragraph's end).
+  paragraph['text-wrap'] = 'pretty'
   if (reading.paragraphs === 'indent') {
     paragraph['text-indent'] = '1.5em !important'
     paragraph['margin-top'] = '0 !important'
@@ -198,6 +205,9 @@ function applyReadingStyle(
       'overscroll-behavior-x': 'none',
     },
     'img, svg, video, table, pre': { 'max-width': '100% !important' },
+    // On a phone the controls lie over the page: room is kept above and below the words so the start and end of a
+    // chapter are never under them.
+    ...(onPhone() ? { body: { 'padding-top': '118px !important', 'padding-bottom': '84px !important' } } : {}),
     'img, video': { height: 'auto' },
     pre: { 'white-space': 'pre-wrap !important', 'overflow-wrap': 'anywhere' },
     'td, th': { 'overflow-wrap': 'anywhere' },
@@ -472,6 +482,9 @@ export function Reader({
   const [footnote, setFootnote] = useState<{ text: string; href: string } | null>(null)
   const dismissedEnds = useRef(new Set<string>())
   const bodyRef = useRef<HTMLDivElement>(null)
+  // On a phone the reader's controls lie over the page and step aside while reading: reading down hides them, reading
+  // back up or a tap in the middle of the page brings them back.
+  const [chromeHidden, setChromeHidden] = useState(false)
   // On a phone the app's own header and tab bar step aside while a book is open.
   useEffect(() => {
     document.body.classList.add('reading-focus')
@@ -1020,6 +1033,12 @@ export function Reader({
             contents.document.head.appendChild(style)
           })
         }
+        // Hyphenation needs the page's language; a book that names none is read as its own metadata says, else English.
+        const bookLanguage = String((epub as { packaging?: { metadata?: { language?: string } } }).packaging?.metadata?.language ?? '').trim() || 'en'
+        instance.hooks.content.register((contents: { document: Document }) => {
+          const root = contents.document.documentElement
+          if (!root.getAttribute('lang') && !root.getAttribute('xml:lang')) root.setAttribute('lang', bookLanguage)
+        })
         applyReadingStyle(instance.themes, readingRef.current)
         let activeChapterIndex = initialIndex
         let scrollTimer: number | undefined
@@ -1101,6 +1120,32 @@ export function Reader({
             void Promise.resolve(location).then((value) => reportLocation(value, scrollFraction(event.target)))
           }, 120)
         }
+        // Reading down hides the phone's controls; reading back up, or reaching the top, shows them.
+        const chromeTops = new WeakMap<EventTarget, number>()
+        let lastChromeTap = -1
+        const watchChrome = (target: EventTarget | null) => {
+          if (!target || chromeTops.has(target)) return
+          const topOf = () =>
+            target instanceof Document
+              ? (target.scrollingElement?.scrollTop ?? 0)
+              : target instanceof HTMLElement
+                ? target.scrollTop
+                : 0
+          chromeTops.set(target, topOf())
+          target.addEventListener(
+            'scroll',
+            () => {
+              const top = topOf()
+              const moved = top - (chromeTops.get(target) ?? top)
+              if (Math.abs(moved) < 8 && top > 24) return
+              chromeTops.set(target, top)
+              if (!onPhone()) return
+              if (top <= 24 || moved < 0) setChromeHidden(false)
+              else setChromeHidden(true)
+            },
+            { passive: true },
+          )
+        }
         const attachScroll = (target: EventTarget | null) => {
           if (!target || scrollTargets.has(target)) return
           scrollTargets.add(target)
@@ -1153,12 +1198,22 @@ export function Reader({
             contentDocument.addEventListener(name, () => setAutoScroll(false), { passive: true })
           // Tapping near the top or bottom of the page turns it.
           contentDocument.addEventListener('click', (event) => {
-            if (!readingRef.current.tapZones || contentDocument.getSelection()?.toString()) return
+            if (contentDocument.getSelection()?.toString()) return
             if ((event.target as Element | null)?.closest?.('a, svg, button, input')) return
             const container = bodyRef.current?.querySelector<HTMLElement>('.epub-container')
             if (!container) return
-            const zone = tapZone(event.clientY - container.scrollTop, container.clientHeight)
-            if (!zone) return
+            const zone = readingRef.current.tapZones
+              ? tapZone(event.clientY - container.scrollTop, container.clientHeight)
+              : null
+            if (!zone) {
+              // A tap in the middle of the page shows or hides the controls on a phone (once per tap, however many
+              // times the page was handed to this listener).
+              if (onPhone() && event.timeStamp !== lastChromeTap) {
+                lastChromeTap = event.timeStamp
+                setChromeHidden((hidden) => !hidden)
+              }
+              return
+            }
             const atEdge =
               zone === 'down'
                 ? container.scrollTop + container.clientHeight >= container.scrollHeight - 4
@@ -1183,6 +1238,8 @@ export function Reader({
             }, 250)
           })
           window.setTimeout(() => noteChapterWordsRef.current(), 300)
+          watchChrome(contentDocument)
+          watchChrome(frame.current?.querySelector('.epub-container') ?? null)
           attachScroll(contentDocument.scrollingElement)
           attachScroll(contentDocument.documentElement)
           attachScroll(contentDocument.body)
@@ -1363,6 +1420,8 @@ export function Reader({
     if (index >= 0) goToChapterRef.current(index)
   }
   const chapterLabel = chapterCount > 0 ? `${place.ordinal} of ${place.total}` : 'Opening'
+  // Panels opened from the controls keep them in view.
+  const chromeShut = chromeHidden && !moreOpen && !searchOpen && !define && !translated && !footnote
   const bookNotes = notes.filter(
     (note) => note.bookId === book.id || note.source.toLowerCase().includes(book.title.toLowerCase()),
   )
@@ -1375,7 +1434,9 @@ export function Reader({
         (wideLayout && toolsOpen ? ' reader-tools-open' : '') +
         (pageTurn ? ' reader-page-turn-' + pageTurn : '')
       }
+      style={{ '--reader-paper': READER_COLORS[readerTheme].background } as CSSProperties}
     >
+      <div className={'reader-chrome' + (chromeShut ? ' reader-chrome-hidden' : '')}>
       {wideLayout ? (
         <div className="reader-wide-topbar" aria-label="Expanded reader controls">
           <div className="reader-wide-capture">
@@ -1849,6 +1910,7 @@ export function Reader({
           <strong>{visibleProgress}%</strong>
         </div>
       ) : null}
+      </div>
       <div className={'reader-workspace-grid' + (!wideLayout && !toolsOpen ? ' reader-rail-off' : '')}>
         {!wideLayout ? (
           <aside className="reader-chapter-rail" aria-label="Book contents">
@@ -2148,7 +2210,7 @@ export function Reader({
         />
       ) : null}
       {!wideLayout && book.format === 'epub' && chapterCount > 0 ? (
-        <div className="reader-pager" aria-label="Chapters">
+        <div className={'reader-pager' + (chromeShut ? ' reader-chrome-hidden' : '')} aria-label="Chapters">
           <button
             className="reader-page-button"
             onClick={() => goBackRef.current()}
@@ -2157,7 +2219,22 @@ export function Reader({
           >
             <ArrowLeft size={18} />
           </button>
-          <span>{chapterLabel}</span>
+          <label className="reader-pager-place">
+            <span>{chapterLabel}</span>
+            {toc.length ? (
+              <select
+                value={currentChapter.href}
+                onChange={(event) => handleChapterSelect(event.target.value)}
+                aria-label={`Contents, chapter ${chapterLabel}`}
+              >
+                {toc.map((item) => (
+                  <option key={item.href + '-' + item.label} value={item.href}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </label>
           <button
             className="reader-page-button"
             onClick={() => goToChapterRef.current(nextChapterIndex(toc, chapterIndex))}

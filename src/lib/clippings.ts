@@ -7,9 +7,9 @@ export type Clipping = {
   location: string
   addedAt?: string
   body: string
-  quote?: string // the passage a note was written about (Libby keeps the two together)
+  quote?: string // the passage a note was written about
   chapter?: string
-  from?: 'kindle' | 'libby'
+  from?: 'kindle'
 }
 
 const SEPARATOR = /\r?\n={5,}\r?\n?/

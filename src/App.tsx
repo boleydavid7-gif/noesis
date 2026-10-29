@@ -109,7 +109,6 @@ import { discoverQuery, interestTerms, libraryPicks } from './lib/readNext'
 import { duplicateGroups, resizeCover } from './lib/libraryTools'
 import { DRM_FREE_SOURCES } from './lib/drmFree'
 import { parseClippings } from './lib/clippings'
-import { parseLibbyExport } from './lib/libbyExport'
 import { readDiary, writeDiary } from './lib/diary'
 import { foldDuplicates } from './lib/duplicates'
 import { bookSource } from './lib/bookSource'
@@ -143,8 +142,7 @@ import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
 import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
 import { AddExternalBook, Borrowed } from './Borrowed'
-import { SearchLibbyLink } from './LibbyBar'
-import { isLibbyBook, newLoan, readLoans, writeLoans } from './lib/loans'
+import { newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
 import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
 import { exploreInto, isExploring, questionsToPrepare, type EditSubject } from './lib/subjectExplore'
@@ -1312,17 +1310,12 @@ function App() {
       window.prompt('Copy this link', link)
     }
   }
-  // Kindle's "My Clippings.txt", or the reading journey Libby exports for a book (JSON or CSV).
+  // Kindle's "My Clippings.txt".
   async function importClippings(file: File) {
     const contents = await file.text()
-    const libby = /\.(json|csv)$/i.test(file.name) || /^\s*[[{]/.test(contents)
-    const clips = libby ? parseLibbyExport(contents) : parseClippings(contents)
+    const clips = parseClippings(contents)
     if (clips.length === 0) {
-      showNotice(
-        libby
-          ? 'No highlights found in that Libby file.'
-          : 'No highlights found. Choose “My Clippings.txt” from your Kindle, or a Libby export.',
-      )
+      showNotice('No highlights found. Choose “My Clippings.txt” from your Kindle.')
       return
     }
     const key = (title: string, body: string, quote = '') => `${title}|${body.trim()}|${quote.trim()}`
@@ -2793,7 +2786,7 @@ function App() {
                 ) : null
               })()
             : null}
-          <Borrowed books={books} onOpenBook={openSavedBook} onRemoveBook={deleteBook} />
+          <Borrowed books={books} onOpenBook={openSavedBook} />
           <BookSection
             title="On this device"
             views
@@ -2843,7 +2836,7 @@ function App() {
                       author: details.author || undefined,
                       kind: 'ebook',
                       due: details.due,
-                      lender: details.store === 'Libby' ? 'Libby' : details.store,
+                      lender: details.store,
                       bookId: book.id,
                     }),
                   ])
@@ -2854,7 +2847,7 @@ function App() {
           ) : null}
           <BookSection
             title="External e-books"
-            books={filteredBooks.filter((book) => book.format === 'external' && !isLibbyBook(book))}
+            books={filteredBooks.filter((book) => book.format === 'external')}
             onOpen={openSavedBook}
             onDelete={deleteBook}
             onEdit={editBook}
@@ -3019,7 +3012,6 @@ function App() {
             <BookSection books={localMatches} onOpen={openSavedBook} />
           </section>
         ) : null}
-        <SearchLibbyLink query={resourceQuery} />
         <section className="resource-section">
           <div className="section-heading">
             <div>
@@ -3971,7 +3963,7 @@ function App() {
                           inputMode="url"
                           value={editing.link ?? ''}
                           onChange={(event) => setEditing({ ...editing, link: event.target.value })}
-                          placeholder="The book's page in Kindle, Libby or a store"
+                          placeholder="The book's page in Kindle or a store"
                         />
                         {editing.link ? (
                           <button

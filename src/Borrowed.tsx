@@ -1,16 +1,14 @@
 // Borrowed: loans with their due dates, a way to renew at the library, and the external e-books form.
-import { useEffect, useRef, useState } from 'react'
-import { BookOpen, Check, ExternalLink, Headphones, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BookOpen, Check, Headphones, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { LibraryBook } from './lib/library'
 import {
-  LIBBY_SHELF,
   LOAN_KINDS,
   activeLoans,
   bookForLoan,
   daysLeft,
   dueSoon,
   dueText,
-  libbyBooksWithoutLoan,
   localDay,
   newLoan,
   onLoansChanged,
@@ -25,22 +23,8 @@ import {
 } from './lib/loans'
 import { useChosenLibrary } from './lib/publicLibrary'
 import { cleanLink, linkLabel } from './lib/notesBooks'
-import {
-  connectLibby,
-  libbyDue,
-  onLibbyLinkChanged,
-  readLibbyLink,
-  refreshFromLibby,
-  writeLibbyLink,
-} from './lib/libbyLink'
-import { timeAgo } from './lib/time'
-import { libbyLinkProps } from './lib/libby'
 
-// Libby pages open the Libby app where the phone has it (lib/libby.ts); other links open a new tab.
-const linkTo = (url: string) =>
-  /^https:\/\/([\w-]+\.)?libbyapp\.com\//.test(url)
-    ? libbyLinkProps(url)
-    : { href: url, target: '_blank', rel: 'noreferrer noopener' }
+const linkTo = (url: string) => ({ href: url, target: '_blank', rel: 'noreferrer noopener' })
 
 export function useLoans(): [Loan[], (next: Loan[]) => void] {
   const [loans, setLoans] = useState(readLoans)
@@ -74,19 +58,9 @@ function LoanRow({
   const put = (next: Loan) => save(loans.map((item) => (item.id === next.id ? next : item)))
   return (
     <li className={`loan-row${days <= 3 ? ' loan-row-soon' : ''}`}>
-      {loan.cover ? (
-        <a
-          className="loan-cover"
-          {...linkTo(loan.readUrl ?? loan.renewUrl ?? LIBBY_SHELF)}
-          aria-label={`Read “${loan.title}” in Libby`}
-        >
-          <img src={loan.cover} alt="" referrerPolicy="no-referrer" />
-        </a>
-      ) : (
-        <span className="loan-icon" aria-hidden="true">
-          <Icon size={16} />
-        </span>
-      )}
+      <span className="loan-icon" aria-hidden="true">
+        <Icon size={16} />
+      </span>
       <div className="loan-body">
         {book && onOpenBook ? (
           <button className="loan-title" onClick={() => onOpenBook(book)}>
@@ -128,43 +102,23 @@ function LoanRow({
           </form>
         ) : (
           <div className="loan-actions">
-            {loan.readUrl ? (
-              <a className="primary-button" {...linkTo(loan.readUrl)}>
-                <BookOpen size={13} /> Read
-              </a>
-            ) : null}
             {renewAt ? (
-              <a
-                className="secondary-button"
-                {...linkTo(renewAt)}
-                onClick={() => {
-                  if (!loan.libbyId) setRenewing(true)
-                }}
-              >
+              <a className="secondary-button" {...linkTo(renewAt)} onClick={() => setRenewing(true)}>
                 <RotateCcw size={13} /> Renew
               </a>
             ) : null}
-            {loan.kind !== 'physical' && renewAt !== LIBBY_SHELF && !loan.libbyId ? (
-              <a className="text-button" {...linkTo(LIBBY_SHELF)}>
-                Open in Libby <ExternalLink size={11} />
-              </a>
-            ) : null}
-            {loan.libbyId ? null : (
-              <>
-                <button className="text-button" onClick={() => setRenewing(true)}>
-                  Renewed…
-                </button>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    onUndo(`Returned “${loan.title}”.`, loans)
-                    put(returned(loan))
-                  }}
-                >
-                  <Check size={13} /> Returned
-                </button>
-              </>
-            )}
+            <button className="text-button" onClick={() => setRenewing(true)}>
+              Renewed…
+            </button>
+            <button
+              className="text-button"
+              onClick={() => {
+                onUndo(`Returned “${loan.title}”.`, loans)
+                put(returned(loan))
+              }}
+            >
+              <Check size={13} /> Returned
+            </button>
           </div>
         )}
       </div>
@@ -176,12 +130,10 @@ function LoanRow({
 export function Borrowed({
   books,
   onOpenBook,
-  onRemoveBook,
   compact = false,
 }: {
   books: LibraryBook[]
   onOpenBook?: (book: LibraryBook) => void
-  onRemoveBook?: (book: LibraryBook) => void
   compact?: boolean
 }) {
   const [loans, save] = useLoans()
@@ -199,8 +151,6 @@ export function Borrowed({
     .sort((a, b) => (b.returnedAt ?? '').localeCompare(a.returnedAt ?? ''))
   if (compact && !shown.length) return null
   const bookFor = (loan: Loan) => bookForLoan(loan, books)
-  // Libby e-books kept in the library with no open loan (added by hand, or read before Libby was connected).
-  const libbyOnly = compact ? [] : libbyBooksWithoutLoan(books, loans)
   return (
     <section className={`section-block borrowed${compact ? ' borrowed-compact' : ''}`} aria-label="Borrowed">
       <div className="section-heading">
@@ -213,7 +163,6 @@ export function Borrowed({
           </button>
         )}
       </div>
-      {compact ? null : <LibbyConnect loans={loans} save={save} />}
       {adding ? (
         <LoanForm
           books={books}
@@ -239,42 +188,9 @@ export function Borrowed({
             />
           ))}
         </ul>
-      ) : compact || libbyOnly.length ? null : (
+      ) : compact ? null : (
         <p className="context-empty">Nothing borrowed. Add a loan to keep its due date here.</p>
       )}
-      {libbyOnly.length ? (
-        <ul className="loan-list">
-          {libbyOnly.map((book) => (
-            <li key={book.id} className="loan-row">
-              <span className="loan-icon" aria-hidden="true">
-                <BookOpen size={16} />
-              </span>
-              <div className="loan-body">
-                {onOpenBook ? (
-                  <button className="loan-title" onClick={() => onOpenBook(book)}>
-                    {book.title}
-                  </button>
-                ) : (
-                  <strong className="loan-title">{book.title}</strong>
-                )}
-                <small>
-                  {[book.author !== 'Unknown author' ? book.author : '', 'Libby'].filter(Boolean).join(' · ')}
-                </small>
-                <div className="loan-actions">
-                  <a className="text-button" {...linkTo(book.externalUrl ?? LIBBY_SHELF)}>
-                    Open in Libby <ExternalLink size={11} />
-                  </a>
-                  {onRemoveBook ? (
-                    <button className="text-button" onClick={() => onRemoveBook(book)}>
-                      <Trash2 size={13} /> Remove
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
       {!compact && past.length ? (
         <details className="loan-past">
           <summary>Returned ({past.length})</summary>
@@ -312,125 +228,6 @@ export function Borrowed({
         </div>
       ) : null}
     </section>
-  )
-}
-
-// Libby, connected: loans, due dates and covers come from Libby itself, and update when Borrowed opens (at most
-// every 15 minutes) or on Update.
-function LibbyConnect({ loans, save }: { loans: Loan[]; save: (next: Loan[]) => void }) {
-  const [link, setLink] = useState(readLibbyLink)
-  const [open, setOpen] = useState(false)
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  const [leaving, setLeaving] = useState(false)
-  const latest = useRef(loans)
-  latest.current = loans
-  useEffect(() => onLibbyLinkChanged(() => setLink(readLibbyLink())), [])
-  const update = async () => {
-    setBusy(true)
-    const result = await refreshFromLibby(latest.current, save)
-    setBusy(false)
-    setMessage('problem' in result ? result.problem : '')
-  }
-  useEffect(() => {
-    if (libbyDue(readLibbyLink())) void update()
-    // Once, when Borrowed opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  if (!link || link.problem) {
-    return (
-      <div className="libby-connect">
-        {open ? (
-          <form
-            className="libby-connect-form"
-            onSubmit={async (event) => {
-              event.preventDefault()
-              setBusy(true)
-              setMessage('')
-              try {
-                await connectLibby(code)
-                setOpen(false)
-                setCode('')
-                await update()
-              } catch (error) {
-                setMessage(error instanceof Error ? error.message : 'That did not work.')
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
-            <p>
-              In the Libby you are signed in to, open Menu › Copy To Another Device › Sonos Speakers, then enter the
-              code it shows.
-            </p>
-            <label>
-              Code
-              <input
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="8 digits"
-                autoFocus
-              />
-            </label>
-            <div className="recovery-actions">
-              <button className="primary-button" type="submit" disabled={busy || code.length !== 8}>
-                {busy ? 'Connecting…' : 'Connect'}
-              </button>
-              <button type="button" className="text-button" onClick={() => setOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="libby-connect-row">
-            <span>{link?.problem ?? 'Bring in your Libby loans and due dates.'}</span>
-            <button className="secondary-button" onClick={() => setOpen(true)}>
-              {link?.problem ? 'Connect again' : 'Connect Libby'}
-            </button>
-          </div>
-        )}
-        {message ? <p className="libby-connect-note">{message}</p> : null}
-      </div>
-    )
-  }
-  return (
-    <div className="libby-connect">
-      <div className="libby-connect-row">
-        <span>Libby{link.checked ? ` · ${timeAgo(link.checked)}` : ''}</span>
-        {leaving ? (
-          <>
-            <button
-              className="text-button"
-              onClick={() => {
-                writeLibbyLink(null)
-                setLeaving(false)
-              }}
-            >
-              Disconnect
-            </button>
-            <button className="text-button" onClick={() => setLeaving(false)}>
-              Keep
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="text-button" onClick={() => void update()} disabled={busy}>
-              {busy ? 'Updating…' : 'Update'}
-            </button>
-            <a className="text-button" {...linkTo(LIBBY_SHELF)}>
-              Open Libby <ExternalLink size={11} />
-            </a>
-            <button className="text-button" onClick={() => setLeaving(true)}>
-              Disconnect
-            </button>
-          </>
-        )}
-      </div>
-      {message ? <p className="libby-connect-note">{message}</p> : null}
-    </div>
   )
 }
 
@@ -512,7 +309,7 @@ export function LoanForm({
           inputMode="url"
           value={link}
           onChange={(event) => setLink(event.target.value)}
-          placeholder={kind === 'physical' ? "Your library's account page" : 'Libby is used when this is empty'}
+          placeholder="Your library's account page"
           aria-invalid={!linkOk}
         />
       </label>
@@ -528,7 +325,7 @@ export function LoanForm({
   )
 }
 
-export const STORES = ['Kindle', 'Apple Books', 'Google Play Books', 'Kobo', 'Libby', 'Hoopla', 'Other']
+export const STORES = ['Kindle', 'Apple Books', 'Google Play Books', 'Kobo', 'Hoopla', 'Other']
 
 // An e-book read somewhere else: its title, where it is, and (when borrowed) its due date.
 export function AddExternalBook({
@@ -554,7 +351,7 @@ export function AddExternalBook({
         onSave({
           title: title.trim(),
           author: author.trim(),
-          link: cleanLink(link) ?? (store === 'Libby' ? LIBBY_SHELF : undefined),
+          link: cleanLink(link),
           store,
           due: borrowed ? due : undefined,
         })

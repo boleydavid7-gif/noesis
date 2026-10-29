@@ -11,6 +11,13 @@ startIncoming()
 
 installNativeApi()
 
+// Libby was taken out of Noesis: the sign-in an earlier version kept on this device goes too.
+try {
+  localStorage.removeItem('noesis:libby-link:v1')
+} catch {
+  // Storage blocked: nothing was kept.
+}
+
 // The library is read into memory first, so the app opens with every book in place.
 void startLibrary().finally(() => {
   createRoot(document.getElementById('root')!).render(

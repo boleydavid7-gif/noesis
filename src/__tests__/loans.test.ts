@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   activeLoans,
   bookForLoan,
-  isLibbyBook,
-  libbyBooksWithoutLoan,
   dueSoon,
   dueText,
-  LIBBY_SHELF,
   newLoan,
   renewed,
   renewLink,
@@ -39,7 +36,7 @@ describe('loans', () => {
     expect(renewLink(loan('2026-10-20', { renewUrl: 'https://example.org/acct' }), null)).toBe(
       'https://example.org/acct',
     )
-    expect(renewLink(loan('2026-10-20'), null)).toBe(LIBBY_SHELF)
+    expect(renewLink(loan('2026-10-20'), null)).toBeUndefined()
     const paper = loan('2026-10-20', { kind: 'physical' })
     expect(renewLink(paper, { catalog: 'seattle', website: 'https://spl.org' } as never)).toBe(
       'https://seattle.bibliocommons.com/v2/checkedout',
@@ -57,20 +54,10 @@ describe('loans', () => {
   })
 })
 
-describe('Libby books under Borrowed', () => {
-  const libby = { id: 'b1', title: 'The Overstory', format: 'external' as const, store: 'Libby' }
-  const kindle = { id: 'b2', title: 'Dune', format: 'external' as const, store: 'Kindle' }
-  const byLink = { id: 'b3', title: 'Circe', format: 'external' as const, externalUrl: 'https://libbyapp.com/shelf' }
-  const loan = newLoan({ title: 'the overstory', kind: 'ebook', due: '2026-10-30' })
-
-  it('knows a Libby e-book by its store or its link', () => {
-    expect([libby, kindle, byLink].map(isLibbyBook)).toEqual([true, false, true])
-  })
-
-  it('joins a loan to the Libby e-book of the same title, and lists the rest without a due date', () => {
-    expect(bookForLoan(loan, [kindle, libby])).toBe(libby)
-    expect(bookForLoan({ ...loan, kind: 'physical' }, [libby])).toBeUndefined()
-    expect(libbyBooksWithoutLoan([libby, kindle, byLink], [loan])).toEqual([byLink])
-    expect(libbyBooksWithoutLoan([libby], [{ ...loan, returnedAt: '2026-10-01' }])).toEqual([libby])
+describe('loans and library books', () => {
+  const book = { id: 'b1', title: 'The Overstory' }
+  it('joins a loan only to the book it was linked to', () => {
+    expect(bookForLoan(newLoan({ title: 'x', kind: 'ebook', due: '2026-10-30', bookId: 'b1' }), [book])).toBe(book)
+    expect(bookForLoan(newLoan({ title: 'The Overstory', kind: 'ebook', due: '2026-10-30' }), [book])).toBeUndefined()
   })
 })

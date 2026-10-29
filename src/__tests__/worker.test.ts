@@ -855,7 +855,7 @@ describe('public libraries', () => {
     longitude,
     systems: [{ name: `${name} Library`, fulfillmentId: id, type: 'Public Library', links: [] }],
   })
-  it('lists only libraries near the place', async () => {
+  it('lists only libraries near the place whose catalog Noesis can read', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL | Request) => {
@@ -871,14 +871,15 @@ describe('public libraries', () => {
             }),
           )
         if (url.includes('thunder.api.overdrive.com')) return new Response(JSON.stringify({ preferredKey: 'short' }))
+        // Only Seattle's catalog is on BiblioCommons.
+        if (url.includes('gateway.bibliocommons.com/v2/libraries/seattle/')) return new Response('{}')
         return new Response('', { status: 404 })
       }),
     )
     const response = await call('/api/libraries?q=98116', { headers: { 'cf-connecting-ip': '8.8.2.1' } })
     const body = (await response.json()) as { systems: Array<{ key: string; libbyKey: string; catalog?: string }> }
-    expect(body.systems.map((system) => system.key)).toEqual(['seattle', 'tacoma'])
-    expect(body.systems[0].libbyKey).toBe('short')
-    expect(body.systems[0].catalog).toBeUndefined()
+    expect(body.systems.map((system) => system.key)).toEqual(['seattle'])
+    expect(body.systems[0].catalog).toBe('seattle')
   })
 })
 

@@ -1,4 +1,4 @@
-// "At your library": whether a book is on the shelf or in Libby at the reader's own public library.
+// "At your library": whether a book is on the shelf at the reader's own public library.
 import { useEffect, useState } from 'react'
 import { ExternalLink, Library, LocateFixed } from 'lucide-react'
 import {
@@ -27,7 +27,7 @@ export function LibraryChooser({ onDone }: { onDone?: () => void }) {
       const systems = await findLibraries(query)
       setFound(systems)
       if (!systems.length)
-        setError('No libraries with online lending near there. Each book still links to WorldCat for libraries nearby.')
+        setError('No libraries found near there. Each book still links to WorldCat for libraries nearby.')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Libraries could not be looked up right now.')
     } finally {
@@ -101,7 +101,6 @@ export function LibraryChooser({ onDone }: { onDone?: () => void }) {
                   {[
                     system.place,
                     system.miles !== undefined ? `${system.miles} mi` : '',
-                    system.catalog ? 'Shelf and Libby' : 'Libby',
                   ]
                     .filter(Boolean)
                     .join(' · ')}

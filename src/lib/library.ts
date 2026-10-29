@@ -1,5 +1,5 @@
 import { markDeleted, markRestored } from './tombstones'
-// 'external': an e-book read in another app or store (Kindle, Libby…); Noesis keeps its details and a link to it.
+// 'external': an e-book read in another app or store (Kindle, Kobo…); Noesis keeps its details and a link to it.
 export type BookFormat = 'epub' | 'pdf' | 'resource' | 'web' | 'external'
 
 export type LibraryBook = {

@@ -329,15 +329,15 @@ export function SecondBrainPage({
             </p>
           </div>
           <div>
-            <strong>From a Kindle or Libby</strong>
-            <p>Kindle: “My Clippings.txt”. Libby: Timeline › a book › Export reading journey.</p>
+            <strong>From a Kindle</strong>
+            <p>“My Clippings.txt”, in the Kindle’s documents folder.</p>
             <button className="secondary-button" onClick={() => clippingsInput.current?.click()}>
               Import highlights
             </button>
             <input
               ref={clippingsInput}
               type="file"
-              accept=".txt,.json,.csv,text/plain,application/json,text/csv"
+              accept=".txt,text/plain"
               hidden
               onChange={(event) => {
                 const file = event.target.files?.[0]

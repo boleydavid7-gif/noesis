@@ -76,9 +76,11 @@ The current app is a working reader-first build:
 - Your public library (Settings > Reading, or "Check your library" on a book; `PublicLibrary.tsx`,
   `lib/publicLibrary.ts`, synced preference `noesis:public-library:v1`): `/api/libraries` finds library systems with
   a branch within about 50 miles of a typed city or ZIP code, or of the reader's location (turned into a postal code
-  by BigDataCloud, not kept), through Libby's locate service. `/api/library-has` says whether a book is in Libby
-  (e-book, audiobook; available or the wait, OverDrive's public catalog) and, where the library's catalog is on
-  BiblioCommons, whether a printed copy is in. Only what the library has is shown; every book also links to
+  by BigDataCloud, not kept), through OverDrive's directory of libraries; only systems whose catalog is on
+  BiblioCommons are listed. `/api/library-has` says whether a printed copy is on the shelf and in. Libby was taken
+  out on Oct 29 (its unofficial connection kept dropping): no e-book or audiobook availability, no Libby links, no
+  Connect Libby, no Libby highlight import; `main.tsx` removes an old device's `noesis:libby-link:v1`. Only what the
+  library has is shown; every book also links to
   WorldCat, which lists libraries holding it near any place. These services have no published API terms for this
   use; each lookup fails quietly to the WorldCat link.
 - Settings is one page with Account, Reading, Appearance, Library, Backup & Sync,
@@ -160,11 +162,11 @@ and a Wrangler dry run. The live health endpoint is
   syncs. Next: notes in IndexedDB with the person's own storage holding the full set (beyond 2,000), photo of a page
   to text, Kindle and Readwise imports, links to subjects, review cards, Markdown export, three panes on computers.
 - Library sections: Borrowed, On this device, External e-books. An external e-book (`format: 'external'`,
-  `externalUrl`, `store`) has no file; its cover opens the link (Kindle, Libby, Apple Books…), and Edit details,
+  `externalUrl`, `store`) has no file; its cover opens the link (Kindle, Kobo, Apple Books…), and Edit details,
   shelves, favorite and Remove work as for books on the device; with no link, opening asks for one.
 - Borrowed (`lib/loans.ts`, `Borrowed.tsx`, synced preference `noesis:loans:v1`): e-book, audiobook or paper loans
-  with a due date ("Due in 3 days", "Was due Oct 10"). Renew opens `renewLink` (the loan's own link, else the Libby
-  shelf for digital copies, else the chosen library's BiblioCommons "checked out" page or website) and asks for the
+  with a due date ("Due in 3 days", "Was due Oct 10"). Renew opens `renewLink` (the loan's own link, else the chosen
+  library's BiblioCommons "checked out" page or website) and asks for the
   new date; Returned with undo. Home shows loans due within three days.
 - Introduction (`src/Onboarding.tsx`, `onboarding.css`): new people (nothing in the library, notes or paths) see
   seven full-screen pages in the iOS manner: Welcome; Read what you own; Keep what you read; Learn by asking; Yours,
@@ -193,13 +195,6 @@ and a Wrangler dry run. The live health endpoint is
   place and anything set on either copy. Notes, review cards, loans, reading diary, rabbit holes' books and the
   folder map move to it, a copy's file moves over when the kept one has none here, and the copy is tombstoned so no
   sync brings it back.
-- Libby (`lib/libby.ts`, `LibbyBar.tsx`): Libby's books are DRM-protected and have no public reading API, so they
-  can't be read inside Noesis. The Library page has a Libby bar (Shelf, the chosen library in Libby, and a search
-  that opens Libby's results for that library, by its `libbyKey`); Explore offers "Search Libby for …".
-- Libby highlights (`lib/libbyExport.ts`): Second Brain's "Import highlights" takes Kindle's My Clippings.txt or the
-  reading journey Libby exports for a book (Timeline › a book › Export reading journey) as JSON or CSV. Highlights
-  come in as highlights; a highlight with a note comes in as a note with the passage as its quote; chapter and
-  place are kept, the book is linked when it is in the library, tag `libby`, and ones already there are skipped.
 - Lamplight, the family's design system, in its deep (premium) cut (`src/lamplight/`, copied from Proairetos's `src/lamplight/`;
   change it there first): `scheme.ts` makes every color from a room seed (the chosen background) and a lamp seed (the chosen color),
   each moved until it reads 7:1 / 4.5:1 on every surface; `noesis.ts` maps the 13 backgrounds to rooms and the 8 colors to lamps
@@ -223,25 +218,6 @@ and a Wrangler dry run. The live health endpoint is
   the lamp's light falling on their near side, a satin sheen, a shade beneath each, a vignette, dim stars and grain),
   made from the page color, the chosen color and the background's hue (`wallpaperColors`), set as `--lamplight` (tall,
   sidebar) and `--lamplight-wide` (home banner) by App's appearance effect. A chosen picture still replaces it.
-- Connected Libby (Borrowed › Connect Libby): the reader makes a setup code in the Libby they are signed in to
-  (Menu › Copy To Another Device › Sonos Speakers; the plain option asks for a code from the other device instead) and
-  enters it in Noesis, which joins as one more device and receives their library cards. Worker `/api/libby`
-  (`src/workerLibby.ts`): `POST /chip?client=dewey`, `POST /chip/clone/code {code}`, the chip again for the joined
-  token, then `GET /chip/sync` until a card shows up (three tries); hosts `sentry.libbyapp.com`, then
-  `sentry-read.svc.overdrive.com`; headers like Libby's own web app; errors name the step. A code from a signed-out
-  Libby is taken ("cloned") but brings no card, and says so. (Tried the other way, Noesis showing a code: Libby kept it
-  "retained" and nothing came over.) Unofficial, so it can stop working if Libby changes it; nothing kept on the
-  server. The token stays on the device (`noesis:libby-link:v1`, not synced or backed up). `mergeLibbyLoans`
-  (`lib/libbyLink.ts`) lays Libby's loans over Borrowed: due dates follow renewals, a hand-typed e-book of the same
-  title is joined, a loan Libby no longer has is marked returned; paper copies are untouched. Each Libby loan shows its
-  cover and Read, which open the loan in Libby's reader (`libbyapp.com/open/loan/CARD/ID`); Renew opens its page
-  (`share.libbyapp.com/title/ID`). Updates when Borrowed opens
-  (at most every 15 minutes) or on Update; a refused token asks to connect again. Libby e-books added by hand sit under
-  Borrowed too (`isLibbyBook`), joined to their loan by title (`bookForLoan`) or listed without a due date; External
-  e-books leaves them out. Libby links open the Libby app on phones (`libbyLinkProps`: Android intent link to
-  `com.overdrive.mobile.android.libby` with the web page as fallback; iPhone follows the link in place so the app can
-  take it); computers open a new tab. The old Libby card on the Library page is gone (Open Libby sits in Borrowed's
-  Libby line; Search Libby stays in Explore).
 - Library views (On this device; `BookSection` `views`): Grid (the cover grid), Large (big covers with a calm shadow and a
   thin progress line) and List (one grouped list: small cover, title, author, a progress line, 30% / New / Read, then
   favorite, shelves and remove; hairlines start after the cover). Chosen with a segmented switch in the section
@@ -265,3 +241,11 @@ and a Wrangler dry run. The live health endpoint is
   clear at rest with the mark before the title, mica and a hairline once the page scrolls (`nx-scrolled`), the title
   keeping one size while scrolling (the owner's choice); the dock steps aside reading down and comes back on the way up, at the top or the foot
   (`nx-tucked`, `useScrollBars`, which reads only the scroll). Motion turned down keeps every change without travel.
+- Phone reader (`src/readerPhone.css`, `chromeHidden` in `Reader.tsx`, under 900px while reading): the book fills the
+  screen in its paper color; the controls (back, title, tools, progress) lie over the top in `.reader-chrome` (on
+  computers `display: contents`, so the grid is unchanged) and the chapter bar over the foot. Reading down slides both
+  away, reading back up or reaching the top brings them back, and a tap in the middle of the page toggles them (once per
+  tap: a page can be handed to the listener twice). Panels opened from them keep them in view. On a phone the page keeps
+  118px above and 84px below the words (`applyReadingStyle`), and the chapter bar's "N of M" opens the contents (an
+  unseen select). Pages without a language get the book's, so justified text hyphenates; paragraphs use
+  `text-wrap: pretty`.

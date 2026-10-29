@@ -1,0 +1,226 @@
+/* The reader on a phone: the book fills the screen in its own paper color, and the controls lie over it at the top
+   (back, title, tools, progress) and at the foot (chapters). Reading down slides them away; reading back up or a tap
+   in the middle of the page brings them back (Reader.tsx: chromeHidden). On computers .reader-chrome is
+   display: contents, so the page keeps its usual grid. */
+.reader-chrome {
+  display: contents;
+}
+
+@media (max-width: 899px) {
+  body.reading-focus .reader-page.reader-page:not(.reader-page-wide) {
+    --reader-top: 118px;
+    --reader-foot: 76px;
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: var(--reader-paper, #f6f2e9);
+    box-shadow: none;
+  }
+
+  /* The book: everything under the status bar, edge to edge. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-workspace-grid {
+    position: absolute;
+    inset: env(safe-area-inset-top) 0 0;
+    display: block;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chapter-rail,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-context-rail {
+    display: none;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-body,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-frame-wrap,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-frame-wrap.reader-frame-epub,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  /* A PDF or a web source has no room kept for the controls inside its page, so it starts below them. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-body-pdf,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-body-web {
+    padding-top: var(--reader-top);
+  }
+
+  /* The controls at the top: one band of the app's mica over the page. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chrome {
+    position: absolute;
+    z-index: 40;
+    top: 0;
+    right: 0;
+    left: 0;
+    display: grid;
+    gap: 8px;
+    max-height: 100dvh;
+    overflow-y: auto;
+    padding: calc(env(safe-area-inset-top) + 6px) 14px 10px;
+    background: color-mix(in oklab, var(--tone-1, #0b1622) 94%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    transition:
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.24s ease;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chrome.reader-chrome-hidden {
+    transform: translateY(-104%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* One row: back, the book and chapter, then the tools in a row of their own that scrolls sideways if it must. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 10px;
+    align-items: center;
+    padding: 0;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-toolbar > .secondary-button {
+    order: 0;
+    min-height: 36px;
+    padding: 0 12px 0 8px;
+    border-radius: 999px;
+    font-size: 14px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-title {
+    order: 1;
+    flex-basis: auto;
+    gap: 1px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-title strong {
+    font-size: 16px;
+    line-height: 1.25;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-title span {
+    font-size: 12px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-controls {
+    order: 2;
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    gap: 4px;
+    margin: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-controls::-webkit-scrollbar {
+    display: none;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-controls .icon-button {
+    flex: none;
+    width: 40px;
+    height: 40px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-contents-select {
+    flex: 1 1 7rem;
+    width: auto;
+    max-width: 11rem;
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* Progress: a hairline with the figures beside it. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-progress-row {
+    gap: 10px;
+    margin: 0;
+    font-size: 12px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-progress-row .reader-progress {
+    height: 3px;
+  }
+
+  /* Chapters at the foot: a slim bar just above the home indicator that leaves with the top controls. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pager {
+    position: absolute;
+    z-index: 40;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom) + 8px);
+    left: 12px;
+    min-height: 0;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid rgba(var(--accent-rgb, 220, 194, 142), 0.22);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--tone-1, #0b1622) 98%, transparent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+    font-size: 13px;
+    transition:
+      transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 0.24s ease;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pager .reader-page-button {
+    width: 40px;
+    height: 40px;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pager.reader-chrome-hidden {
+    transform: translateY(calc(100% + 24px + env(safe-area-inset-bottom)));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* What sits over the page (end of chapter, highlight choices, a note) keeps clear of the foot. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chapter-end {
+    bottom: calc(env(safe-area-inset-bottom) + var(--reader-foot));
+  }
+}
+
+@media (max-width: 899px) and (prefers-reduced-motion: reduce) {
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chrome,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pager {
+    transition: opacity 0.2s ease;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-chrome.reader-chrome-hidden,
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pager.reader-chrome-hidden {
+    transform: none;
+  }
+}
+
+/* The chapter bar's place ("13 of 20") opens the contents: a select laid unseen over it. */
+.reader-pager-place {
+  position: relative;
+  display: grid;
+  flex: 1;
+  min-height: 40px;
+  place-items: center;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.reader-pager-place select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.reader-pager-place:focus-within {
+  outline: 2px solid var(--lamp, #d5ab61);
+  outline-offset: 2px;
+}
+@media (max-width: 899px) {
+  /* Contents live in the chapter bar on a phone, so the tool row keeps only icons. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-controls .reader-contents-select {
+    display: none;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-controls {
+    justify-content: space-around;
+  }
+}

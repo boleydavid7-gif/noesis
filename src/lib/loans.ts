@@ -1,5 +1,5 @@
 // Borrowed: due dates for library loans, digital or paper. Kept as a small synced preference, so every device
-// has the same list. Renewing happens at the library (Libby, the library's catalog, or a link the reader sets);
+// has the same list. Renewing happens at the library (its catalog, or a link the reader sets);
 // Noesis opens the right page and records the new date.
 import type { LibrarySystem } from './publicLibrary'
 import type { LibraryBook } from './library'
@@ -20,9 +20,6 @@ export type Loan = {
   due: string // YYYY-MM-DD
   renewUrl?: string
   bookId?: string // the book in the Noesis library, when there is one
-  libbyId?: string // the title in Libby, for loans brought in from a connected Libby
-  cover?: string
-  readUrl?: string // opens the loan in Libby's reader
   renewals?: number
   returnedAt?: string
   added: string
@@ -30,7 +27,6 @@ export type Loan = {
 }
 
 export const LOANS_KEY = 'noesis:loans:v1'
-export const LIBBY_SHELF = 'https://libbyapp.com/shelf'
 const CHANGED = 'noesis-loans-changed'
 
 export function readLoans(storage: Storage | null = typeof window === 'undefined' ? null : localStorage): Loan[] {
@@ -100,11 +96,10 @@ export const activeLoans = (loans: Loan[]) =>
 export const dueSoon = (loans: Loan[], today = localDay(), within = 3) =>
   activeLoans(loans).filter((loan) => daysLeft(loan, today) <= within)
 
-// Where renewing happens: the reader's own link, else Libby for e-books and audiobooks, else the library's
-// "checked out" page when its catalog is on BiblioCommons, else the library's website.
+// Where renewing happens: the reader's own link, else the library's "checked out" page when its catalog is on
+// BiblioCommons, else the library's website.
 export function renewLink(loan: Loan, library: LibrarySystem | null): string | undefined {
   if (loan.renewUrl) return loan.renewUrl
-  if (loan.kind !== 'physical') return LIBBY_SHELF
   if (library?.catalog) return `https://${library.catalog}.bibliocommons.com/v2/checkedout`
   return library?.website
 }
@@ -133,31 +128,7 @@ export function weeksFrom(today: string, weeks: number): string {
   return localDay(date)
 }
 
-// An e-book kept in the library as read in Libby: it sits under Borrowed, not with the other external e-books.
-export const isLibbyBook = (book: Pick<LibraryBook, 'format' | 'store' | 'externalUrl'>) =>
-  book.format === 'external' &&
-  (book.store === 'Libby' || /^https:\/\/([\w-]+\.)?libbyapp\.com\//.test(book.externalUrl ?? ''))
-
-const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
-
-/** The library book a loan is for: the one it was linked to, else a Libby e-book with the same title. */
-export function bookForLoan<B extends Pick<LibraryBook, 'id' | 'title' | 'format' | 'store' | 'externalUrl'>>(
-  loan: Pick<Loan, 'bookId' | 'title' | 'kind'>,
-  books: B[],
-): B | undefined {
-  return (
-    books.find((book) => book.id === loan.bookId) ??
-    (loan.kind === 'physical'
-      ? undefined
-      : books.find((book) => isLibbyBook(book) && sameTitle(book.title, loan.title)))
-  )
-}
-
-/** Libby e-books in the library with no open loan: shown under Borrowed without a due date. */
-export function libbyBooksWithoutLoan<B extends Pick<LibraryBook, 'id' | 'title' | 'format' | 'store' | 'externalUrl'>>(
-  books: B[],
-  loans: Loan[],
-): B[] {
-  const open = activeLoans(loans)
-  return books.filter((book) => isLibbyBook(book) && !open.some((loan) => bookForLoan(loan, [book])))
+/** The library book a loan is for, when it was linked to one. */
+export function bookForLoan<B extends Pick<LibraryBook, 'id'>>(loan: Pick<Loan, 'bookId'>, books: B[]): B | undefined {
+  return loan.bookId ? books.find((book) => book.id === loan.bookId) : undefined
 }

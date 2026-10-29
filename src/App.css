@@ -8015,17 +8015,6 @@ body {
     border-radius: 999px;
     background: rgba(8, 20, 34, 0.94);
   }
-  /* The dock is hidden while reading, so the chapter bar sits just above the home indicator. */
-  body.reading-focus .reader-pager {
-    position: fixed;
-    right: 16px;
-    bottom: calc(env(safe-area-inset-bottom) + 8px);
-    left: 16px;
-    margin: 0;
-  }
-  body.reading-focus .reader-page:not(.reader-page-wide) {
-    padding-bottom: 72px;
-  }
 }
 .drm-sources ul {
   display: grid;
@@ -9025,12 +9014,6 @@ input[type='radio'] {
   body.reading-focus .topbar,
   body.reading-focus .mobile-bottom-nav {
     display: none;
-  }
-}
-@media (max-width: 900px) {
-  body.reading-focus .reader-page:not(.reader-page-wide) .reader-body {
-    min-height: calc(100svh - 215px);
-    height: calc(100svh - 215px);
   }
 }
 
@@ -11561,46 +11544,6 @@ button.loan-title {
 }
 :where(.app-shell) :where(input[type='date']) {
   color-scheme: dark;
-}
-.libby-bar {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 14px 16px;
-}
-.libby-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-}
-.libby-head small {
-  color: var(--muted);
-}
-.libby-links {
-  display: inline-flex;
-  gap: 8px;
-  margin-left: auto;
-}
-.libby-links .secondary-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-}
-.libby-search {
-  position: relative;
-}
-.libby-search svg {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  transform: translateY(-50%);
-  color: var(--muted);
-}
-.libby-search input {
-  width: 100%;
-  padding-left: 36px;
 }
 .deeper-ask {
   display: grid;

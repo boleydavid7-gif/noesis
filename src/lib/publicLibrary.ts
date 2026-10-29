@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 // The reader's public library: chosen once (by a city or ZIP code, or their location), kept as a synced
-// preference, and used to say whether a suggested book is on the shelf or in Libby.
+// preference, and used to say whether a suggested book is on the library's shelf.
 
 export type LibrarySystem = {
   key: string
@@ -13,7 +13,7 @@ export type LibrarySystem = {
   catalog?: string
 }
 export type LibraryCopy = {
-  format: 'ebook' | 'audiobook' | 'print'
+  format: 'print'
   available: boolean
   copies?: number
   held?: number
@@ -89,7 +89,7 @@ export function checkLibrary(system: LibrarySystem, title: string, author: strin
   const id = `${system.key}|${title}|${author}`.toLowerCase()
   const known = checks.get(id)
   if (known && Date.now() - known.at < CHECK_MINUTES * 60_000) return known.result
-  const params = new URLSearchParams({ library: system.key, libby: system.libbyKey, title, author })
+  const params = new URLSearchParams({ library: system.key, title, author })
   if (system.catalog) params.set('catalog', system.catalog)
   const result = getJson<LibraryCheck>(`/api/library-has?${params}`, 'Your library could not be checked right now.')
   checks.set(id, { at: Date.now(), result })
@@ -97,20 +97,10 @@ export function checkLibrary(system: LibrarySystem, title: string, author: strin
   return result
 }
 
-// One plain line per copy: "On the shelf: 2 of 3 in", "E-book: wait about 7 weeks", "Audiobook: available".
+// One plain line for a printed copy: "On the shelf: in now", "On the shelf: all out · 3 waiting".
 export function copyLine(copy: LibraryCopy): string {
-  const label =
-    copy.format === 'print' ? 'On the shelf' : copy.format === 'ebook' ? 'E-book in Libby' : 'Audiobook in Libby'
-  if (copy.format === 'print') {
-    if (copy.available) return `${label}: in now`
-    return `${label}: all out${copy.held ? ` · ${copy.held} waiting` : ''}`
-  }
-  if (copy.available) return `${label}: available now`
-  if (copy.waitDays && copy.waitDays > 0) {
-    const wait = copy.waitDays >= 14 ? `about ${Math.round(copy.waitDays / 7)} weeks` : `about ${copy.waitDays} days`
-    return `${label}: wait ${wait}`
-  }
-  return `${label}: place a hold`
+  if (copy.available) return 'On the shelf: in now'
+  return `On the shelf: all out${copy.held ? ` · ${copy.held} waiting` : ''}`
 }
 
 export function useChosenLibrary(): LibrarySystem | null {

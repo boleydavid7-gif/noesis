@@ -9,7 +9,6 @@ import {
   type RatingSource,
 } from './lib/pathPlan'
 import { handlePasskey, sendReviewReminders } from './workerAccount'
-import { connectLibby, libbyLoans, LibbyError } from './workerLibby'
 import {
   cleanDeeperReply,
   cleanQuestionReply,
@@ -95,29 +94,6 @@ function rateLimited(request: Request, route: string, limit: number, windowMs = 
   return bucket.count > limit
 }
 
-// Libby: join this device to the reader's Libby with a Copy To Another Device code, or read its loans with the token
-// the device keeps (workerLibby.ts). Nothing is stored here.
-async function libby(request: Request): Promise<Response> {
-  if (rateLimited(request, 'libby', 20)) return json({ error: 'Too many tries. Wait a minute.' }, 429)
-  let body: { action?: unknown; code?: unknown; token?: unknown; host?: unknown }
-  try {
-    body = (await request.json()) as typeof body
-  } catch {
-    return json({ error: 'Bad request.' }, 400)
-  }
-  const fetcher = (input: string, init?: RequestInit) => fetchWithTimeout(input, init, 10_000)
-  try {
-    if (body.action === 'connect') return json(await connectLibby(fetcher, String(body.code ?? '').trim()))
-    if (body.action === 'loans')
-      return json({
-        loans: await libbyLoans(fetcher, String(body.token ?? ''), body.host ? String(body.host) : undefined),
-      })
-    return json({ error: 'Bad request.' }, 400)
-  } catch (error) {
-    if (error instanceof LibbyError) return json({ error: error.message }, error.status)
-    return json({ error: 'Libby did not answer. Try again later.' }, 502)
-  }
-}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -1275,11 +1251,11 @@ async function proxyWebdav(request: Request): Promise<Response> {
   })
 }
 
-// ---------- Public libraries (Libby) ----------
+// ---------- Public libraries ----------
 
 export type LibrarySystem = {
-  key: string // OverDrive's id, for e-books and audiobooks in Libby
-  libbyKey: string // the short name Libby's links use
+  key: string // OverDrive's library id, from its directory of libraries
+  libbyKey: string // the library's short name, used to find its catalog
   name: string
   place: string
   miles?: number
@@ -1396,7 +1372,7 @@ export async function findLibraries(request: Request): Promise<Response> {
       }
     }
     const systems = [...seen.values()].sort((a, b) => (a.miles ?? 0) - (b.miles ?? 0)).slice(0, 8)
-    // Libby's own links use the library's short name; the shelf catalog is looked for under the same names.
+    // The library's short name; the shelf catalog is looked for under the same names.
     await Promise.all(
       systems.map(async (system) => {
         try {
@@ -1410,7 +1386,7 @@ export async function findLibraries(request: Request): Promise<Response> {
             if (detail.preferredKey && /^[\w-]{1,40}$/.test(detail.preferredKey)) system.libbyKey = detail.preferredKey
           }
         } catch {
-          // The longer key still works in Libby's search.
+          // The longer key is kept when no short name is given.
         }
         try {
           const host = system.website ? new URL(system.website).hostname.replace(/^www\./, '').split('.')[0] : ''
@@ -1420,7 +1396,8 @@ export async function findLibraries(request: Request): Promise<Response> {
         }
       }),
     )
-    return json({ ok: true, place, systems })
+    // Only libraries whose catalog Noesis can read: the shelf is the one thing it checks.
+    return json({ ok: true, place, systems: systems.filter((system) => system.catalog) })
   } catch {
     return json({ ok: false, error: 'Libraries could not be looked up right now.' }, 502)
   }
@@ -1483,7 +1460,7 @@ const sameWords = (value: string) =>
     .trim()
 
 export type LibraryCopy = {
-  format: 'ebook' | 'audiobook' | 'print'
+  format: 'print'
   held?: number
   available: boolean
   copies?: number
@@ -1491,67 +1468,21 @@ export type LibraryCopy = {
   url: string
 }
 
-// Whether the reader's library has a book in Libby, as an e-book or audiobook, and if it is free now.
+// Whether the reader's library has a printed copy on the shelf (libraries whose catalog is on BiblioCommons).
 export async function libraryHas(request: Request): Promise<Response> {
   if (rateLimited(request, 'library-has', 60))
     return json({ ok: false, error: 'Too many lookups. Try again in a minute.' }, 429)
   const params = new URL(request.url).searchParams
   const key = (params.get('library') ?? '').trim()
-  const libbyKey = (params.get('libby') ?? key).trim()
   const catalog = (params.get('catalog') ?? '').trim()
   const title = (params.get('title') ?? '').trim().slice(0, 160)
   const author = (params.get('author') ?? '').trim().slice(0, 100)
-  if (!/^[\w-]{1,60}$/.test(key) || !/^[\w-]{1,60}$/.test(libbyKey) || title.length < 2)
+  if (!/^[\w-]{1,60}$/.test(key) || title.length < 2)
     return json({ ok: false, error: 'Choose a library and a book.' }, 400)
-  try {
-    const query = `${title} ${author.split(',')[0] ?? ''}`.trim()
-    const shelf = /^[a-z0-9-]{2,40}$/.test(catalog) ? onTheShelf(catalog, query, title, author) : Promise.resolve(null)
-    const response = await fetchWithTimeout(
-      `https://thunder.api.overdrive.com/v2/libraries/${encodeURIComponent(key)}/media?query=${encodeURIComponent(query)}&perPage=12`,
-      { headers: { accept: 'application/json' } },
-      6_000,
-    )
-    if (!response.ok) return json({ ok: false, error: 'Your library could not be checked right now.' }, 502)
-    const body = (await response.json()) as {
-      items?: Array<{
-        id?: string
-        title?: string
-        firstCreatorName?: string
-        type?: { id?: string }
-        isAvailable?: boolean
-        ownedCopies?: number
-        estimatedWaitDays?: number
-      }>
-    }
-    const wanted = sameWords(title)
-    const surname =
-      sameWords(author.split(',')[0] ?? '')
-        .split(' ')
-        .pop() ?? ''
-    const copies: LibraryCopy[] = []
-    for (const item of body.items ?? []) {
-      const format = item.type?.id === 'audiobook' ? 'audiobook' : item.type?.id === 'ebook' ? 'ebook' : null
-      if (!format || !item.id || !item.title || sameWords(item.title) !== wanted) continue
-      if (surname && !sameWords(item.firstCreatorName ?? '').includes(surname)) continue
-      if (copies.some((copy) => copy.format === format)) continue
-      copies.push({
-        format,
-        available: Boolean(item.isAvailable),
-        copies: item.ownedCopies,
-        waitDays: item.isAvailable ? undefined : item.estimatedWaitDays,
-        url: `https://share.libbyapp.com/title/${encodeURIComponent(item.id)}`,
-      })
-    }
-    const print = await shelf
-    if (print) copies.unshift(print)
-    return json({
-      ok: true,
-      copies,
-      searchUrl: `https://libbyapp.com/search/${libbyKey}/search/query-${encodeURIComponent(query)}/page-1`,
-    })
-  } catch {
-    return json({ ok: false, error: 'Your library could not be checked right now.' }, 502)
-  }
+  if (!/^[a-z0-9-]{2,40}$/.test(catalog)) return json({ ok: true, copies: [] })
+  const query = `${title} ${author.split(',')[0] ?? ''}`.trim()
+  const print = await onTheShelf(catalog, query, title, author)
+  return json({ ok: true, copies: print ? [print] : [] })
 }
 
 // ---------- Subjects: a map of questions around the reading ----------
@@ -2159,7 +2090,6 @@ const worker = {
       if (request.method !== 'POST') return json({ ok: false, error: 'Method not allowed.' }, 405)
       return draftReviewCards(request, env)
     }
-    if (url.pathname === '/api/libby' && request.method === 'POST') return libby(request)
     if (url.pathname === '/api/libraries' && request.method === 'GET') return findLibraries(request)
     if (url.pathname === '/api/library-has' && request.method === 'GET') return libraryHas(request)
     if (url.pathname === '/api/subject' && request.method === 'POST') return startSubject(request, env)

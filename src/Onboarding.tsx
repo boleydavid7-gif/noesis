@@ -66,7 +66,7 @@ const PAGES: Page[] = [
         icon: ExternalLink,
         tone: 'teal',
         title: 'Books you read elsewhere',
-        text: 'Kindle, Libby or Apple Books: the cover opens the book there.',
+        text: 'Kindle, Kobo or Apple Books: the cover opens the book there.',
       },
       {
         icon: CalendarClock,
@@ -115,7 +115,7 @@ const PAGES: Page[] = [
         icon: Library,
         tone: 'teal',
         title: 'Libraries near you',
-        text: 'See which libraries have a copy on the shelf or in Libby.',
+        text: 'See whether your library has a copy on the shelf.',
       },
       {
         icon: Sparkles,
