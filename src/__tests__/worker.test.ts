@@ -337,18 +337,34 @@ describe('when Gemini is overloaded', () => {
     )
   const modelOf = (call: unknown[]) => decodeURIComponent(String(call[0]).split('/models/')[1].split(':')[0])
 
-  it('falls back to a lighter model instead of giving up', async () => {
-    const mock = vi.fn(async (input: string | URL) => (/flash-lite/.test(String(input)) ? ok() : overloaded()))
+  it('falls back to the newest Flash-Lite instead of giving up', async () => {
+    const mock = vi.fn(async (input: string | URL) => (/flash-lite-latest/.test(String(input)) ? ok() : overloaded()))
     vi.stubGlobal('fetch', mock)
     const response = await ask('9.9.9.1')
     expect(response.status).toBe(200)
-    expect(((await response.json()) as { model: string }).model).toMatch(/flash-lite/)
-    expect(mock.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(((await response.json()) as { model: string }).model).toBe('gemini-flash-lite-latest')
+    expect(mock.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('always asks the cheapest model first and never a pricier one', async () => {
+    const mock = vi.fn(async () => ok())
+    vi.stubGlobal('fetch', mock)
+    const response = await call(
+      '/api/tutor',
+      {
+        method: 'POST',
+        headers: { 'cf-connecting-ip': '9.9.9.4' },
+        body: JSON.stringify({ question: 'What is this?' }),
+      },
+      { GEMINI_API_KEY: 'k', GEMINI_TUTOR_MODEL: 'gemini-3.5-pro' } as never,
+    )
+    expect(response.status).toBe(200)
+    expect(modelOf(mock.mock.calls[0] as unknown[])).toBe('gemini-2.5-flash-lite')
   })
 
   it('treats a rate-limited model as a reason to try the next one', async () => {
     const mock = vi.fn(async (input: string | URL) =>
-      /flash-lite/.test(String(input))
+      /flash-lite-latest/.test(String(input))
         ? ok()
         : new Response(JSON.stringify({ error: { message: 'quota' } }), { status: 429 }),
     )
@@ -369,7 +385,8 @@ describe('when Gemini is overloaded', () => {
       expect(body.error).toBe('Noema is very busy right now. Please try again in a moment.')
       expect(body.error).not.toMatch(/Gemini|503/)
       const models = mock.mock.calls.map((entry) => modelOf(entry as unknown[]))
-      expect(models.length).toBeGreaterThanOrEqual(8) // two rounds over at least four models
+      expect(models.length).toBeGreaterThanOrEqual(4) // two rounds over both models
+      expect(new Set(models)).toEqual(new Set(['gemini-2.5-flash-lite', 'gemini-flash-lite-latest']))
     } finally {
       vi.useRealTimers()
     }

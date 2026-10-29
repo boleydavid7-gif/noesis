@@ -4,7 +4,6 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-06",
   "vars": {
-    "GEMINI_TUTOR_MODEL": "gemini-2.5-flash",
     "TUTOR_REQUIRE_AUTH": "true",
     "VAPID_PUBLIC_KEY": "BKCosZ_0fSUKgK9fIXHeCZUhrk7PnB9MsJTHpQdRIhig05QIL7Ou-AfVLS_plb4lId5JNRIPZHUoNeyhdDCfaOA",
     "VAPID_SUBJECT": "mailto:boleydavid1227@outlook.com",

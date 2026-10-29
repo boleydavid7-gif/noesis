@@ -23,7 +23,6 @@ type Env = {
   ASSETS: { fetch(request: Request): Promise<Response> }
   GEMINI_API_KEY?: string
   GOOGLE_API_KEY?: string
-  GEMINI_TUTOR_MODEL?: string
   VITE_SUPABASE_URL?: string
   VITE_SUPABASE_PUBLISHABLE_KEY?: string
   // Set to "true" to require a valid Supabase session for /api/tutor.
@@ -58,6 +57,9 @@ const MAX_QUESTION_LENGTH = 2_000
 const MAX_CONTEXT_LENGTH = 32_000
 const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
+// Noema always uses the most cost-effective model, fixed here and never chosen by a setting: Gemini 2.5 Flash-Lite
+// ($0.10 in / $0.40 out per million tokens), and Google's newest Flash-Lite when that one is busy or gone.
+export const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-flash-lite-latest']
 const MAX_SEARCH_LENGTH = 160
 // Wikimedia asks callers to name themselves with a way to reach them.
 const WIKI_AGENT = 'Noesis/1.0 (https://noesis.proairetos.com; reading app)'
@@ -155,17 +157,7 @@ async function generate(
   const apiKey = env.GEMINI_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim()
   if (!apiKey) return { ok: false, error: 'GEMINI_API_KEY is not configured in Cloudflare.', status: 503 }
 
-  const configuredModel = env.GEMINI_TUTOR_MODEL?.trim() || 'gemini-flash-latest'
-  // When the main model is overloaded the lighter ones usually still answer.
-  const models = [
-    ...new Set([
-      configuredModel,
-      'gemini-flash-latest',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-flash-lite-latest',
-    ]),
-  ]
+  const models = GEMINI_MODELS
   // These mean "try another model" (a model can be missing, rate limited, or overloaded).
   const tryNext = new Set([404, 429, 500, 502, 503, 504])
   const busy = new Set([429, 500, 502, 503, 504])
