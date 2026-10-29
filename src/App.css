@@ -8015,6 +8015,17 @@ body {
     border-radius: 999px;
     background: rgba(8, 20, 34, 0.94);
   }
+  /* The dock is hidden while reading, so the chapter bar sits just above the home indicator. */
+  body.reading-focus .reader-pager {
+    position: fixed;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom) + 8px);
+    left: 16px;
+    margin: 0;
+  }
+  body.reading-focus .reader-page:not(.reader-page-wide) {
+    padding-bottom: 72px;
+  }
 }
 .drm-sources ul {
   display: grid;
