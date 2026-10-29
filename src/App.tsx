@@ -223,7 +223,14 @@ import type { User } from '@supabase/supabase-js'
 type Note = BrainNote
 type Overlay = 'brain' | 'noema' | null
 type SelectionOffer = { text: string; top: number; left: number }
-type NoteDraft = { title: string; body: string; source: string; kind: BrainNoteKind; location?: BrainNoteLocation }
+type NoteDraft = {
+  title: string
+  body: string
+  source: string
+  kind: BrainNoteKind
+  location?: BrainNoteLocation
+  quote?: string // the passage a note is about, shown above the note
+}
 type LibrarySort = 'recent' | 'title' | 'progress'
 type Resource = {
   id: string
@@ -407,6 +414,9 @@ function App() {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  // A notice can carry one action (Undo); it stays a little longer then.
+  const [noticeAction, setNoticeAction] = useState<{ label: string; run: () => void } | null>(null)
+  const noticeTimer = useRef<number | undefined>(undefined)
   const [tutorPrompt, setTutorPrompt] = useState('')
   const [tutorReply, setTutorReply] = useState('')
   const [tutorContext, setTutorContext] = useState<ReaderTutorContext | null>(null)
@@ -1108,9 +1118,17 @@ function App() {
     setSelectedBookId(null)
     setActiveNav('Settings')
   }
-  function showNotice(message: string) {
+  function showNotice(message: string, action?: { label: string; run: () => void }) {
     setNotice(message)
-    window.setTimeout(() => setNotice(''), 3800)
+    setNoticeAction(action ?? null)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(
+      () => {
+        setNotice('')
+        setNoticeAction(null)
+      },
+      action ? 7000 : 3800,
+    )
   }
   function updateFocusState(updater: (current: FocusState) => FocusState) {
     const next = updater(focusState)
@@ -1202,7 +1220,16 @@ function App() {
     const source = sourceLocation?.bookTitle
       ? `${sourceLocation.bookTitle}${sourceLocation.chapter ? ` · ${sourceLocation.chapter}` : ''}${sourceLocation.page ? ` · p. ${sourceLocation.page}` : ''}`
       : 'Noesis'
-    setNoteDraft({ title: choice.title, body: seed, source, kind: choice.kind, location: sourceLocation })
+    // A note about a passage keeps the passage as its quote, and the reader writes beneath it.
+    const aboutPassage = action === 'note' && seed.trim().length > 0
+    setNoteDraft({
+      title: choice.title,
+      body: aboutPassage ? '' : seed,
+      quote: aboutPassage ? seed.trim().slice(0, 1200) : undefined,
+      source,
+      kind: choice.kind,
+      location: sourceLocation,
+    })
     setUtilityOverlay(null)
     setOverlay('brain')
   }
@@ -1236,7 +1263,7 @@ function App() {
   }
   function saveHighlight(text: string, color: HighlightColor, location: BrainNoteLocation) {
     tap()
-    void addNote({
+    const saved = addNote({
       title:
         text.trim().split(/\s+/).slice(0, 7).join(' ') + (text.trim().split(/\s+/).length > 7 ? '…' : '') ||
         'Highlight',
@@ -1250,13 +1277,25 @@ function App() {
       color,
       quiet: true,
     })
-    showNotice('Highlighted.')
+    showNotice('Highlighted', {
+      label: 'Undo',
+      run: () => void saved.then((note) => removeNote(note, true)),
+    })
   }
   function changeHighlight(noteId: string, color: HighlightColor | null) {
     const note = notes.find((item) => item.id === noteId)
     if (!note) return
-    if (color === null) removeNote(note)
-    else void editNote({ ...note, color, updated: new Date().toISOString(), synced: undefined })
+    if (color === null) {
+      removeNote(note, true)
+      showNotice('Highlight removed', { label: 'Undo', run: () => restoreNote(note) })
+    } else void editNote({ ...note, color, updated: new Date().toISOString(), synced: undefined })
+  }
+  // Puts a removed note back as it was (Undo).
+  function restoreNote(note: Note) {
+    markRestored('note', note.id)
+    const back = { ...note, updated: new Date().toISOString(), synced: undefined }
+    setNotes((current) => (current.some((item) => item.id === note.id) ? current : [back, ...current]))
+    void persistNote(back)
   }
   function saveWord(word: string, definition: string, location: BrainNoteLocation) {
     void addNote({
@@ -1635,11 +1674,11 @@ function App() {
     const destination = await updateNote(note)
     showNotice(destination === 'remote' ? 'Note updated.' : 'Note updated on this device.')
   }
-  function removeNote(note: Note) {
+  function removeNote(note: Note, quiet = false) {
     markDeleted('note', note.id)
     setNotes((current) => current.filter((item) => item.id !== note.id))
     void deleteNote(note.id)
-    showNotice('Note deleted.')
+    if (!quiet) showNotice('Note deleted.')
   }
   async function askNoema(
     prompt: string,
@@ -2640,7 +2679,15 @@ function App() {
               />
             ) : null}
             {learner ? null : null}
-            <SuggestedSection resources={resources} onExplore={() => selectNav('Explore')} />
+            <SuggestedSection
+              resources={resources}
+              onExplore={() => selectNav('Explore')}
+              onClear={() => {
+                const before = resources
+                setResources([])
+                showNotice('Suggestions cleared', { label: 'Undo', run: () => setResources(before) })
+              }}
+            />
           </>
         )}
       </div>
@@ -2944,7 +2991,7 @@ function App() {
           notes={notes}
           onSave={(note) => void editNote(note)}
           onCreate={(fields) => void addNote(fields)}
-          onDelete={removeNote}
+          onDelete={(note) => removeNote(note)}
           onMerge={(keep, remove) => {
             void editNote(keep)
             removeNote(remove)
@@ -3525,7 +3572,7 @@ function App() {
         onHighlightEdit={changeHighlight}
         initialSearch={readerSearch}
         onBookmark={toggleBookmark}
-        onRemoveNote={removeNote}
+        onRemoveNote={(note) => removeNote(note)}
         onCopied={showNotice}
         reading={{ ...settings.reading, ...(selectedBook.look as Partial<AppSettings['reading']> | undefined) }}
         ownLook={Boolean(selectedBook.look)}
@@ -4174,7 +4221,23 @@ function App() {
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </footer>
-        {notice ? <div className="toast-notice">{notice}</div> : null}
+        {notice ? (
+          <div className="toast-notice" role="status">
+            <span>{notice}</span>
+            {noticeAction ? (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  noticeAction.run()
+                  setNotice('')
+                  setNoticeAction(null)
+                }}
+              >
+                {noticeAction.label}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </main>
       {activeNav !== 'Settings' && activeNav !== 'Read' && !fresh && learner ? (
         <ContextSidebar
@@ -4228,16 +4291,31 @@ function Page({ subtitle, children }: { title?: string; subtitle: string; childr
     </div>
   )
 }
-function SuggestedSection({ resources, onExplore }: { resources: Resource[]; onExplore: () => void }) {
+function SuggestedSection({
+  resources,
+  onExplore,
+  onClear,
+}: {
+  resources: Resource[]
+  onExplore: () => void
+  onClear: () => void
+}) {
   return (
     <section className="section-block suggested-section">
       <div className="section-heading">
         <div>
           <h2>Suggested for you</h2>
         </div>
-        <button className="text-button" onClick={onExplore}>
-          Explore <ArrowRight size={15} />
-        </button>
+        <div className="suggested-head-actions">
+          {resources.length > 0 ? (
+            <button className="text-button" onClick={onClear}>
+              Clear
+            </button>
+          ) : null}
+          <button className="text-button" onClick={onExplore}>
+            Explore <ArrowRight size={15} />
+          </button>
+        </div>
       </div>
       {resources.length === 0 ? (
         <button className="suggested-empty panel-card" onClick={onExplore}>
@@ -5338,6 +5416,7 @@ function BrainOverlay({
               placeholder="Quick note"
             />
           </label>
+          {draft.quote ? <blockquote className="reader-note-quote">{draft.quote}</blockquote> : null}
           <label>
             Note
             <textarea

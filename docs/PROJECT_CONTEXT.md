@@ -260,3 +260,11 @@ and a Wrangler dry run. The live health endpoint is
   `noesis:highlight-review:v1`, synced with the other small preferences (`accountLibrary.ts`). From a highlight: Open
   in book, Review card (the Review page's drafting, `reviewStartNote`) and Quote card. It replaced the old one-note
   ResurfaceCard and shows in both modes.
+- Highlighting in the reader (`Reader.tsx` picker `.reader-pick-sheet`, styles in `highlights.css`): six colors
+  (`PICK_COLORS`) with the last one used first (`noesis:last-highlight-color`, device only) and a highlight's own color
+  added when it is another; then Note, Copy (the passage with the book and author), Ask Noema, and Remove for a
+  highlight already made, whose passage shows at the top. Saving says "Highlighted" with Undo; Remove says "Highlight
+  removed" with Undo (`restoreNote`, `markRestored`). Notices take one action (`showNotice(message, { label, run })`,
+  7 s). Marks are drawn as a multiplied wash on light pages and a screen glow on Night and High contrast
+  (`highlightLook`), redrawn when the theme changes. Note on a passage keeps it as the note's quote (`NoteDraft.quote`).
+  On a phone the picker sits above the chapter bar. Suggested for you on Home has Clear (with Undo).

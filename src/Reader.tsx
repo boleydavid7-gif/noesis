@@ -3,6 +3,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Bookmark,
+  Copy,
+  NotebookPen,
+  Trash2,
   BookA,
   Languages,
   CloudRain,
@@ -73,6 +76,23 @@ import { FONT_STACKS, READER_COLORS, type ReaderTheme, type Settings } from './l
 type Note = BrainNote
 type SearchHit = { cfi: string; excerpt: string; chapter: string }
 const MAX_SEARCH_HITS = 40
+// The highlight colors the picker offers; a highlight saved in another color keeps it and shows it too.
+const PICK_COLORS: HighlightColor[] = ['yellow', 'green', 'blue', 'pink', 'purple', 'orange']
+const LAST_COLOR_KEY = 'noesis:last-highlight-color'
+function lastColor(): HighlightColor {
+  try {
+    const saved = localStorage.getItem(LAST_COLOR_KEY) as HighlightColor | null
+    return saved && HIGHLIGHT_COLORS.some((item) => item.id === saved) ? saved : 'yellow'
+  } catch {
+    return 'yellow'
+  }
+}
+// How a highlight is drawn: a soft wash that multiplies into a light page, and a lighter glow on a dark one.
+function highlightLook(theme: ReaderTheme): Record<string, string> {
+  return theme === 'night' || theme === 'contrast'
+    ? { 'fill-opacity': '0.32', 'mix-blend-mode': 'screen' }
+    : { 'fill-opacity': '0.38', 'mix-blend-mode': 'multiply' }
+}
 // Phones get the full-screen reader with controls laid over the page (readerPhone.css).
 const PHONE_READER = '(max-width: 899px)'
 const onPhone = () => typeof window !== 'undefined' && window.matchMedia(PHONE_READER).matches
@@ -753,20 +773,26 @@ export function Reader({
 
   // Highlights are drawn on the page in the color they were saved with.
   const drawn = useRef(new Map<string, { cfi: string; color: HighlightColor }>())
-  const highlightKey = notes
-    .filter((note) => note.bookId === book.id && note.kind === 'highlight' && note.cfi?.startsWith('epubcfi'))
-    .map((note) => `${note.id}|${note.cfi}|${note.color ?? 'yellow'}`)
-    .join(';')
+  const highlightKey =
+    readerTheme +
+    '#' +
+    notes
+      .filter((note) => note.bookId === book.id && note.kind === 'highlight' && note.cfi?.startsWith('epubcfi'))
+      .map((note) => `${note.id}|${note.cfi}|${note.color ?? 'yellow'}`)
+      .join(';')
+  const notesRef = useLatest(notes)
   useEffect(() => {
     const instance = rendition.current
     if (loading || !instance || book.format !== 'epub') {
       drawn.current.clear()
       return
     }
+    const [theme, list] = highlightKey.split('#') as [ReaderTheme, string]
     const wanted = new Map<string, { cfi: string; color: HighlightColor }>()
-    for (const entry of highlightKey ? highlightKey.split(';') : []) {
+    for (const entry of list ? list.split(';') : []) {
       const [id, cfi, color] = entry.split('|')
-      wanted.set(id, { cfi, color: color as HighlightColor })
+      // The theme is part of the color, so a change of theme draws every mark again in its new look.
+      wanted.set(id, { cfi, color: `${color}|${theme}` as HighlightColor })
     }
     for (const [id, info] of drawn.current) {
       const next = wanted.get(id)
@@ -780,14 +806,34 @@ export function Reader({
     }
     for (const [id, info] of wanted) {
       if (drawn.current.has(id)) continue
-      const css = HIGHLIGHT_COLORS.find((item) => item.id === info.color)?.css ?? '#f2d46b'
+      const color = info.color.split('|')[0] as HighlightColor
+      const css = HIGHLIGHT_COLORS.find((item) => item.id === color)?.css ?? '#f2d46b'
       try {
         instance.annotations.highlight(
           info.cfi,
           { noteId: id },
-          () => setPick({ text: '', location: currentNoteLocation(), noteId: id, color: info.color }),
+          () => {
+            const saved = notesRef.current.find((note) => note.id === id)
+            setPick({
+              text: saved?.body ?? '',
+              location: saved
+                ? {
+                    bookId: saved.bookId,
+                    bookTitle: saved.bookTitle,
+                    author: saved.author,
+                    chapter: saved.chapter,
+                    chapterIndex: saved.chapterIndex,
+                    page: saved.page,
+                    href: saved.href,
+                    cfi: saved.cfi,
+                  }
+                : currentNoteLocation(),
+              noteId: id,
+              color,
+            })
+          },
           'noesis-highlight',
-          { fill: css, 'fill-opacity': '0.38', 'mix-blend-mode': 'multiply' },
+          { fill: css, ...highlightLook(theme) },
         )
         drawn.current.set(id, info)
       } catch {
@@ -803,10 +849,33 @@ export function Reader({
   }
   const chooseColor = (color: HighlightColor) => {
     if (!pick) return
+    try {
+      localStorage.setItem(LAST_COLOR_KEY, color)
+    } catch {
+      // Remembered for this visit only.
+    }
     if (pick.noteId) onHighlightEdit(pick.noteId, color)
     else onHighlight(pick.text, color, pick.location)
     finishPick()
   }
+  // The passage with where it is from, ready to paste anywhere.
+  const copyPick = () => {
+    if (!pick?.text) return
+    const from = [pick.location.bookTitle, pick.location.author].filter(Boolean).join(', ')
+    const words = `“${pick.text.trim()}”${from ? ` (${from})` : ''}`
+    void navigator.clipboard
+      ?.writeText(words)
+      .then(() => onCopied('Copied'))
+      .catch(() => onCopied('Couldn’t copy that.'))
+    finishPick()
+  }
+  // The colors on offer: the last one used first, and a highlight's own color even when it is not one of them.
+  const pickColors = (() => {
+    const first = lastColor()
+    const list = [first, ...PICK_COLORS.filter((color) => color !== first)]
+    if (pick?.color && !list.includes(pick.color)) list.push(pick.color)
+    return list.map((id) => HIGHLIGHT_COLORS.find((item) => item.id === id)!).filter(Boolean)
+  })()
 
   // The selected passage in the reader's own language, translated on the device (where the browser can).
   const [translated, setTranslated] = useState<{
@@ -2079,51 +2148,59 @@ export function Reader({
               </div>
             ) : null}
             {pick ? (
-              <div className="reader-pick" role="toolbar" aria-label="Highlight">
-                {HIGHLIGHT_COLORS.map((item) => (
-                  <button
-                    key={item.id}
-                    className={'reader-pick-dot' + (pick.color === item.id ? ' reader-pick-dot-on' : '')}
-                    style={{ background: item.css }}
-                    aria-label={`${item.label} highlight`}
-                    onClick={() => chooseColor(item.id)}
-                  />
-                ))}
-                {pick.noteId ? (
+              <div className="reader-pick reader-pick-sheet" role="toolbar" aria-label={pick.noteId ? 'Highlight' : 'Selection'}>
+                {pick.noteId && pick.text ? <p className="reader-pick-quote">{pick.text}</p> : null}
+                <div className="reader-pick-colors">
+                  {pickColors.map((item) => (
+                    <button
+                      key={item.id}
+                      className={'reader-pick-dot' + (pick.color === item.id ? ' reader-pick-dot-on' : '')}
+                      style={{ background: item.css }}
+                      aria-label={pick.noteId ? `Make it ${item.label.toLowerCase()}` : `Highlight in ${item.label.toLowerCase()}`}
+                      aria-pressed={pick.color === item.id}
+                      onClick={() => chooseColor(item.id)}
+                    />
+                  ))}
+                  <button className="reader-pick-close" onClick={finishPick} aria-label="Close">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="reader-pick-actions">
                   <button
                     className="reader-pick-action"
                     onClick={() => {
-                      onHighlightEdit(pick.noteId as string, null)
+                      onNote(pick.text, 'note', pick.location)
                       finishPick()
                     }}
                   >
-                    Remove
+                    <NotebookPen size={15} /> Note
                   </button>
-                ) : (
-                  <>
+                  {pick.text ? (
+                    <button className="reader-pick-action" onClick={copyPick}>
+                      <Copy size={15} /> Copy
+                    </button>
+                  ) : null}
+                  <button
+                    className="reader-pick-action"
+                    onClick={() => {
+                      onAsk('Explain the selected passage', { ...pick.location, selectedText: pick.text })
+                      finishPick()
+                    }}
+                  >
+                    <NoemaIcon size={15} /> Ask Noema
+                  </button>
+                  {pick.noteId ? (
                     <button
-                      className="reader-pick-action"
+                      className="reader-pick-action reader-pick-remove"
                       onClick={() => {
-                        onNote(pick.text, 'note', pick.location)
+                        onHighlightEdit(pick.noteId as string, null)
                         finishPick()
                       }}
                     >
-                      Note
+                      <Trash2 size={15} /> Remove
                     </button>
-                    <button
-                      className="reader-pick-action"
-                      onClick={() => {
-                        onAsk('Explain the selected passage', { ...pick.location, selectedText: pick.text })
-                        finishPick()
-                      }}
-                    >
-                      Ask Noema
-                    </button>
-                  </>
-                )}
-                <button className="reader-pick-action" onClick={finishPick} aria-label="Close">
-                  <X size={14} />
-                </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {loading ? <div className="reader-overlay">Opening {book.title}…</div> : null}

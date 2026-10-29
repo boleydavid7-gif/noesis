@@ -251,3 +251,139 @@ body.daily-open {
     animation: none;
   }
 }
+
+/* A notice with one action (Undo) beside its words. */
+.toast-notice {
+  font-size: 0.9rem;
+}
+.toast-notice > span {
+  flex: 1;
+}
+.toast-action {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(var(--lamp-rgb, 226, 184, 110), 0.16);
+  color: var(--lamp, #e2b86e);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* While reading on a phone, notices sit above the chapter bar. */
+@media (max-width: 899px) {
+  body.reading-focus .toast-notice {
+    z-index: 90;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom) + 78px);
+    left: 16px;
+    max-width: none;
+  }
+}
+
+/* Suggested for you: Clear beside Explore. */
+.suggested-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+/* The highlight picker in the reader: the passage (for a highlight already made), the colors with the last one used
+   first, then Note, Copy, Ask Noema and Remove. */
+.reader-pick.reader-pick-sheet {
+  display: grid;
+  gap: 10px;
+  width: min(420px, calc(100% - 24px));
+  max-width: none;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong, rgba(200, 220, 245, 0.16));
+  border-radius: 20px;
+  background: #0c1520;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: pick-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pick-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+.reader-pick-quote {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--paper-2, #aebccd);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.reader-pick-colors {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.reader-pick-sheet .reader-pick-dot {
+  width: 30px;
+  height: 30px;
+  border: 2px solid rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease;
+}
+.reader-pick-sheet .reader-pick-dot:active {
+  transform: scale(0.9);
+}
+.reader-pick-sheet .reader-pick-dot-on {
+  box-shadow:
+    0 0 0 2px var(--tone-1, #08111c),
+    0 0 0 4px var(--paper, #eef3fa);
+}
+.reader-pick-close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tone-3, rgba(255, 255, 255, 0.08));
+  color: inherit;
+  cursor: pointer;
+}
+.reader-pick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 0 -6px -4px;
+}
+.reader-pick-sheet .reader-pick-action {
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 0.88rem;
+}
+.reader-pick-remove {
+  margin-left: auto;
+  color: #f2a39c;
+}
+@media (max-width: 899px) {
+  /* Above the chapter bar and the home indicator. */
+  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pick.reader-pick-sheet {
+    position: fixed;
+    z-index: 60;
+    bottom: calc(env(safe-area-inset-bottom) + 76px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-pick.reader-pick-sheet {
+    animation: none;
+  }
+}
+/* While the picker is open, a notice moves to the top so it never covers it. */
+@media (max-width: 899px) {
+  body.reading-focus:has(.reader-pick-sheet) .toast-notice {
+    top: calc(env(safe-area-inset-top) + 12px);
+    bottom: auto;
+  }
+}
