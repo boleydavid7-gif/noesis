@@ -75,7 +75,7 @@ develop without changing the production IT PATH app.
 This repository uses a static-assets Worker. Keep the build command as
 `npm run build` and the deploy command as `npx wrangler deploy`. Add the
 `GEMINI_API_KEY` Worker secret before asking Noema a question. Noema's model is fixed in
-`src/worker.ts` (`GEMINI_MODELS`: Gemini 2.5 Flash-Lite, then the newest Flash-Lite), the most cost-effective;
+`src/worker.ts` (`GEMINI_MODELS`: Gemini 3.5 Flash-Lite, the balance of quality and cost, then the cheaper 2.5 Flash-Lite);
 no setting or person chooses it. Set
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as build variables and
 enable email/password accounts in Supabase. Anonymous sign-in is optional for

@@ -195,7 +195,20 @@ describe('whole answers from Gemini', () => {
     vi.stubGlobal('fetch', mock)
     const result = (await (await ask('7.7.7.1')).json()) as { text: string }
     expect(result.text).toBe('A whole answer.')
-    expect(body(mock, 0).generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+    expect(body(mock, 0).generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' })
+  })
+
+  it('gives the 2.5 fallback a thinking budget of nothing', async () => {
+    const mock = vi.fn(async (input: string | URL) =>
+      /gemini-3\.5/.test(String(input))
+        ? new Response(JSON.stringify({ error: { message: 'busy' } }), { status: 503 })
+        : answer('A whole answer.'),
+    )
+    vi.stubGlobal('fetch', mock)
+    expect((await (await ask('7.7.7.9')).json()) as { text: string }).toMatchObject({ text: 'A whole answer.' })
+    const last = mock.mock.calls.length - 1
+    expect(String((mock.mock.calls[last] as unknown as [string])[0])).toMatch(/gemini-2\.5-flash-lite/)
+    expect(body(mock, last).generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
   })
 
   it('asks again with more room when an answer stops at the limit', async () => {
@@ -337,16 +350,16 @@ describe('when Gemini is overloaded', () => {
     )
   const modelOf = (call: unknown[]) => decodeURIComponent(String(call[0]).split('/models/')[1].split(':')[0])
 
-  it('falls back to the newest Flash-Lite instead of giving up', async () => {
-    const mock = vi.fn(async (input: string | URL) => (/flash-lite-latest/.test(String(input)) ? ok() : overloaded()))
+  it('falls back to the cheaper 2.5 Flash-Lite instead of giving up', async () => {
+    const mock = vi.fn(async (input: string | URL) => (/2\.5-flash-lite/.test(String(input)) ? ok() : overloaded()))
     vi.stubGlobal('fetch', mock)
     const response = await ask('9.9.9.1')
     expect(response.status).toBe(200)
-    expect(((await response.json()) as { model: string }).model).toBe('gemini-flash-lite-latest')
+    expect(((await response.json()) as { model: string }).model).toBe('gemini-2.5-flash-lite')
     expect(mock.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('always asks the cheapest model first and never a pricier one', async () => {
+  it('always asks 3.5 Flash-Lite first, whatever a setting says', async () => {
     const mock = vi.fn(async () => ok())
     vi.stubGlobal('fetch', mock)
     const response = await call(
@@ -359,12 +372,12 @@ describe('when Gemini is overloaded', () => {
       { GEMINI_API_KEY: 'k', GEMINI_TUTOR_MODEL: 'gemini-3.5-pro' } as never,
     )
     expect(response.status).toBe(200)
-    expect(modelOf(mock.mock.calls[0] as unknown[])).toBe('gemini-2.5-flash-lite')
+    expect(modelOf(mock.mock.calls[0] as unknown[])).toBe('gemini-3.5-flash-lite')
   })
 
   it('treats a rate-limited model as a reason to try the next one', async () => {
     const mock = vi.fn(async (input: string | URL) =>
-      /flash-lite-latest/.test(String(input))
+      /2\.5-flash-lite/.test(String(input))
         ? ok()
         : new Response(JSON.stringify({ error: { message: 'quota' } }), { status: 429 }),
     )
@@ -386,7 +399,7 @@ describe('when Gemini is overloaded', () => {
       expect(body.error).not.toMatch(/Gemini|503/)
       const models = mock.mock.calls.map((entry) => modelOf(entry as unknown[]))
       expect(models.length).toBeGreaterThanOrEqual(4) // two rounds over both models
-      expect(new Set(models)).toEqual(new Set(['gemini-2.5-flash-lite', 'gemini-flash-lite-latest']))
+      expect(new Set(models)).toEqual(new Set(['gemini-3.5-flash-lite', 'gemini-2.5-flash-lite']))
     } finally {
       vi.useRealTimers()
     }

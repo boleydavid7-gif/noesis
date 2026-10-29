@@ -57,9 +57,9 @@ const MAX_QUESTION_LENGTH = 2_000
 const MAX_CONTEXT_LENGTH = 32_000
 const MAX_BOOK_LENGTH = 36_000
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
-// Noema always uses the most cost-effective model, fixed here and never chosen by a setting: Gemini 2.5 Flash-Lite
-// ($0.10 in / $0.40 out per million tokens), and Google's newest Flash-Lite when that one is busy or gone.
-export const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-flash-lite-latest']
+// Noema's model, fixed here and never chosen by a setting: Gemini 3.5 Flash-Lite, the balance of answer quality and
+// cost ($0.30 in / $2.50 out per million tokens), and the cheaper 2.5 Flash-Lite when that one is busy or gone.
+export const GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-2.5-flash-lite']
 const MAX_SEARCH_LENGTH = 160
 // Wikimedia asks callers to name themselves with a way to reach them.
 const WIKI_AGENT = 'Noesis/1.0 (https://noesis.proairetos.com; reading app)'
@@ -140,6 +140,12 @@ function json(data: unknown, status = 200): Response {
 // Room for thinking when a model will not turn it off.
 const THINKING_ROOM = 4_096
 
+// As little thinking as each model allows, since it is billed as answer. Gemini 3 models take a level; 2.5 a budget.
+function thinkingFor(model: string): Record<string, string | number> {
+  if (/gemini-3/i.test(model)) return { thinkingLevel: 'minimal' }
+  return { thinkingBudget: /pro/i.test(model) ? 128 : 0 }
+}
+
 type Generated = { ok: true; text: string; model: string } | { ok: false; error: string; status: number }
 
 // One Gemini call with model fallback. Shared by the tutor and review routes.
@@ -188,7 +194,7 @@ async function generate(
               generationConfig: {
                 temperature: options.temperature,
                 maxOutputTokens: room,
-                ...(thinking ? { thinkingConfig: { thinkingBudget: /pro/i.test(model) ? 128 : 0 } } : {}),
+                ...(thinking ? { thinkingConfig: thinkingFor(model) } : {}),
                 ...(options.json ? { responseMimeType: 'application/json' } : {}),
               },
             }),
