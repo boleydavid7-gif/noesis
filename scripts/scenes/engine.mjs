@@ -1,5 +1,9 @@
-// A small flat-illustration scene kit: layered ridges, firs on the ridge line, sky, sun or moon, clouds,
-// mist, still water with reflections, and a few foreground things. Everything is seeded so it redraws the same.
+// Noesis's scene kit: the Proairetos family's flat-illustration kit (layered ridges, firs on the ridge line, sky,
+// mist, still water with reflections, a few foreground things) in a richer cut. One light at LAMP_X with its faint
+// ring as in every family scene, no clouds and no second sun or moon; each ridge is shaded from a lit crest to a
+// darker foot and catches the light along its top on the light's side; mist is a soft band with no edge; the
+// picture has a gentle vignette and a fine grain. The files are drawn at twice their size and scaled down, so every
+// edge is smooth. Everything is seeded so it redraws the same.
 
 export function rng(seed) {
   let s = seed >>> 0;
@@ -68,7 +72,32 @@ export function clouds(w, h, seed, n, y0, y1, color, opacity, size = 1) {
   return s;
 }
 
-export const defs = `<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.07 0"/></filter><filter id="blur" x="-0.2" y="-2" width="1.4" height="5"><feGaussianBlur stdDeviation="18"/></filter><filter id="soft" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter><filter id="glowblur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="8"/></filter>`;
+export const defs = `<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.055 0"/></filter><filter id="blur" x="-0.2" y="-2" width="1.4" height="5"><feGaussianBlur stdDeviation="18"/></filter><filter id="soft" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3"/></filter><filter id="glowblur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="8"/></filter><filter id="rimblur" x="-0.05" y="-0.5" width="1.1" height="2"><feGaussianBlur stdDeviation="1.6"/></filter><filter id="mirror" x="-0.05" y="-0.2" width="1.1" height="1.4"><feGaussianBlur stdDeviation="3 6"/></filter>`;
+
+/*
+ * Lamplight's one light. Every scene in the family is lit by a single light at the same place across the picture
+ * (LAMP_X, as the wallpaper's lamp and the icons' are upper right), at the height of that scene's horizon, with one
+ * faint ring around it as the wallpaper and the icons have. No clouds, no second sun or moon.
+ */
+export const LAMP_X = 0.64;
+
+export function lampRing(x, y, m, color, opacity = 0.22) {
+  return `<circle cx="${x}" cy="${y}" r="${(m * 0.13).toFixed(1)}" fill="none" stroke="${color}" stroke-opacity="${opacity}" stroke-width="${Math.max(1.5, m * 0.004).toFixed(1)}"/>`;
+}
+
+/** The light itself: a soft bright core, the disc and its ring. */
+export function lamp(x, y, m, r, color, glowColor) {
+  const id = `core${Math.round(x)}${Math.round(y)}`;
+  return `<defs><radialGradient id="${id}" cx="${x}" cy="${y}" r="${m * r * 4}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".25" stop-color="${glowColor}" stop-opacity=".35"/><stop offset="1" stop-color="${glowColor}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${m * r * 4}" fill="url(#${id})"/><circle cx="${x}" cy="${y}" r="${m * r}" fill="${color}"/>${lampRing(x, y, m, glowColor)}`;
+}
+
+const channels = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+/** `from` moved toward `to` by `amount` (0 to 1). */
+export function mixHex(from, to, amount) {
+  const a = channels(from);
+  const b = channels(to);
+  return `#${a.map((v, i) => Math.round(v + (b[i] - v) * amount).toString(16).padStart(2, '0')).join('')}`;
+}
 
 export function sky(id, stops) {
   return `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('')}</linearGradient>`;
@@ -78,8 +107,11 @@ export function glow(id, cx, cy, r, color, strength = 0.9) {
   return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${color}" stop-opacity="${strength}"/><stop offset="0.14" stop-color="${color}" stop-opacity="${strength * 0.55}"/><stop offset="0.5" stop-color="${color}" stop-opacity="${strength * 0.12}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>`;
 }
 
+let mists = 0;
+/** A soft band of mist: clear at both edges, thickest in its middle, no hard line anywhere. */
 export function mist(w, y, height, color, opacity) {
-  return `<rect x="0" y="${y}" width="${w}" height="${height}" fill="${color}" opacity="${opacity}" filter="url(#blur)"/>`;
+  const id = `mist${mists++}`;
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity="0"/><stop offset=".5" stop-color="${color}" stop-opacity="${opacity}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><rect x="0" y="${(y - height).toFixed(1)}" width="${w}" height="${(height * 3).toFixed(1)}" fill="url(#${id})"/>`;
 }
 
 /** Still water from y down: a gradient, a glitter path under the sun, and soft lines. */
@@ -110,7 +142,7 @@ export function reflection(w, h, f, y, color, opacity) {
     const dy = y - f(x);
     pts.push(`${x.toFixed(1)},${(y + dy * 0.8).toFixed(1)}`);
   }
-  return `<path d="M0,${y} L${pts.join(' L')} L${w},${y} Z" fill="${color}" opacity="${opacity}"/>`;
+  return `<path d="M0,${y} L${pts.join(' L')} L${w},${y} Z" fill="${color}" opacity="${opacity}" filter="url(#mirror)"/>`;
 }
 
 /** Rounded boulders along the foreground. */
@@ -151,40 +183,66 @@ export function branch(x, y, len, angle, seed, leaf, color, stem) {
 }
 
 export function svg(w, h, extraDefs, body) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs>${defs}${extraDefs}</defs>${body}<rect width="${w}" height="${h}" filter="url(#grain)"/></svg>`;
+  const vignette = `<radialGradient id="vig" cx="${w * 0.55}" cy="${h * 0.45}" r="${Math.max(w, h) * 0.75}" gradientUnits="userSpaceOnUse"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs>${defs}${vignette}${extraDefs}</defs>${body}<rect width="${w}" height="${h}" fill="url(#vig)"/><rect width="${w}" height="${h}" filter="url(#grain)"/></svg>`;
+}
+
+/** The top line of a ridge, open, for the light along it. */
+export function ridgeTop(w, f) {
+  const pts = [];
+  for (let step = 0; step <= 200; step++) {
+    const x = (w * step) / 200;
+    pts.push(`${x.toFixed(1)},${f(x).toFixed(1)}`);
+  }
+  return `M${pts.join(' L')}`;
+}
+
+/** A ridge shaded from its crest (a little of the light's color in it) to a darker foot, with light along its top. */
+export function litRidge(w, h, f, i, layer, glowColor, lampX, rim) {
+  const top = h * (layer.base - Math.abs(layer.amp) * 2 - (layer.peaks ? layer.amp * 2 : 0));
+  const crest = mixHex(layer.color, glowColor, layer.lit ?? 0.14);
+  const foot = mixHex(layer.color, '#000000', 0.18);
+  const id = `ridge${i}`;
+  let s = `<defs><linearGradient id="${id}" x1="0" y1="${top.toFixed(1)}" x2="0" y2="${h}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${crest}"/><stop offset=".45" stop-color="${layer.color}"/><stop offset="1" stop-color="${foot}"/></linearGradient>`;
+  s += `<linearGradient id="${id}rim" x1="0" y1="0" x2="${w}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${glowColor}" stop-opacity="0"/><stop offset="${Math.max(0, lampX / w - 0.38).toFixed(3)}" stop-color="${glowColor}" stop-opacity="0"/><stop offset="${(lampX / w).toFixed(3)}" stop-color="${glowColor}" stop-opacity="${rim}"/><stop offset="${Math.min(1, lampX / w + 0.38).toFixed(3)}" stop-color="${glowColor}" stop-opacity="0"/></linearGradient></defs>`;
+  s += `<path d="${ridgePath(w, h, f)}" fill="url(#${id})"/>`;
+  if (rim > 0) s += `<path d="${ridgeTop(w, f)}" fill="none" stroke="url(#${id}rim)" stroke-width="${Math.max(1.5, Math.min(w, h) * 0.004).toFixed(1)}" filter="url(#rimblur)"/>`;
+  return s;
 }
 
 /**
- * A common landscape: sky, glow and sun, optional moon and stars, clouds, ridges (far to near, each optionally
- * with firs), mist between them, and optional water from a line.
+ * A common landscape: sky, the one light and its glow, optional stars, ridges (far to near, each optionally with
+ * firs), mist between them, and optional water from a line. A scene's `moon` (night) becomes the one light, pale and
+ * without a crescent; `clouds` are left out.
  */
 export function landscape(w, h, o) {
   const m = Math.min(w, h);
-  const sunX = w * o.sun[0];
-  const sunY = h * o.sun[1];
+  const night = Boolean(o.moon);
+  const sunX = w * LAMP_X;
+  const sunY = night ? h * o.moon[1] : h * o.sun[1];
+  const lightR = night ? o.moon[2] * 0.7 : o.sunR;
   let extra = sky('sky', o.sky) + glow('sunglow', sunX, sunY, Math.max(w, h) * (o.glowSize ?? 0.55), o.glowColor, o.glowStrength ?? 0.9);
   let body = `<rect width="${w}" height="${h}" fill="url(#sky)"/>`;
   if (o.stars) body += stars(w, h, o.stars.seed ?? 3, Math.round((w * h) / o.stars.density), o.stars.maxY);
   body += `<rect width="${w}" height="${h}" fill="url(#sunglow)"/>`;
-  if (o.moon) {
-    const [mx, my, mr] = [w * o.moon[0], h * o.moon[1], m * o.moon[2]];
-    body += `<circle cx="${mx}" cy="${my}" r="${mr}" fill="#efe6d2"/><circle cx="${mx + mr * 0.45}" cy="${my - mr * 0.25}" r="${mr * 0.92}" fill="${o.moonSky}"/>`;
-  }
-  if (o.clouds) for (const c of o.clouds) body += clouds(w, h, c.seed, c.n, c.y0, c.y1, c.color, c.opacity, c.size ?? 1);
-  if (o.sunR) body += `<circle cx="${sunX}" cy="${sunY}" r="${m * o.sunR}" fill="${o.sunColor ?? '#fff3d6'}"/>`;
+  if (lightR) body += lamp(sunX, sunY, m, lightR, night ? '#f2eee4' : (o.sunColor ?? '#fff3d6'), o.glowColor);
+  else body += lampRing(sunX, sunY, m, o.glowColor, 0.14);
   const fns = [];
+  const count = o.ridges.length;
   for (const [i, layer] of o.ridges.entries()) {
     const f = ridgeFn(w, h, layer.base, layer.amp, layer.seed ?? 10 + i * 7, layer.detail ?? 1, layer.peaks ?? 0);
     fns.push(f);
-    if (layer.mistBefore) body += mist(w, h * (layer.base - 0.03), h * 0.06, layer.mistBefore[0], layer.mistBefore[1]);
-    body += `<path d="${ridgePath(w, h, f)}" fill="${layer.color}"/>`;
-    if (layer.firs) body += `<path d="${firsOn(w, f, layer.seed ?? 10 + i * 7, h * layer.firs.size, layer.firs.count)}" fill="${layer.firs.color ?? layer.color}"/>`;
+    if (layer.mistBefore) body += mist(w, h * (layer.base - 0.03), h * 0.05, layer.mistBefore[0], layer.mistBefore[1]);
+    // Far ridges face the light and catch it most; the nearest are dark shapes with only a trace along their tops.
+    const rim = layer.rim ?? 0.55 * (1 - i / Math.max(1, count)) + 0.08;
+    body += litRidge(w, h, f, i, layer, o.glowColor, sunX, rim);
+    if (layer.firs) body += `<path d="${firsOn(w, f, layer.seed ?? 10 + i * 7, h * layer.firs.size, layer.firs.count)}" fill="${layer.firs.color ?? mixHex(layer.color, '#000000', 0.08)}"/>`;
     if (layer.waterAfter) {
       const wy = h * layer.waterAfter.y;
       body += water(w, h, wy, layer.waterAfter.stops, sunX, layer.waterAfter.glint, layer.seed);
-      if (layer.waterAfter.reflect) body += reflection(w, h, f, wy, layer.waterAfter.reflect, 0.18);
+      if (layer.waterAfter.reflect) body += reflection(w, h, f, wy, layer.waterAfter.reflect, 0.22);
     }
   }
-  if (o.after) body += o.after(w, h, fns);
+  if (o.after) body += o.after(w, h, fns, sunX, sunY);
   return svg(w, h, extra, body);
 }

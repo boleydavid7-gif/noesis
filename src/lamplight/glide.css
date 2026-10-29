@@ -264,16 +264,6 @@
     flex: none;
   }
 
-  /* The large title settles into the bar: one transform, so nothing reflows while scrolling. */
-  :root .topbar .greeting h1 {
-    transform-origin: 0% 50%;
-    transition: transform 420ms var(--ll-spring);
-  }
-
-  :root.nx-scrolled .topbar .greeting h1 {
-    transform: scale(0.74);
-  }
-
   /* The dock steps aside reading down a page and comes back on the way up. */
   :root .mobile-bottom-nav {
     transition: translate 520ms var(--ll-spring);
@@ -317,7 +307,6 @@
   :root .sidebar,
   :root .page-content,
   :root .topbar,
-  :root .topbar .greeting h1,
   :root .mobile-bottom-nav {
     transition: none;
   }
@@ -329,7 +318,7 @@
 }
 
 :root.reduce-motion .nx-glide-ready > .nx-glide,
-:root.reduce-motion :is(.sidebar, .page-content, .topbar, .topbar .greeting h1, .mobile-bottom-nav) {
+:root.reduce-motion :is(.sidebar, .page-content, .topbar, .mobile-bottom-nav) {
   transition: none;
 }
 

@@ -22,7 +22,9 @@ The product centers on four things:
 - Inside the app the tile is never shown: `NoesisMark` draws the same shapes (`src/lib/markGlyph.ts`, kept equal to the
   generator by a test) in one colour, the lighter parts as a lighter shade. No "by Proairetos" in Noesis's own header.
 - Every picture is a flat drawn scene in the Proairetos family's style, drawn by `scripts/scenes/noesis.mjs`
-  (`engine.mjs` is a copy of the family's kit): the default reading view (`noesis-hero.jpg`, `noesis-header.webp`,
+  (`engine.mjs` is the family's kit in a richer cut: one light at `LAMP_X` with its faint ring, no clouds or second
+  sun or moon, ridges shaded from a lit crest with light along their tops, soft mist, a vignette, drawn at twice the
+  size and scaled down): the default reading view (`noesis-hero.jpg`, `noesis-header.webp`,
   `noesis-sidebar.webp`: a lake at sunset from a sill with an open book) and every choosable scene in `public/scenes/`,
   at the same names and sizes. Run `node scripts/scenes/noesis.mjs [part of a file name]` (needs ffmpeg), then bump
   `CACHE` in `public/sw.js`.

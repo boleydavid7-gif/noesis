@@ -1,5 +1,5 @@
-// Noesis's pictures as flat drawn scenes, in the Proairetos family's style (engine.mjs is a copy of its kit):
-// the default reading view (a lake at sunset seen from a sill with an open book) and the choosable scenes, at the
+// Noesis's pictures as flat drawn scenes, in the Proairetos family's style (engine.mjs is its kit in a richer cut:
+// one light at LAMP_X with its ring, lit ridge tops, soft mist, drawn at twice the size): the default reading view (a lake at sunset seen from a sill with an open book) and the choosable scenes, at the
 // same names and sizes as the photos they replaced.
 // Run: node scripts/scenes/noesis.mjs   (Playwright's Chromium at /opt/pw-browsers/chromium or CHROMIUM=path; ffmpeg)
 import { execFileSync } from 'node:child_process'
@@ -7,7 +7,22 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { clouds, firsOn, glow, landscape, mist, rng, ridgeFn, ridgePath, sky, stars, svg, water } from './engine.mjs'
+import {
+  LAMP_X,
+  firsOn,
+  glow,
+  lamp,
+  lampRing,
+  landscape,
+  mist,
+  rng,
+  ridgeFn,
+  ridgePath,
+  sky,
+  stars,
+  svg,
+  water,
+} from './engine.mjs'
 
 const pub = join(dirname(fileURLToPath(import.meta.url)), '../../public')
 
@@ -90,15 +105,30 @@ function sill(w, h) {
   const mx = w * 0.78
   const mw = m * 0.07
   const mh = m * 0.08
+  const base = top + h * 0.035
+  const lampX = w * LAMP_X
   return `
-  <rect x="0" y="${top}" width="${w}" height="${h - top}" fill="#140f0c"/>
-  <rect x="0" y="${top}" width="${w}" height="${h * 0.012}" fill="#2a2018"/>
-  <ellipse cx="${bx}" cy="${by + m * 0.04}" rx="${bw * 0.6}" ry="${m * 0.012}" fill="#000" opacity="0.35"/>
-  <path d="${page(-1)}" fill="#e7d9bd"/><path d="${page(1)}" fill="#d9c8a6"/>${lines(-1)}${lines(1)}
-  <path d="M${bx},${by - m * 0.002} L${bx},${by + m * 0.035}" stroke="#9c8a6d" stroke-width="${Math.max(1, m * 0.003)}"/>
-  <rect x="${mx - mw / 2}" y="${top + h * 0.035 - mh}" width="${mw}" height="${mh}" rx="${mw * 0.12}" fill="#3a2c22"/>
-  <path d="M${mx + mw / 2},${top + h * 0.035 - mh * 0.75} C${mx + mw},${top + h * 0.035 - mh * 0.75} ${mx + mw},${top + h * 0.035 - mh * 0.25} ${mx + mw / 2},${top + h * 0.035 - mh * 0.25}" stroke="#3a2c22" stroke-width="${mw * 0.16}" fill="none"/>
-  <path d="M${mx - mw * 0.1},${top + h * 0.035 - mh * 1.1} C${mx - mw * 0.3},${top - mh * 1.6} ${mx + mw * 0.2},${top - mh * 1.9} ${mx},${top - mh * 2.5}" stroke="#f3e2c4" stroke-width="${Math.max(1.5, m * 0.004)}" fill="none" opacity="0.18" stroke-linecap="round"/>`
+  <defs>
+    <linearGradient id="sillg" x1="0" y1="${top}" x2="0" y2="${h}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22180f"/><stop offset="1" stop-color="#0d0907"/></linearGradient>
+    <linearGradient id="silledge" x1="0" y1="0" x2="${w}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#3a2b1d"/><stop offset="${(lampX / w).toFixed(3)}" stop-color="#8a6a44"/><stop offset="1" stop-color="#3a2b1d"/></linearGradient>
+    <linearGradient id="pageL" x1="${bx - bw * 0.5}" y1="0" x2="${bx}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#eadcc0"/><stop offset=".8" stop-color="#d8c6a2"/><stop offset="1" stop-color="#b8a27c"/></linearGradient>
+    <linearGradient id="pageR" x1="${bx}" y1="0" x2="${bx + bw * 0.5}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#bba57f"/><stop offset=".2" stop-color="#e4d4b4"/><stop offset="1" stop-color="#f6ebd4"/></linearGradient>
+    <linearGradient id="mugg" x1="${mx - mw / 2}" y1="0" x2="${mx + mw / 2}" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2a1f17"/><stop offset=".55" stop-color="#4a3829"/><stop offset=".8" stop-color="#6d5238"/><stop offset="1" stop-color="#33261c"/></linearGradient>
+    <radialGradient id="pool" cx="${bx}" cy="${by}" r="${bw * 0.9}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffcf86" stop-opacity=".16"/><stop offset="1" stop-color="#ffcf86" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="0" y="${top}" width="${w}" height="${h - top}" fill="url(#sillg)"/>
+  <rect x="0" y="${top}" width="${w}" height="${Math.max(2, h * 0.004)}" fill="url(#silledge)"/>
+  <rect x="0" y="${top}" width="${w}" height="${h - top}" fill="url(#pool)"/>
+  <ellipse cx="${bx}" cy="${by + m * 0.042}" rx="${bw * 0.62}" ry="${m * 0.014}" fill="#000" opacity="0.5" filter="url(#soft)"/>
+  <path d="${page(-1)}" fill="url(#pageL)"/><path d="${page(1)}" fill="url(#pageR)"/>${lines(-1)}${lines(1)}
+  <path d="${page(1)}" fill="none" stroke="#fff6e0" stroke-opacity="0.35" stroke-width="${Math.max(1, m * 0.0018)}"/>
+  <path d="M${bx},${by - m * 0.002} L${bx},${by + m * 0.035}" stroke="#7d6a4f" stroke-width="${Math.max(1, m * 0.003)}"/>
+  <ellipse cx="${mx + mw * 0.1}" cy="${base + m * 0.004}" rx="${mw * 0.75}" ry="${m * 0.008}" fill="#000" opacity="0.45" filter="url(#soft)"/>
+  <rect x="${mx - mw / 2}" y="${base - mh}" width="${mw}" height="${mh}" rx="${mw * 0.14}" fill="url(#mugg)"/>
+  <ellipse cx="${mx}" cy="${base - mh}" rx="${mw / 2}" ry="${mw * 0.09}" fill="#1a120c"/>
+  <path d="M${mx - mw * 0.2},${base - mh - mw * 0.06} A${mw / 2} ${mw * 0.09} 0 0 0 ${mx + mw / 2},${base - mh}" stroke="#c7a173" stroke-opacity="0.5" stroke-width="${Math.max(1, m * 0.0018)}" fill="none"/>
+  <path d="M${mx + mw / 2},${base - mh * 0.75} C${mx + mw},${base - mh * 0.75} ${mx + mw},${base - mh * 0.25} ${mx + mw / 2},${base - mh * 0.25}" stroke="#4a3829" stroke-width="${mw * 0.16}" fill="none"/>
+  <path d="M${mx - mw * 0.1},${base - mh * 1.1} C${mx - mw * 0.3},${top - mh * 1.6} ${mx + mw * 0.2},${top - mh * 1.9} ${mx},${top - mh * 2.5}" stroke="#f3e2c4" stroke-width="${Math.max(1.5, m * 0.004)}" fill="none" opacity="0.16" stroke-linecap="round" filter="url(#rimblur)"/>`
 }
 
 // ---------- Scenes ----------
@@ -116,7 +146,6 @@ const reading = (w, h) =>
     sunR: 0.03,
     glowColor: '#ffcf86',
     glowSize: 0.55,
-    clouds: [{ seed: 6, n: 5, y0: 0.14, y1: 0.36, color: '#f0a070', opacity: 0.28 }],
     ridges: [
       { base: 0.5, amp: 0.04, seed: 4, detail: 1.3, peaks: 4, color: '#86677c' },
       { base: 0.55, amp: 0.03, seed: 9, color: '#58486a', mistBefore: ['#f2c08a', 0.25] },
@@ -144,7 +173,7 @@ const reading = (w, h) =>
 const cityNight = (w, h) => {
   const y = h * 0.84
   const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/>${stars(w, h, 5, Math.round((w * h) / 2600), 0.55)}
-  <circle cx="${w * 0.78}" cy="${h * 0.16}" r="${Math.min(w, h) * 0.05}" fill="#efe6d2"/><circle cx="${w * 0.78 + Math.min(w, h) * 0.022}" cy="${h * 0.16 - Math.min(w, h) * 0.012}" r="${Math.min(w, h) * 0.046}" fill="#0b1124"/>
+  ${lamp(w * LAMP_X, h * 0.18, Math.min(w, h), 0.032, '#f2eee4', '#cfdcf2')}
   <rect width="${w}" height="${h}" fill="url(#cityglow)"/>
   ${skyline(w, h, 0.84, 11, { color: '#1c2744', height: 0.42, lit: 0.06, litColor: '#9fb7e6' })}
   ${skyline(w, h, 0.86, 23, { color: '#0d1326', height: 0.3, minW: 0.05, maxW: 0.11, lit: 0.22 })}
@@ -156,7 +185,7 @@ const cityNight = (w, h) => {
       [0, '#18233f'],
       [1, '#05080f'],
     ],
-    w * 0.78,
+    w * LAMP_X,
     null,
     7,
   )}
@@ -176,8 +205,7 @@ const cityNight = (w, h) => {
 const citySunset = (w, h) => {
   const y = h * 0.86
   const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/><rect width="${w}" height="${h}" fill="url(#sunglow)"/>
-  ${clouds(w, h, 8, 6, 0.12, 0.42, '#f6a46e', 0.3)}
-  <circle cx="${w * 0.32}" cy="${h * 0.62}" r="${Math.min(w, h) * 0.06}" fill="#ffe2a8"/>
+  ${lamp(w * LAMP_X, h * 0.62, Math.min(w, h), 0.045, '#ffe2a8', '#ffcf86')}
   ${skyline(w, h, 0.84, 41, { color: '#7a4f60', height: 0.4 })}
   ${mist(w, h * 0.76, h * 0.06, '#f4b07a', 0.25)}
   ${skyline(w, h, 0.87, 47, { color: '#2a1b2b', height: 0.28, minW: 0.05, maxW: 0.1, lit: 0.06, litColor: '#ffcf86' })}
@@ -190,7 +218,7 @@ const citySunset = (w, h) => {
       [0.4, '#5a3346'],
       [1, '#160f1c'],
     ],
-    w * 0.32,
+    w * LAMP_X,
     '#ffd59a',
     9,
   )}`
@@ -202,14 +230,13 @@ const citySunset = (w, h) => {
       [0.35, '#8a4b63'],
       [0.6, '#ea8a5a'],
       [0.72, '#f7c278'],
-    ]) + glow('sunglow', w * 0.32, h * 0.62, Math.max(w, h) * 0.6, '#ffcf86', 0.8),
+    ]) + glow('sunglow', w * LAMP_X, h * 0.62, Math.max(w, h) * 0.6, '#ffcf86', 0.8),
     body,
   )
 }
 
 const duskCity = (w, h) => {
-  const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/>${stars(w, h, 13, Math.round((w * h) / 6000), 0.35)}<rect width="${w}" height="${h}" fill="url(#sunglow)"/>
-  ${clouds(w, h, 15, 5, 0.18, 0.45, '#c78aa8', 0.22)}
+  const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/>${stars(w, h, 13, Math.round((w * h) / 6000), 0.35)}<rect width="${w}" height="${h}" fill="url(#sunglow)"/>${lampRing(w * LAMP_X, h * 0.72, Math.min(w, h), '#ffb38a', 0.18)}
   ${skyline(w, h, 0.8, 53, { color: '#4a3a66', height: 0.38, lit: 0.05, litColor: '#f1c6e0' })}
   ${skyline(w, h, 0.84, 59, { color: '#1f1833', height: 0.3, minW: 0.06, maxW: 0.12, lit: 0.16, litColor: '#ffd59a' })}
   <rect x="0" y="${h * 0.84}" width="${w}" height="${h * 0.16}" fill="#120e1f"/>
@@ -222,15 +249,14 @@ const duskCity = (w, h) => {
       [0.45, '#4b3767'],
       [0.75, '#c4789a'],
       [0.85, '#f0a98e'],
-    ]) + glow('sunglow', w * 0.5, h * 0.8, Math.max(w, h) * 0.6, '#ffb38a', 0.5),
+    ]) + glow('sunglow', w * LAMP_X, h * 0.8, Math.max(w, h) * 0.6, '#ffb38a', 0.5),
     body,
   )
 }
 
 const sunriseCity = (w, h) => {
   const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/><rect width="${w}" height="${h}" fill="url(#sunglow)"/>
-  ${clouds(w, h, 21, 6, 0.1, 0.4, '#ffffff', 0.35)}
-  <circle cx="${w * 0.6}" cy="${h * 0.66}" r="${Math.min(w, h) * 0.055}" fill="#fff4d6"/>
+  ${lamp(w * LAMP_X, h * 0.66, Math.min(w, h), 0.045, '#fff4d6', '#fff0c4')}
   ${skyline(w, h, 0.8, 61, { color: '#93a3bf', height: 0.42 })}
   ${mist(w, h * 0.7, h * 0.08, '#fff0d4', 0.45)}
   ${skyline(w, h, 0.85, 67, { color: '#4a5878', height: 0.3, minW: 0.05, maxW: 0.11, lit: 0.04, litColor: '#ffe7b0' })}
@@ -244,7 +270,7 @@ const sunriseCity = (w, h) => {
       [0.4, '#b9c9de'],
       [0.62, '#f3d8b0'],
       [0.72, '#fbe6c2'],
-    ]) + glow('sunglow', w * 0.6, h * 0.66, Math.max(w, h) * 0.6, '#fff0c4', 0.85),
+    ]) + glow('sunglow', w * LAMP_X, h * 0.66, Math.max(w, h) * 0.6, '#fff0c4', 0.85),
     body,
   )
 }
@@ -261,7 +287,6 @@ const cabinScene = (w, h) =>
     sunR: 0.03,
     glowColor: '#ffd9b0',
     glowSize: 0.55,
-    clouds: [{ seed: 3, n: 6, y0: 0.12, y1: 0.36, color: '#ffd2c0', opacity: 0.35 }],
     ridges: [
       { base: 0.5, amp: 0.05, seed: 7, detail: 1.2, peaks: 5, color: '#9a86a6' },
       { base: 0.58, amp: 0.03, seed: 12, color: '#6d6688', mistBefore: ['#ffd9c0', 0.35] },
@@ -270,7 +295,7 @@ const cabinScene = (w, h) =>
       { base: 0.88, amp: 0.02, seed: 33, color: '#1a2330', firs: { size: 0.07, count: 14 } },
     ],
     after: (w2, h2, fns) =>
-      cabin(w2 * 0.62, fns[3](w2 * 0.62) + h2 * 0.006, Math.min(w2, h2) / 260, {
+      cabin(w2 * 0.34, fns[3](w2 * 0.34) + h2 * 0.006, Math.min(w2, h2) / 260, {
         wall: '#1e2735',
         roof: '#151c27',
         light: '#ffcf7a',
@@ -378,7 +403,7 @@ const moonBeach = (w, h) => {
   const shore = ridgeFn(w, h, 0.82, 0.02, 101, 0.6)
   const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/>${stars(w, h, 17, Math.round((w * h) / 2200), 0.5)}
   <rect width="${w}" height="${h}" fill="url(#moonglow)"/>
-  <circle cx="${w * 0.6}" cy="${h * 0.24}" r="${m * 0.09}" fill="#f3ecd9"/>
+  ${lamp(w * LAMP_X, h * 0.24, m, 0.06, '#f3ecd9', '#cfdcf2')}
   ${water(
     w,
     h,
@@ -388,7 +413,7 @@ const moonBeach = (w, h) => {
       [0.5, '#16223e'],
       [1, '#0a111f'],
     ],
-    w * 0.6,
+    w * LAMP_X,
     '#f3ecd9',
     11,
   )}
@@ -402,7 +427,7 @@ const moonBeach = (w, h) => {
       [0, '#060a16'],
       [0.45, '#152245'],
       [0.6, '#2c3d66'],
-    ]) + glow('moonglow', w * 0.6, h * 0.24, Math.max(w, h) * 0.5, '#cfdcf2', 0.35),
+    ]) + glow('moonglow', w * LAMP_X, h * 0.24, Math.max(w, h) * 0.5, '#cfdcf2', 0.35),
     body,
   )
 }
@@ -417,8 +442,7 @@ const sunsetBeach = (w, h) => {
     return `M${x.toFixed(1)},${b.toFixed(1)} q${((r() - 0.5) * t * 0.6).toFixed(1)},${(-t / 2).toFixed(1)} ${((r() - 0.3) * t * 0.8).toFixed(1)},${(-t).toFixed(1)} `
   }).join('')
   const body = `<rect width="${w}" height="${h}" fill="url(#sky)"/><rect width="${w}" height="${h}" fill="url(#sunglow)"/>
-  ${clouds(w, h, 115, 5, 0.15, 0.42, '#ffb98a', 0.3)}
-  <circle cx="${w * 0.5}" cy="${sea}" r="${Math.min(w, h) * 0.08}" fill="#ffe1a2"/>
+  ${lamp(w * LAMP_X, sea, Math.min(w, h), 0.06, '#ffe1a2', '#ffcf86')}
   ${water(
     w,
     h,
@@ -428,7 +452,7 @@ const sunsetBeach = (w, h) => {
       [0.4, '#8a4f5e'],
       [1, '#2a1c2c'],
     ],
-    w * 0.5,
+    w * LAMP_X,
     '#ffd99a',
     13,
   )}
@@ -443,7 +467,7 @@ const sunsetBeach = (w, h) => {
       [0.3, '#8a4f78'],
       [0.5, '#ef8f62'],
       [0.6, '#fbc37a'],
-    ]) + glow('sunglow', w * 0.5, sea, Math.max(w, h) * 0.6, '#ffcf86', 0.85),
+    ]) + glow('sunglow', w * LAMP_X, sea, Math.max(w, h) * 0.6, '#ffcf86', 0.85),
     body,
   )
 }
@@ -560,20 +584,20 @@ const FILES = [
 const only = process.argv[2]
 const { chromium } = await import('playwright').catch(() => import('/opt/node-tools/node_modules/playwright/index.mjs'))
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium' })
-const page = await browser.newPage()
+// Drawn at twice the size and scaled down, so every edge is smooth.
+const page = await browser.newPage({ deviceScaleFactor: 2 })
 const tmp = mkdtempSync(join(tmpdir(), 'noesis-scenes-'))
 for (const [file, draw, w, h] of FILES) {
   if (only && !file.includes(only)) continue
   await page.setViewportSize({ width: w, height: h })
   await page.setContent(`<html><body style="margin:0">${draw(w, h)}</body></html>`)
   const target = join(pub, file)
-  if (file.endsWith('.jpg')) {
-    await page.screenshot({ path: target, type: 'jpeg', quality: 86 })
-  } else {
-    const png = join(tmp, 'x.png')
-    await page.screenshot({ path: png })
-    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, '-quality', '85', target])
-  }
+  const png = join(tmp, 'x.png')
+  await page.screenshot({ path: png })
+  const scale = ['-vf', `scale=${w}:${h}:flags=lanczos`]
+  if (file.endsWith('.jpg'))
+    execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, ...scale, '-q:v', '3', target])
+  else execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', png, ...scale, '-quality', '86', target])
   console.log('drawn', file)
 }
 rmSync(tmp, { recursive: true, force: true })

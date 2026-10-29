@@ -218,7 +218,9 @@ and a Wrangler dry run. The live health endpoint is
 - Colors and wallpaper from Lamplight (Proairetos's palette): the accents are Gold (Noesis's own), Ember, Rose, Heather,
   Ink, Tide, Sage and Pewter (older saved choices move to the nearest: blue to Ink, green to Sage, violet to Heather,
   orange and red to Ember, teal to Tide); backgrounds add Hearth, Dusk and Clay. The default wallpaper is drawn
-  (`lib/wallpaper.ts`, the same drawing as Proairetos's rooms: a lamp with rings of light and three sweeping bands),
+  (`lib/wallpaper.ts`, in the manner of Proairetos's rooms taken further: a cool room of the background's hue with soft
+  blooms of color, a reading lamp as a warm glow with no rings, three silk folds rising toward it with lit top edges,
+  the lamp's light falling on their near side, a satin sheen, a shade beneath each, a vignette, dim stars and grain),
   made from the page color, the chosen color and the background's hue (`wallpaperColors`), set as `--lamplight` (tall,
   sidebar) and `--lamplight-wide` (home banner) by App's appearance effect. A chosen picture still replaces it.
 - Connected Libby (Borrowed › Connect Libby): the reader makes a setup code in the Libby they are signed in to
@@ -261,5 +263,5 @@ and a Wrangler dry run. The live health endpoint is
   dock and sidebar hold still). On phones the drawer glides in on a spring while the page steps back (scaled and dimmed),
   its places arriving in turn; the top bar is sticky (`.app-shell` uses `overflow: clip`, since `hidden` would trap it),
   clear at rest with the mark before the title, mica and a hairline once the page scrolls (`nx-scrolled`), the title
-  settling by one transform; the dock steps aside reading down and comes back on the way up, at the top or the foot
+  keeping one size while scrolling (the owner's choice); the dock steps aside reading down and comes back on the way up, at the top or the foot
   (`nx-tucked`, `useScrollBars`, which reads only the scroll). Motion turned down keeps every change without travel.
