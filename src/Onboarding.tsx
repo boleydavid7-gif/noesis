@@ -329,7 +329,7 @@ export function Onboarding({
                 <span className="intro-row-text">
                   <small>From the same maker</small>
                   <strong>Proairetos</strong>
-                  <span>Plan your days, write things down, and look back on them.</span>
+                  <span>Plan your days and reflect</span>
                 </span>
                 <span className="intro-sibling-open">Open</span>
               </a>
