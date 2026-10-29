@@ -217,3 +217,75 @@
     display: none;
   }
 }
+
+/* ---------- Fields inside a search box: the box is the field ---------- */
+/* The text box inside a search field (icon, words, sometimes a button) takes no fill, corners or ring of its own;
+   only the outer field lights on focus, so it never draws a box inside a box. */
+:root
+  .app-shell
+  :is(
+      .field-with-icon,
+      .reader-search,
+      .pdf-search,
+      .sidebar-search,
+      .top-search,
+      .explore-search,
+      .opds-search
+    )
+  :is(input, textarea) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root
+  .app-shell
+  :is(
+      .field-with-icon,
+      .reader-search,
+      .pdf-search,
+      .sidebar-search,
+      .top-search,
+      .explore-search,
+      .opds-search
+    )
+  :is(input, textarea):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* iPhone Safari zooms the whole page into any field whose text is under 16px, and the page then runs off the
+   screen. Fields keep 16px on iPhones and iPads. */
+@supports (-webkit-touch-callout: none) {
+  :root
+    :is(
+      input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']),
+      textarea,
+      select
+    ) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* The library's tools on a phone: sort and Add books share a row, anything more wraps below; labels stay on one
+   line. Search inside books puts its button under the field. */
+@media (max-width: 899px) {
+  :root .page-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  :root .page-toolbar-actions > * {
+    flex: 1 1 auto;
+    white-space: nowrap;
+  }
+  :root .deep-search form {
+    flex-wrap: wrap;
+  }
+  :root .deep-search form .field-with-icon {
+    flex: 1 1 100%;
+  }
+  :root .deep-search form > button {
+    flex: 1 1 auto;
+  }
+}

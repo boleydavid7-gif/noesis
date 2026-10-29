@@ -276,3 +276,8 @@ and a Wrangler dry run. The live health endpoint is
   chapter at its top, clear of the phone's controls (`landAt`, and a saved place within 200px of the top), keeps a
   comfortable line length by default (`lineWidth: 'comfortable'`), and names its page frame. A library card's
   remove is in its menu (the ⋯ under the heart), never over the title. Explore shows Results only once there are some.
+- Fields on phones (Oct 29): a search box's inner text field has no fill, corners or ring of its own (only the box
+  lights), and no ring around a whole form; on iPhones and iPads every field is at least 16px
+  (`@supports (-webkit-touch-callout: none)` in `noesis.css`), since Safari zooms the page into smaller ones and the
+  page then runs off the screen. On phones the Library's sort and Add books share a row and Search inside books sits
+  under its field.

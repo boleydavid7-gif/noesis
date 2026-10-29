@@ -9555,7 +9555,6 @@ input[type='radio'] {
   box-shadow: none;
 }
 .field-with-icon:focus-within,
-.deep-search form:focus-within,
 .reader-search:focus-within,
 .pdf-search:focus-within,
 .sidebar-search:focus-within,
