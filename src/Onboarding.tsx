@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   Cloud,
   ExternalLink,
+  Gem,
   HardDrive,
   Highlighter,
   Library,
@@ -19,7 +20,8 @@ import {
 } from 'lucide-react'
 import './onboarding.css'
 
-// The first visit: what Noesis is, in a few plain pages, then an account and (optionally) the person's own storage.
+// The first visit: what Noesis is, in a few plain pages, then an account, Noesis Plus (optional) and (optionally)
+// the person's own storage.
 // The step is kept so a storage sign-in that leaves the page comes back to the same place.
 export const INTRO_KEY = 'noesis:intro:v1'
 
@@ -149,8 +151,9 @@ const PAGES: Page[] = [
   },
 ]
 const ACCOUNT = PAGES.length
-const STORAGE = PAGES.length + 1
-export const INTRO_STEPS = PAGES.length + 2
+const PLUS = PAGES.length + 1
+const STORAGE = PAGES.length + 2
+export const INTRO_STEPS = PAGES.length + 3
 
 export function Onboarding({
   start = 0,
@@ -158,6 +161,8 @@ export function Onboarding({
   signedIn,
   email,
   account,
+  plus,
+  plusOn = false,
   storage,
   onDone,
 }: {
@@ -166,6 +171,9 @@ export function Onboarding({
   signedIn: boolean
   email?: string
   account: ReactNode
+  /** The Plus panel; given a way back to the account page for starting without an account. */
+  plus: (toAccount: () => void) => ReactNode
+  plusOn?: boolean
   storage: ReactNode
   onDone: () => void
 }) {
@@ -207,9 +215,13 @@ export function Onboarding({
         ? signedIn
           ? 'Continue'
           : 'Not now'
-        : step === STORAGE
-          ? 'Start reading'
-          : 'Continue'
+        : step === PLUS
+          ? plusOn
+            ? 'Continue'
+            : 'Not now'
+          : step === STORAGE
+            ? 'Start reading'
+            : 'Continue'
 
   return (
     <div className="intro" role="dialog" aria-modal="true" aria-label="Welcome to Noesis">
@@ -292,6 +304,15 @@ export function Onboarding({
                 <div className="intro-account">{account}</div>
               )}
             </>
+          ) : step === PLUS ? (
+            <>
+              <span className="intro-tile intro-tile-yellow intro-tile-big" aria-hidden="true">
+                <Gem size={30} />
+              </span>
+              <h1 className="intro-title">Noesis Plus</h1>
+              <p className="intro-lead">More time with Noema. Reading, notes and sync stay free.</p>
+              <div className="intro-plus">{plus(() => go(ACCOUNT))}</div>
+            </>
           ) : (
             <>
               <span className="intro-tile intro-tile-orange intro-tile-big" aria-hidden="true">
@@ -309,7 +330,9 @@ export function Onboarding({
       </div>
       <div className="intro-foot">
         <button
-          className={step === ACCOUNT && !signedIn ? 'intro-secondary' : 'intro-primary'}
+          className={
+            (step === ACCOUNT && !signedIn) || (step === PLUS && !plusOn) ? 'intro-secondary' : 'intro-primary'
+          }
           onClick={() => go(step + 1)}
         >
           {primary}

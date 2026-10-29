@@ -273,3 +273,7 @@
   opacity: 0.45;
   cursor: default;
 }
+.intro-plus {
+  width: 100%;
+  margin-top: 8px;
+}

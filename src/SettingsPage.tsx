@@ -44,6 +44,7 @@ type Props = {
   onClearLocal: () => void
   onNotice: (message: string) => void
   onIntro?: () => void
+  plus: ReactNode
 }
 
 export function SettingsPage(props: Props) {
@@ -119,6 +120,7 @@ export function SettingsPage(props: Props) {
             </>
           ) : null}
           {section === 'ai' ? <AiSection settings={settings} set={set} /> : null}
+          {section === 'plus' ? <div className="settings-plus">{props.plus}</div> : null}
         </div>
       </div>
     </div>

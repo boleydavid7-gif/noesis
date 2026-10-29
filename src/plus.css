@@ -1,0 +1,145 @@
+/* Noesis Plus: two plan tiles (the chosen one lit by the lamp), what it includes, this month's Noema use, and one
+   pill button. Used on the first-visit page and in Settings. */
+.plus {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+}
+.plus-plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.plus-plan {
+  display: grid;
+  gap: 4px;
+  min-height: 104px;
+  padding: 14px 16px;
+  border: 1px solid var(--hair, rgba(237, 244, 255, 0.14));
+  border-radius: var(--radius-m, 16px);
+  background: color-mix(in oklab, var(--tone-2, #18212e) 80%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.plus-plan-on {
+  border-color: var(--lamp, #d5ab61);
+  background: color-mix(in oklab, var(--lamp, #d5ab61) 12%, var(--tone-2, #18212e));
+  box-shadow: 0 0 0 1px var(--lamp, #d5ab61) inset;
+}
+.plus-plan-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.plus-plan-price {
+  font-family: var(--serif, Georgia, serif);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+.plus-plan-price small {
+  margin-left: 2px;
+  font-family: var(--sans, system-ui, sans-serif);
+  font-size: 0.85rem;
+  opacity: 0.72;
+}
+.plus-plan-note {
+  color: var(--lamp, #d5ab61);
+  font-size: 0.85rem;
+}
+.plus-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plus-list li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.plus-list svg {
+  margin-top: 2px;
+  color: var(--lamp, #d5ab61);
+}
+.plus-list li > span {
+  display: grid;
+  gap: 2px;
+}
+.plus-list li > span > span {
+  font-size: 0.88rem;
+  opacity: 0.72;
+}
+.plus-usage {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.plus-meter {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--paper, #edf4ff) 12%, transparent);
+  overflow: hidden;
+}
+.plus-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lamp, #d5ab61);
+  transition: width 0.4s ease;
+}
+.plus-button {
+  justify-self: stretch;
+  min-height: 48px;
+}
+.plus-fine {
+  margin: -6px 0 0;
+  font-size: 0.85rem;
+  text-align: center;
+  opacity: 0.72;
+}
+.plus-on .plus-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.plus-on .plus-head span,
+.plus-line {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .plus-plan,
+  .plus-meter span {
+    transition: none;
+  }
+}
+
+/* Under Ask Noema: this month's questions as a plain line. */
+.noema-allowance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.noema-allowance .text-button {
+  min-height: 32px;
+  padding: 0 4px;
+}
+.settings-plus {
+  max-width: 520px;
+}

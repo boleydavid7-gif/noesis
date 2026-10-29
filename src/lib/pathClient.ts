@@ -1,4 +1,5 @@
 import { authHeaders } from './auth'
+import { noemaUsed } from './plus'
 import type { SubjectDraft } from './subjects'
 import { unverifiedBook, type BookCandidate, type ResolvedBook } from './pathPlan'
 
@@ -48,6 +49,7 @@ async function post<T>(route: string, body: unknown, fallback: string): Promise<
   } catch {
     throw new Error('Could not reach Noesis. Check your connection and try again.')
   }
+  noemaUsed()
   const result = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T
   if (response.status === 401) throw new AuthRequiredError(result.error || 'Sign in to use this.')
   if (!response.ok || !result.ok) throw new Error(result.error || fallback)

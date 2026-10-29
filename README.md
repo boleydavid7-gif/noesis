@@ -131,6 +131,24 @@ sign-in; it is never sent to the app.
   plain push ("Review cards are ready.") to each device whose next card has come due, at most once a day. Turn on
   Settings → Notifications → Review reminders while signed in, in the installed app.
 
+### Noesis Plus and Noema's allowance
+
+Everyone signed in may ask Noema 15 times a month; Noesis Plus ($5.99 a month or $49.99 a year, the first 7 days
+free) raises that to 300. Every AI route counts one use (`takeNoema` in `src/workerPlus.ts`, called by `guardAi`).
+Prices, the free week and the two allowances are fixed in `workerPlus.ts`; the app reads them from `GET /api/plus`.
+Until the steps below are done, Noema is not counted and the Plus button reads "Opens soon".
+
+1. Apply `supabase/migrations/20261029000000_noesis_plus.sql` (tables `noesis_plus`, `noesis_noema_use` and the
+   counting function, callable only with the service role). `SUPABASE_SERVICE_ROLE_KEY` must already be a Worker secret.
+2. In Stripe, add a webhook endpoint `https://<your site>/api/plus/webhook` for `checkout.session.completed`,
+   `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`.
+3. Add the Worker secrets `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (the endpoint's signing secret).
+4. In Stripe's settings, turn on the customer portal (Billing > Customer portal) so "Manage subscription" can change
+   the plan, the card or cancel.
+
+No products need setting up in Stripe: checkout names "Noesis Plus" and its price itself. The first subscription on an
+account gets the free week; a later one does not.
+
 ### Device features (no setup)
 
 - Reader: the screen stays on while a book is open (Settings → Reading → Keep the screen on); Listen shows the

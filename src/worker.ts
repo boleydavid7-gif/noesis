@@ -1,3 +1,4 @@
+import { handlePlus, personFrom, takeNoema } from './workerPlus'
 import {
   buyLinks,
   isPublicHttps,
@@ -47,6 +48,9 @@ type Env = {
   VAPID_PUBLIC_KEY?: string
   VAPID_PRIVATE_KEY?: string
   VAPID_SUBJECT?: string
+  // Noesis Plus (workerPlus.ts): Stripe's secret key and its webhook's signing secret. Without them nothing is sold.
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
   // Optional: finds videos for a question by search (YouTube Data API). Without it, only links Noema names are
   // checked and kept.
   YOUTUBE_API_KEY?: string
@@ -89,21 +93,6 @@ function rateLimited(request: Request, route: string, limit: number, windowMs = 
   }
   bucket.count += 1
   return bucket.count > limit
-}
-
-async function hasValidSession(request: Request, env: Env): Promise<boolean> {
-  const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
-  const base = env.VITE_SUPABASE_URL?.trim().replace(/\/$/, '')
-  const key = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
-  if (!token || !base || !key) return false
-  try {
-    const response = await fetchWithTimeout(`${base}/auth/v1/user`, {
-      headers: { authorization: `Bearer ${token}`, apikey: key },
-    })
-    return response.ok
-  } catch {
-    return false
-  }
 }
 
 // Libby: join this device to the reader's Libby with a Copy To Another Device code, or read its loans with the token
@@ -284,7 +273,7 @@ async function generate(
   }
 }
 
-// Rate limit and (optionally) require a signed-in session for AI routes.
+// Rate limit, (optionally) require a signed-in session, and count one use of Noema's monthly allowance for AI routes.
 async function guardAi(
   request: Request,
   env: Env,
@@ -294,10 +283,11 @@ async function guardAi(
   signIn: string,
 ): Promise<Response | null> {
   if (rateLimited(request, route, limit)) return json({ ok: false, error: busy }, 429)
-  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !(await hasValidSession(request, env))) {
+  const person = await personFrom(request, env)
+  if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !person) {
     return json({ ok: false, error: signIn }, 401)
   }
-  return null
+  return takeNoema(env, person)
 }
 
 async function answerTutor(request: Request, env: Env): Promise<Response> {
@@ -2156,6 +2146,9 @@ const worker = {
         .map((model) => (model.name ?? '').replace(/^models\//, ''))
         .filter(Boolean)
       return json({ ok: true, models })
+    }
+    if (url.pathname === '/api/plus' || url.pathname.startsWith('/api/plus/')) {
+      return handlePlus(request, env, url.pathname.slice('/api/plus'.length).replace(/^\//, ''))
     }
     if (url.pathname === '/api/tutor') {
       if (request.method === 'OPTIONS') return new Response(null, { status: 204 })

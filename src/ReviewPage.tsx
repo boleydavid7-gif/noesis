@@ -1,6 +1,7 @@
 import { tap } from './lib/device'
 import { useEffect, useMemo, useState } from 'react'
 import { authHeaders } from './lib/auth'
+import { noemaUsed } from './lib/plus'
 import { markRemoved } from './lib/tombstones'
 import type { BrainNote } from './lib/knowledge'
 import {
@@ -93,6 +94,7 @@ export function ReviewPage({
       onNotice(reason instanceof Error ? reason.message : 'Noema could not draft questions.')
     } finally {
       setDrafting(null)
+      noemaUsed()
     }
   }
 

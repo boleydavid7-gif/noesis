@@ -1,9 +1,9 @@
-import { BookOpen, Brain, Library, Palette, UserRound, type LucideIcon } from 'lucide-react'
+import { BookOpen, Brain, Gem, Library, Palette, UserRound, type LucideIcon } from 'lucide-react'
 
 export type SettingsSectionId =
-  'account' | 'reading' | 'appearance' | 'library' | 'backup' | 'ai' | 'notifications' | 'privacy' | 'about'
+  'account' | 'reading' | 'appearance' | 'library' | 'backup' | 'ai' | 'plus' | 'notifications' | 'privacy' | 'about'
 
-// Five places to look. Backup, privacy and about live under Account; reminders live under Library.
+// Six places to look. Backup, privacy and about live under Account; reminders live under Library.
 export const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   title: string
@@ -40,6 +40,13 @@ export const SETTINGS_SECTIONS: Array<{
     subtitle: 'What the AI companion can use',
     icon: Brain,
     keywords: 'noema ai answer length notes reading text spoilers meaning on device',
+  },
+  {
+    id: 'plus',
+    title: 'Noesis Plus',
+    subtitle: 'Plan and Noema questions',
+    icon: Gem,
+    keywords: 'plus subscription plan price monthly yearly trial noema questions allowance billing cancel manage',
   },
   {
     id: 'account',

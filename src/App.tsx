@@ -130,6 +130,8 @@ import { RECAP_QUESTION, readSoFar, recapExcerpt } from './lib/spoilers'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import { Onboarding, readIntroStep, saveIntroStep } from './Onboarding'
+import { PlusPanel } from './Plus'
+import { noemaUsed, refreshPlus, usePlus, type PlusStatus } from './lib/plus'
 import type { SettingsSectionId } from './settings/sections'
 import { Group, Row, Toggle } from './settings/controls'
 import { ContextSidebar } from './ContextSidebar'
@@ -415,6 +417,10 @@ function App() {
   const [noteDraft, setNoteDraft] = useState<NoteDraft>({ title: '', body: '', source: '', kind: 'note' })
   const [pathDraft, setPathDraft] = useState({ title: '', description: '' })
   const [authUser, setAuthUser] = useState<User | null>(null)
+  const plusStatus = usePlus()
+  useEffect(() => {
+    void refreshPlus()
+  }, [authUser?.id])
   const [authName, setAuthName] = useState('')
   const [profileFirstName, setProfileFirstName] = useState(() => readProfileName())
   const [authEmail, setAuthEmail] = useState('')
@@ -1017,6 +1023,28 @@ function App() {
     else if (page === 'review') setActiveNav('Review')
     if (params.has('continue') || params.has('page') || params.has('book'))
       window.history.replaceState(null, '', window.location.pathname)
+  }, [])
+  // Back from Stripe (/?plus=started|canceled|manage): open Noesis Plus in Settings, and once Stripe's webhook has
+  // landed (a few seconds at most), say so.
+  useEffect(() => {
+    const back = new URLSearchParams(window.location.search).get('plus')
+    if (!back) return
+    window.history.replaceState(null, '', window.location.pathname)
+    setSettingsSection('plus')
+    setActiveNav('Settings')
+    if (back !== 'started') return void refreshPlus()
+    let tries = 0
+    const timer = window.setInterval(async () => {
+      tries += 1
+      const status = await refreshPlus()
+      if (status.plus || tries >= 10) {
+        window.clearInterval(timer)
+        if (status.plus) showNotice('Noesis Plus is on.')
+      }
+    }, 2_000)
+    return () => window.clearInterval(timer)
+    // showNotice is stable in practice; this runs once on opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // Something shared into Noesis from another app or a web page.
   useEffect(() => {
@@ -1734,6 +1762,7 @@ function App() {
       showNotice(message)
     } finally {
       setTutorBusy(false)
+      noemaUsed()
     }
   }
   async function searchResources(event?: React.FormEvent, override?: string) {
@@ -3583,6 +3612,7 @@ function App() {
         onClearLocal={clearLocalData}
         onIntro={() => setIntroStep(0)}
         onNotice={showNotice}
+        plus={<PlusPanel onSignIn={() => goSignIn('sign-up')} onNotice={showNotice} />}
       />
     ) : (
       <div className="empty-state">Choose a page from the navigation.</div>
@@ -4122,6 +4152,12 @@ function App() {
                 setPrompt={setTutorPrompt}
                 onAsk={askNoema}
                 onClose={() => setOverlay(null)}
+                allowance={plusStatus.noema}
+                plusOn={Boolean(plusStatus.plus)}
+                onPlus={() => {
+                  setOverlay(null)
+                  openSettings('plus')
+                }}
               />
             ) : null}
             {utilityOverlay === 'calendar' ? (
@@ -4176,6 +4212,8 @@ function App() {
           signedIn={Boolean(authUser && !isAnonymousUser(authUser))}
           email={authUser?.email ?? undefined}
           account={authForm()}
+          plus={(toAccount) => <PlusPanel onSignIn={toAccount} onNotice={showNotice} />}
+          plusOn={Boolean(plusStatus.plus)}
           storage={storageGroup()}
           onDone={() => setIntroStep(null)}
         />
@@ -5445,6 +5483,9 @@ function NoemaOverlay({
   setPrompt,
   onAsk,
   onClose,
+  allowance,
+  plusOn,
+  onPlus,
 }: {
   context: ReaderTutorContext | null
   prompt: string
@@ -5457,6 +5498,9 @@ function NoemaOverlay({
   setPrompt: (value: string) => void
   onAsk: TutorHandler
   onClose: () => void
+  allowance: PlusStatus['noema']
+  plusOn: boolean
+  onPlus: () => void
 }) {
   const hasPassage = Boolean(context?.selectedText || context?.visibleText)
   const explainPrompt = context?.selectedText ? 'Explain the selected passage' : 'Explain the current page'
@@ -5543,6 +5587,16 @@ function NoemaOverlay({
         <button className="noema-ask" onClick={() => onAsk(prompt)} disabled={busy}>
           {busy ? 'Thinking…' : 'Ask Noema'}
         </button>
+        {allowance ? (
+          <p className="noema-allowance">
+            {Math.max(0, allowance.limit - allowance.used)} of {allowance.limit} questions left this month
+            {!plusOn ? (
+              <button type="button" className="text-button" onClick={onPlus}>
+                Noesis Plus
+              </button>
+            ) : null}
+          </p>
+        ) : null}
         {reply ? (
           <div className="tutor-reply">
             <strong>{prompt}</strong>
