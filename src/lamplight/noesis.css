@@ -223,15 +223,7 @@
    only the outer field lights on focus, so it never draws a box inside a box. */
 :root
   .app-shell
-  :is(
-      .field-with-icon,
-      .reader-search,
-      .pdf-search,
-      .sidebar-search,
-      .top-search,
-      .explore-search,
-      .opds-search
-    )
+  :is(.field-with-icon, .reader-search, .pdf-search, .sidebar-search, .top-search, .explore-search, .opds-search)
   :is(input, textarea) {
   border: 0;
   border-radius: 0;
@@ -240,15 +232,7 @@
 }
 :root
   .app-shell
-  :is(
-      .field-with-icon,
-      .reader-search,
-      .pdf-search,
-      .sidebar-search,
-      .top-search,
-      .explore-search,
-      .opds-search
-    )
+  :is(.field-with-icon, .reader-search, .pdf-search, .sidebar-search, .top-search, .explore-search, .opds-search)
   :is(input, textarea):focus-visible {
   outline: none;
   box-shadow: none;
