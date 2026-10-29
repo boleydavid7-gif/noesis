@@ -324,6 +324,15 @@ export function Onboarding({
                 books you keep in it.
               </p>
               <div className="intro-storage">{storage}</div>
+              <a className="intro-sibling" href="https://proairetos.com/" target="_blank" rel="noopener">
+                <img src="/partners/proairetos.png" alt="" width={40} height={40} />
+                <span className="intro-row-text">
+                  <small>From the same maker</small>
+                  <strong>Proairetos</strong>
+                  <span>Plan your days, write things down, and look back on them.</span>
+                </span>
+                <span className="intro-sibling-open">Open</span>
+              </a>
             </>
           )}
         </div>
