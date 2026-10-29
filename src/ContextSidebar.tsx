@@ -216,7 +216,7 @@ export function ContextSidebar(props: Props) {
         </div>
         {forecast.status === 'none' ? (
           <div className="weather-setup">
-            <p className="context-empty">Add your location to see the forecast.</p>
+            <p className="context-empty">No place set.</p>
             <div className="weather-setup-actions">
               <button className="secondary-button" onClick={() => void detect()} disabled={detecting}>
                 <MapPin size={14} /> {detecting ? 'Detecting…' : 'Detect'}

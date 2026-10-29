@@ -151,7 +151,7 @@ export function WebdavBrowser({ onImport }: { onImport: (file: File) => Promise<
       <div className="section-heading">
         <div>
           <h2>Your cloud folders</h2>
-          <p>Browse a WebDAV folder, such as Nextcloud or ownCloud, and add books from it to your library.</p>
+          <p>Nextcloud, ownCloud or any WebDAV folder.</p>
         </div>
         <button className="text-button" onClick={() => setAdding((value) => !value)}>
           <Plus size={14} /> Add a folder
@@ -166,7 +166,7 @@ export function WebdavBrowser({ onImport }: { onImport: (file: File) => Promise<
       {adding ? (
         <form className="opds-form panel-card" onSubmit={add}>
           <input
-            placeholder="Folder address, e.g. https://cloud.example.com/remote.php/dav/files/you/Books"
+            placeholder="Folder address"
             value={draft.url}
             onChange={(event) => setDraft({ ...draft, url: event.target.value })}
             aria-label="Folder address"

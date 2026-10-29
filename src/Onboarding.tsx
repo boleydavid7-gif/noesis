@@ -49,103 +49,103 @@ type Page = { title: string; lead: string; rows?: Row[] }
 
 const PAGES: Page[] = [
   {
-    title: 'Welcome to Noesis',
-    lead: 'A place to read your books, keep what stays with you, and find what to read next.',
+    title: 'Noesis',
+    lead: 'Your books, highlights and notes in one place.',
   },
   {
     title: 'Read what you own',
-    lead: 'Your books sit together, wherever you read them.',
+    lead: 'Every book in one library.',
     rows: [
       {
         icon: BookOpen,
         tone: 'blue',
         title: 'EPUB and PDF',
-        text: 'Add files from your phone or computer. They open right here.',
+        text: 'Add files from your phone or computer.',
       },
       {
         icon: ExternalLink,
         tone: 'teal',
         title: 'Books you read elsewhere',
-        text: 'Kindle, Kobo or Apple Books: the cover opens the book there.',
+        text: 'Kindle, Kobo and Apple Books, opened from their covers.',
       },
       {
         icon: CalendarClock,
         tone: 'orange',
         title: 'Library loans',
-        text: 'Due dates in one list, with Renew where the library allows it.',
+        text: 'Due dates and renewals in one list.',
       },
     ],
   },
   {
     title: 'Keep what you read',
-    lead: 'Mark a line, write a thought, and find it again later.',
+    lead: 'Highlight a line, add a thought, find it later.',
     rows: [
       {
         icon: Highlighter,
         tone: 'yellow',
         title: 'Highlights and notes',
-        text: 'Select a passage to keep it. Add a thought to it.',
+        text: 'On any passage, in any book.',
       },
-      { icon: Brain, tone: 'indigo', title: 'Second Brain', text: 'Everything you keep, in one place you can search.' },
+      { icon: Brain, tone: 'indigo', title: 'Second Brain', text: 'Everything you keep, searchable.' },
       {
         icon: NotebookPen,
         tone: 'green',
         title: 'Noesis Notes',
-        text: 'A notebook for paper books and anything you read away from here.',
+        text: 'For paper books and everything else you read.',
       },
     ],
   },
   {
     title: 'Go down a rabbit hole',
-    lead: 'Start from something you want to understand.',
+    lead: 'Start from a question.',
     rows: [
       {
         icon: MessageCircleQuestion,
         tone: 'pink',
-        title: 'Begin with a question',
-        text: 'Each one comes with books, articles and videos.',
+        title: 'Books, articles and videos',
+        text: 'Found for each question.',
       },
       {
         icon: ArrowDown,
         tone: 'indigo',
         title: 'Go deeper',
-        text: 'Ask what you want to know next, as far as you want.',
+        text: 'Follow the next question as far as you like.',
       },
       {
         icon: Library,
         tone: 'teal',
         title: 'Libraries near you',
-        text: 'See whether your library has a copy on the shelf.',
+        text: 'See if your library has a copy.',
       },
       {
         icon: Sparkles,
         tone: 'blue',
         title: 'Noema',
-        text: 'Ask about a passage as you read. It sees only what you allow.',
+        text: 'Ask about a passage as you read. It sees only what you share.',
       },
     ],
   },
   {
-    title: 'Yours, and private',
-    lead: 'Noesis works without an account. One makes it go further.',
+    title: 'Private by default',
+    lead: 'No account needed. One adds sync.',
     rows: [
       {
         icon: Smartphone,
         tone: 'green',
-        title: 'On this device first',
-        text: 'Your books and notes are kept here and work offline.',
+        title: 'On this device',
+        text: 'Books and notes stay here and work offline.',
       },
       {
         icon: Cloud,
         tone: 'blue',
-        title: 'An account to sync',
-        text: 'Your library and notes follow you to your other devices.',
+        title: 'Sync',
+        text: 'Your library and notes on every device.',
       },
       {
         icon: HardDrive,
         tone: 'orange',
         title: 'Your own storage',
-        text: 'Google Drive, OneDrive or Dropbox can hold your books.',
+        text: 'Keep books in Google Drive, OneDrive or Dropbox.',
       },
     ],
   },
@@ -233,7 +233,7 @@ export function Onboarding({
         ) : (
           <span />
         )}
-        <div className="intro-dots" aria-label={`Step ${step + 1} of ${INTRO_STEPS}`}>
+        <div className="intro-dots" role="img" aria-label={`Step ${step + 1} of ${INTRO_STEPS}`}>
           {Array.from({ length: INTRO_STEPS }, (_, index) => (
             <span key={index} className={index === step ? 'intro-dot intro-dot-on' : 'intro-dot'} />
           ))}
@@ -291,10 +291,7 @@ export function Onboarding({
                 <Cloud size={30} />
               </span>
               <h1 className="intro-title">Create your account</h1>
-              <p className="intro-lead">
-                Keep your library and notes safe, and open them on your phone, tablet and computer. You can also do this
-                later in Settings.
-              </p>
+              <p className="intro-lead">Your library and notes on your phone, tablet and computer.</p>
               {signedIn ? (
                 <div className="intro-done">
                   <Check size={20} />
@@ -320,8 +317,7 @@ export function Onboarding({
               </span>
               <h1 className="intro-title">Your own storage</h1>
               <p className="intro-lead">
-                Optional. Connect Google Drive, OneDrive or Dropbox and Noesis backs up your library there and brings in
-                books you keep in it.
+                Back up your library to Google Drive, OneDrive or Dropbox, and read the books you keep there.
               </p>
               <div className="intro-storage">{storage}</div>
               <a className="intro-sibling" href="https://proairetos.com/" target="_blank" rel="noopener">

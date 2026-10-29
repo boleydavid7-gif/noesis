@@ -189,7 +189,7 @@ export function Borrowed({
           ))}
         </ul>
       ) : compact ? null : (
-        <p className="context-empty">Nothing borrowed. Add a loan to keep its due date here.</p>
+        <p className="context-empty">Nothing borrowed.</p>
       )}
       {!compact && past.length ? (
         <details className="loan-past">

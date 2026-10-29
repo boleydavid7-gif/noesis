@@ -36,7 +36,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--paper, #eef3fa);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--ll-serif);
   font-size: 1.15rem;
   line-height: 1.45;
   -webkit-line-clamp: 4;
@@ -156,7 +156,7 @@ body.daily-open {
 }
 .daily-quote blockquote {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--ll-serif);
   font-size: clamp(1.35rem, 5.2vw, 1.75rem);
   line-height: 1.45;
   text-wrap: pretty;
@@ -313,7 +313,7 @@ body.daily-open {
   margin: 0;
   overflow: hidden;
   color: var(--paper-2, #aebccd);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--ll-serif);
   font-size: 0.95rem;
   line-height: 1.4;
   -webkit-line-clamp: 2;

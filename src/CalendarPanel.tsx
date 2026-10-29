@@ -226,7 +226,6 @@ export function CalendarPanel({
                   <input
                     value={draft.title}
                     onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                    placeholder="e.g. Biology midterm"
                     maxLength={140}
                     autoFocus
                   />
@@ -311,7 +310,6 @@ export function CalendarPanel({
                   <textarea
                     value={draft.notes}
                     onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-                    placeholder="Room, chapters to cover, what to bring…"
                     rows={3}
                     maxLength={1000}
                   />
@@ -346,7 +344,7 @@ export function CalendarPanel({
                   </button>
                 </div>
                 {dayEvents.length === 0 ? (
-                  <p className="context-empty">Nothing scheduled. Add a class, assignment, exam, or study session.</p>
+                  <p className="context-empty">Nothing scheduled.</p>
                 ) : (
                   <ul className="cal-day-list">
                     {dayEvents.map(({ event, date, done }) => {

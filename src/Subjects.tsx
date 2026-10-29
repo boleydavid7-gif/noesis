@@ -175,7 +175,7 @@ export function SubjectStarter({
         <h3>What are you curious about?</h3>
         {!signedIn ? (
           <p className="planner-signin">
-            Noema maps a subject for you, which needs an account.{' '}
+            Needs an account.{' '}
             <button type="button" className="text-button" onClick={onSignIn}>
               Sign in or create one
             </button>
@@ -184,7 +184,6 @@ export function SubjectStarter({
         <textarea
           value={goal}
           onChange={(event) => setGoal(event.target.value)}
-          placeholder="e.g. Growing tomatoes, the French Revolution, how memory works"
           maxLength={400}
           rows={2}
           aria-label="What you are curious about"

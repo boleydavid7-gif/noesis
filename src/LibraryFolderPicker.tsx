@@ -71,8 +71,7 @@ export function LibraryFolderPicker({
             ? 'No books directly in this folder.'
             : books === 1
               ? 'One book directly in this folder.'
-              : `${books} books directly in this folder.`}{' '}
-          Folders inside are read too.
+              : `${books} books directly in this folder.`}
         </p>
       ) : null}
       <div className="folder-picker-actions">

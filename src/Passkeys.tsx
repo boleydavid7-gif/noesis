@@ -129,9 +129,7 @@ export function PasskeysPanel({ onNotice }: { onNotice: (text: string) => void }
       <h3>
         <KeyRound size={16} /> Passkeys
       </h3>
-      <p className="passkeys-detail">
-        Sign in with Face ID, a fingerprint or this device's PIN, instead of your password.
-      </p>
+      <p className="passkeys-detail">Sign in with Face ID, a fingerprint or your device PIN.</p>
       {problem ? <p className="passkeys-detail">{problem}</p> : null}
       {rows && rows.length > 0 ? (
         <ul className="passkeys-list">

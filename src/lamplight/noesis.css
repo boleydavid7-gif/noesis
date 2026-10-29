@@ -169,3 +169,51 @@
 :root .hero-continue .continue-details {
   background: rgba(5, 11, 18, 0.8);
 }
+
+/* ---------- Audit, Oct 29: touch, cards and the continue card ---------- */
+/* The phone's header buttons draw at 32px but take a 44px touch. */
+@media (max-width: 899px) {
+  :root .topbar :is(.icon-button, .account-top-button) {
+    position: relative;
+  }
+  :root .topbar :is(.icon-button, .account-top-button)::after {
+    position: absolute;
+    inset: -6px;
+    content: '';
+  }
+}
+
+/* A book card's menu sits under its heart, at the cover's edge, clear of the title under the cover. */
+:root .book-card-wrap .shelf-picker {
+  top: 40px;
+  right: 6px;
+  left: auto;
+}
+/* With no pointer to hover, the menu shows, so a tap never lands on a button it cannot see. */
+@media (hover: none) {
+  :root .book-card-wrap .book-shelf-button {
+    opacity: 1;
+  }
+}
+:root .book-card-wrap .book-shelf-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+:root .book-card-wrap .shelf-picker-pop {
+  right: 0;
+  left: auto;
+}
+:root .shelf-picker-pop .shelf-remove {
+  color: #ffabb0;
+}
+
+/* On a phone the continue card gets the whole width; the cover is in the shelf below it. */
+@media (max-width: 560px) {
+  :root .hero-continue {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :root .hero-continue .continue-cover-wrap {
+    display: none;
+  }
+}

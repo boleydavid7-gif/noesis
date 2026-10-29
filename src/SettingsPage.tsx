@@ -97,7 +97,7 @@ export function SettingsPage(props: Props) {
           <header className="settings-panel-head">
             <active.icon size={26} />
             <div>
-              <h3>{active.title}</h3>
+              <h2>{active.title}</h2>
             </div>
           </header>
           {section === 'account' ? (
@@ -137,7 +137,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
   return (
     <>
       <Group title="How you use Noesis">
-        <Row title="Mode" detail="Reading and learning adds rabbit holes and a study panel.">
+        <Row title="Mode" detail="Reading and learning adds rabbit holes and a study panel">
           <Segmented
             label="Mode"
             value={learner ? 'learner' : 'reader'}
@@ -346,7 +346,7 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
             fontFamily: FONT_STACKS[reading.font] ?? "Georgia, 'Times New Roman', serif",
           }}
         >
-          This is how your text will look.
+          We suffer more often in imagination than in reality.
         </div>
       </Group>
     </>

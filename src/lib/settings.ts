@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: Settings = {
     speechRate: 1,
     justify: false,
     paragraphs: 'book',
-    lineWidth: 'full',
+    lineWidth: 'comfortable',
     dropCap: false,
     letterSpacing: 'normal',
     tapZones: false,

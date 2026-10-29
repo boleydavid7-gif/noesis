@@ -242,10 +242,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
       <div className="section-heading">
         <div>
           <h2>Your book servers</h2>
-          <p>
-            Connect a catalog (OPDS) such as Calibre-Web or Kavita, or browse a free one, and add books straight to your
-            library.
-          </p>
+          <p>Calibre-Web, Kavita or any OPDS catalog.</p>
         </div>
         <button className="text-button" onClick={() => setAdding((value) => !value)}>
           <Plus size={14} /> Add a server
@@ -261,11 +258,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
         <form className="opds-form panel-card" onSubmit={add}>
           <label>
             Name
-            <input
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              placeholder="My Calibre library"
-            />
+            <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
           </label>
           <label>
             Catalog address
@@ -277,7 +270,7 @@ export function OpdsBrowser({ onImport }: { onImport: (file: File) => Promise<vo
             />
           </label>
           <label>
-            Username (if it needs one)
+            Username (optional)
             <input
               value={draft.user}
               onChange={(event) => setDraft({ ...draft, user: event.target.value })}

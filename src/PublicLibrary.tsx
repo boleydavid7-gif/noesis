@@ -98,12 +98,7 @@ export function LibraryChooser({ onDone }: { onDone?: () => void }) {
               >
                 <strong>{system.name}</strong>
                 <small>
-                  {[
-                    system.place,
-                    system.miles !== undefined ? `${system.miles} mi` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+                  {[system.place, system.miles !== undefined ? `${system.miles} mi` : ''].filter(Boolean).join(' · ')}
                 </small>
               </button>
             </li>

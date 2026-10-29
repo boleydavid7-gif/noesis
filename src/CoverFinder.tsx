@@ -70,14 +70,10 @@ export function CoverFinder({
             <X size={16} />
           </button>
         </header>
-        <p className="cover-finder-hint">Covers found for “{title}”. Choose one to use.</p>
+        <p className="cover-finder-hint">Covers for “{title}”</p>
         {problem ? <p className="cover-finder-problem">{problem}</p> : null}
         {covers === null ? <p className="cover-finder-hint">Searching…</p> : null}
-        {covers?.length === 0 && !problem ? (
-          <p className="cover-finder-hint">
-            No covers found. Try changing the title or author, or choose a picture of your own.
-          </p>
-        ) : null}
+        {covers?.length === 0 && !problem ? <p className="cover-finder-hint">No covers found.</p> : null}
         <div className="cover-finder-grid">
           {covers?.map((cover) => (
             <button

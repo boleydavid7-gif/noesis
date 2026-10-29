@@ -407,7 +407,7 @@ function Home({
                   autoFocus
                   value={folderName}
                   onChange={(event) => setFolderName(event.target.value)}
-                  placeholder="Name, e.g. Lectures"
+                  placeholder="Notebook name"
                   aria-label="Notebook name"
                 />
                 <button className="notes-primary" type="submit" disabled={!folderName.trim()}>
@@ -673,7 +673,7 @@ function NoteEditor({
         <input
           value={tags}
           onChange={(event) => setTags(event.target.value)}
-          placeholder="Tags (optional), separated by commas"
+          placeholder="Tags (optional)"
           aria-label="Tags"
         />
       </div>

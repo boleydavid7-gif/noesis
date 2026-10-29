@@ -1,7 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+/* The family's type, bundled so it works offline and asks no other site: Google Sans Flex for the interface,
+   EB Garamond for titles, quotes and the reader's own words. */
+@import '@fontsource-variable/google-sans-flex/opsz.css';
+@import '@fontsource/eb-garamond/latin-400.css';
+@import '@fontsource/eb-garamond/latin-500.css';
+@import '@fontsource/eb-garamond/latin-600.css';
 
 :root {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Google Sans Flex Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-optical-sizing: auto;
   color: #edf4ff;
   background: #06101d;
   font-synthesis: none;

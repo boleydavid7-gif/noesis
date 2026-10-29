@@ -3,7 +3,8 @@ import { MARK_GLYPH } from './lib/markGlyph'
 import { createPortal } from 'react-dom'
 import {
   ArrowRight,
-  Tag,
+  MoreHorizontal,
+  NotebookPen,
   Check,
   ChevronDown,
   Clock,
@@ -2530,7 +2531,7 @@ function App() {
                       </button>
                     ) : null}
                     <button className="icon-button" onClick={() => openNotePanel('', 'note')} aria-label="Add a note">
-                      <MoreVertical size={16} />
+                      <NotebookPen size={16} />
                     </button>
                   </div>
                 </div>
@@ -2907,7 +2908,7 @@ function App() {
             onRead={setBookRead}
             onImport={() => setAddingExternal(true)}
             importLabel="Add an external e-book"
-            emptyText="E-books you read in Kindle, Apple Books or anywhere else. Add one to keep it with your library."
+            emptyText="Kindle, Apple Books and other e-books"
           />
         </div>
       </Page>
@@ -2928,12 +2929,14 @@ function App() {
             <input
               value={pathDraft.title}
               onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })}
-              placeholder="Subject, e.g. Cognitive psychology"
+              placeholder="Subject"
+              aria-label="Subject"
             />
             <input
               value={pathDraft.description}
               onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })}
-              placeholder="What do you want to understand? (optional)"
+              placeholder="What you want to understand (optional)"
+              aria-label="What you want to understand"
             />
             <button className="primary-button" type="submit">
               <Plus size={15} /> Start
@@ -3061,15 +3064,13 @@ function App() {
             <BookSection books={localMatches} onOpen={openSavedBook} />
           </section>
         ) : null}
-        <section className="resource-section">
-          <div className="section-heading">
-            <div>
-              <h2>Results</h2>
+        {resources.length === 0 && !searching ? null : (
+          <section className="resource-section">
+            <div className="section-heading">
+              <div>
+                <h2>Results</h2>
+              </div>
             </div>
-          </div>
-          {resources.length === 0 && !searching ? (
-            <div className="empty-state">Search for a topic, author or title.</div>
-          ) : (
             <div className="resource-grid">
               {resources.map((resource) => (
                 <article className="resource-card panel-card" key={`${resource.source}-${resource.id}`}>
@@ -3107,8 +3108,8 @@ function App() {
                 </article>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
         <details className="settings-more explore-own">
           <summary>Connect your own book server or cloud folder</summary>
           <OpdsBrowser onImport={(file) => importFiles([file])} />
@@ -3117,12 +3118,7 @@ function App() {
         <section className="resource-section drm-sources" aria-label="More places for DRM-free books">
           <div className="section-heading">
             <div>
-              <h2>More places for books you can import</h2>
-              <p>
-                These sell or share books without DRM
-                {resourceQuery.trim() ? `, searching for “${resourceQuery.trim()}”` : ''}. Download the EPUB, then add
-                it to your library.
-              </p>
+              <h2>DRM-free books</h2>
             </div>
           </div>
           <ul>
@@ -3228,22 +3224,25 @@ function App() {
               : 'Automatic sync is off. Use Sync now.'
     return (
       <>
-        <section className={`sync-status panel-card${protectedNow ? '' : ' sync-status-warn'}`}>
-          <div>
-            {protectedNow ? (
-              <CheckCircle2 size={34} className="sync-status-icon" />
-            ) : (
-              <Cloud size={34} className="sync-status-icon" />
-            )}
+        {/* Signed out, the sign-in form just above says it all. */}
+        {!signedIn && online ? null : (
+          <section className={`sync-status panel-card${protectedNow ? '' : ' sync-status-warn'}`}>
             <div>
-              <h3>{headline}</h3>
-              <p>{detail}</p>
+              {protectedNow ? (
+                <CheckCircle2 size={34} className="sync-status-icon" />
+              ) : (
+                <Cloud size={34} className="sync-status-icon" />
+              )}
+              <div>
+                <h3>{headline}</h3>
+                <p>{detail}</p>
+              </div>
             </div>
-          </div>
-          <button className="primary-button" onClick={() => void syncEverything()} disabled={cloudSyncing || !online}>
-            <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
-          </button>
-        </section>
+            <button className="primary-button" onClick={() => void syncEverything()} disabled={cloudSyncing || !online}>
+              <RotateCcw size={14} /> {cloudSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </section>
+        )}
         {storageGroup()}
         <Group title="Library folder" icon={<FolderOpen size={18} />}>
           {pickingFolder ? (
@@ -3494,7 +3493,6 @@ function App() {
               <input
                 value={profileFirstName}
                 onChange={(event) => setProfileFirstName(event.target.value)}
-                placeholder="e.g. David"
                 autoComplete="given-name"
               />
             </label>
@@ -3838,6 +3836,8 @@ function App() {
         </nav>
         <input
           ref={fileInput}
+          aria-label="Add books"
+          tabIndex={-1}
           className="visually-hidden"
           type="file"
           accept={IMPORT_ACCEPT}
@@ -3846,6 +3846,8 @@ function App() {
         />
         <input
           ref={folderInput}
+          aria-label="Add a folder of books"
+          tabIndex={-1}
           className="visually-hidden"
           type="file"
           multiple
@@ -3854,6 +3856,8 @@ function App() {
         />
         <input
           ref={backupInput}
+          aria-label="Restore a backup"
+          tabIndex={-1}
           className="visually-hidden"
           type="file"
           accept=".zip,application/zip"
@@ -4383,7 +4387,7 @@ function LibraryDeepSearch({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Ask your library, e.g. why do habits fail?"
+            placeholder="Ask your library"
             aria-label="Search inside your books"
           />
         </div>
@@ -4427,8 +4431,10 @@ function ShelfPicker({
   onSeries,
   onEdit,
   onRead,
+  onDelete,
 }: {
   onRead?: (book: LibraryBook, read: boolean) => void
+  onDelete?: (book: LibraryBook) => void
   onEdit?: (book: LibraryBook) => void
   book: LibraryBook
   all: string[]
@@ -4456,10 +4462,10 @@ function ShelfPicker({
       <button
         className="book-shelf-button"
         onClick={() => setOpen((value) => !value)}
-        aria-label={`Collections for ${book.title}`}
+        aria-label={`More for ${book.title}`}
         aria-expanded={open}
       >
-        <Tag size={13} />
+        <MoreHorizontal size={15} />
       </button>
       {open ? (
         <div className="shelf-picker-pop">
@@ -4477,6 +4483,17 @@ function ShelfPicker({
               }}
             >
               Edit title, author and cover
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button
+              className="text-button shelf-edit shelf-remove"
+              onClick={() => {
+                setOpen(false)
+                onDelete(book)
+              }}
+            >
+              Remove from library
             </button>
           ) : null}
           {all.map((name) => (
@@ -4625,9 +4642,10 @@ function BookSection({
           onSeries={onSeries}
           onEdit={onEdit}
           onRead={onRead}
+          onDelete={onDelete}
         />
       ) : null}
-      {onDelete ? (
+      {onDelete && !onShelves ? (
         <button className="book-delete" onClick={() => onDelete(book)} aria-label={`Remove ${book.title}`}>
           <Trash2 size={13} />
         </button>
@@ -5062,7 +5080,7 @@ function ReadingShelfSection({
       </div>
       {books.length === 0 ? (
         <button className="empty-state" onClick={onImport}>
-          No books yet. Add one to get started.
+          No books yet
         </button>
       ) : shelf.length === 0 ? (
         <div className="empty-state">No books started yet.</div>
@@ -5168,7 +5186,7 @@ function PathSection({
         ) : null}
       </div>
       {paths.length === 0 ? (
-        <div className="empty-state">Nothing to fall into yet</div>
+        <div className="empty-state">No rabbit holes yet</div>
       ) : (
         <div className="path-tiles">
           {paths.map((path) => {
@@ -5422,7 +5440,6 @@ function BrainOverlay({
             <textarea
               value={draft.body}
               onChange={(event) => setDraft((value) => ({ ...value, body: event.target.value }))}
-              placeholder="Write an idea, question, or highlighted passage…"
               rows={5}
             />
           </label>

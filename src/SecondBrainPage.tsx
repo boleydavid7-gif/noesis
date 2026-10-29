@@ -246,7 +246,6 @@ export function SecondBrainPage({
       <a className="brain-notes-link" href="/notes/">
         <span>
           <strong>Noesis Notes</strong>
-          <small>Notebooks for every book, paper or digital</small>
         </span>
         <ExternalLink size={14} aria-hidden="true" />
       </a>
@@ -466,11 +465,7 @@ export function SecondBrainPage({
               {shown.length} {shown.length === 1 ? 'note' : 'notes'}
             </small>
             {shown.length === 0 ? (
-              <p className="brain-rail-empty">
-                {notes.length === 0
-                  ? 'Select text while reading, or press Add note, to start your Second Brain.'
-                  : 'No notes match that.'}
-              </p>
+              <p className="brain-rail-empty">{notes.length === 0 ? 'No notes yet.' : 'No notes match that.'}</p>
             ) : (
               <ul>
                 {shown.map((note) => (
@@ -568,7 +563,6 @@ export function SecondBrainPage({
                     value={draft.body}
                     onChange={(event) => setDraft({ ...draft, body: event.target.value })}
                     rows={10}
-                    placeholder="Write an idea, question, or highlighted passage…"
                   />
                 </label>
                 <div className="brain-page-row">
@@ -578,7 +572,6 @@ export function SecondBrainPage({
                       list="brain-notebooks"
                       value={draft.notebook}
                       onChange={(event) => setDraft({ ...draft, notebook: event.target.value })}
-                      placeholder="Optional, e.g. Work"
                       maxLength={40}
                     />
                     <datalist id="brain-notebooks">
@@ -608,11 +601,7 @@ export function SecondBrainPage({
                 </div>
                 <label>
                   Tags
-                  <input
-                    value={draft.tags}
-                    onChange={(event) => setDraft({ ...draft, tags: event.target.value })}
-                    placeholder="habits, progress (separate with commas)"
-                  />
+                  <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} />
                 </label>
                 {selected ? (
                   <>

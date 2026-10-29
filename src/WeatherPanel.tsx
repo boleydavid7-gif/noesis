@@ -77,12 +77,7 @@ export function WeatherPanel({
           <label>
             Or search for a city
             <span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="e.g. Houston"
-                maxLength={80}
-              />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} maxLength={80} />
               <button className="primary-button" type="submit" disabled={busy !== null} aria-label="Search">
                 <Search size={14} />
               </button>

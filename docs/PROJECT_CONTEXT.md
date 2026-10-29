@@ -268,3 +268,11 @@ and a Wrangler dry run. The live health endpoint is
   7 s). Marks are drawn as a multiplied wash on light pages and a screen glow on Night and High contrast
   (`highlightLook`), redrawn when the theme changes. Note on a passage keeps it as the note's quote (`NoteDraft.quote`).
   On a phone the picker sits above the chapter bar. Suggested for you on Home has Clear (with Undo).
+- Audit, Oct 29: type is the family's, bundled (`@fontsource-variable/google-sans-flex`, `@fontsource/eb-garamond`,
+  imported in `index.css`; no request to Google Fonts); no interface text under 12px (dock labels 11px); the phone's
+  header buttons take a 44px touch (`noesis.css`, "Audit, Oct 29"). Words are short: the welcome is "Noesis / Your
+  books, highlights and notes in one place.", empty states name what is empty ("No books yet", "Nothing borrowed."),
+  no how-to lines or "e.g." placeholders; a field with no visible label has an `aria-label`. The reader starts a
+  chapter at its top, clear of the phone's controls (`landAt`, and a saved place within 200px of the top), keeps a
+  comfortable line length by default (`lineWidth: 'comfortable'`), and names its page frame. A library card's
+  remove is in its menu (the ⋯ under the heart), never over the title. Explore shows Results only once there are some.

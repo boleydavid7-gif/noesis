@@ -155,7 +155,6 @@ export function ReviewPage({
 
       <section className="panel-card review-sources">
         <h3>Make cards from your notes</h3>
-        <p className="review-hint">Noema drafts questions from a note. You choose which ones to keep.</p>
         {sources.length === 0 ? (
           <div className="empty-state">Save a longer note to draft questions from it.</div>
         ) : (

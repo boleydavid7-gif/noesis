@@ -24,7 +24,7 @@
 
   /* Type: the serif for page titles, quotes and the person's own words; the sans for everything else. */
   --ll-serif: 'EB Garamond', Georgia, serif;
-  --ll-sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ll-sans: 'Google Sans Flex Variable', 'Google Sans Flex', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ll-type-display: 400 var(--text-4xl, 2.3rem) / 1.05 var(--ll-serif);
   --ll-type-headline: 400 var(--text-2xl, 1.6rem) / 1.15 var(--ll-serif);
   --ll-type-title: 600 var(--text-lg, 1.15rem) / 1.3 var(--ll-sans);
