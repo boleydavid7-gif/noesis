@@ -149,6 +149,10 @@ Until the steps below are done, Noema is not counted and the Plus button reads "
 No products need setting up in Stripe: checkout names "Noesis Plus" and its price itself. The first subscription on an
 account gets the free week; a later one does not.
 
+The Stripe account can also take the Proairetos Store's payments. Stripe sends every event to every endpoint, so
+Noesis's checkouts and subscriptions carry `metadata.app = noesis-plus` (`PLUS_APP`) and the webhook ignores any event
+without it.
+
 ### Device features (no setup)
 
 - Reader: the screen stays on while a book is open (Settings → Reading → Keep the screen on); Listen shows the

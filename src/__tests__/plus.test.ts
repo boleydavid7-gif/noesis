@@ -40,7 +40,7 @@ function server(options: { plus?: unknown[]; taken?: number | null; used?: numbe
         status: 'trialing',
         customer: 'cus_1',
         current_period_end: 1_800_000_000,
-        metadata: { user: 'u1', plan: 'year' },
+        metadata: { app: 'noesis-plus', user: 'u1', plan: 'year' },
         items: { data: [{ price: { recurring: { interval: 'year' } } }] },
       })
     return json({}, 404)
@@ -161,6 +161,8 @@ describe('Noesis Plus', () => {
     expect(form.get('line_items[0][price_data][recurring][interval]')).toBe('year')
     expect(form.get('subscription_data[trial_period_days]')).toBe('7')
     expect(form.get('subscription_data[metadata][user]')).toBe('u1')
+    expect(form.get('metadata[app]')).toBe('noesis-plus')
+    expect(form.get('subscription_data[metadata][app]')).toBe('noesis-plus')
     expect(form.get('customer_email')).toBe('a@b.c')
   })
 
@@ -239,7 +241,9 @@ describe('Noesis Plus', () => {
   it('writes the subscription a checkout started, and refuses an unsigned webhook', async () => {
     const payload = JSON.stringify({
       type: 'checkout.session.completed',
-      data: { object: { subscription: 'sub_1', client_reference_id: 'u1' } },
+      data: {
+        object: { subscription: 'sub_1', client_reference_id: 'u1', metadata: { app: 'noesis-plus', user: 'u1' } },
+      },
     })
     const { fetcher, calls } = server()
     const bad = await handlePlus(
@@ -266,5 +270,47 @@ describe('Noesis Plus', () => {
     expect(good.status).toBe(200)
     const saved = JSON.parse(String(calls.find((each) => each.url.includes('on_conflict'))!.init?.body))
     expect(saved).toMatchObject({ user_id: 'u1', status: 'trialing', plan: 'year', stripe_subscription: 'sub_1' })
+  })
+
+  it("ignores another app's checkouts and subscriptions on the same Stripe account", async () => {
+    const send = async (event: unknown, fetcher: ReturnType<typeof server>['fetcher']) => {
+      const payload = JSON.stringify(event)
+      return handlePlus(
+        new Request('https://noesis.test/api/plus/webhook', {
+          method: 'POST',
+          body: payload,
+          headers: { 'stripe-signature': await signed(payload) },
+        }),
+        env,
+        'webhook',
+        fetcher,
+      )
+    }
+    const { fetcher, calls } = server()
+    const store = { app: 'soma', user: 'u1' }
+    const answers = [
+      await send(
+        {
+          type: 'checkout.session.completed',
+          data: { object: { subscription: 'sub_9', client_reference_id: 'u1', metadata: store } },
+        },
+        fetcher,
+      ),
+      await send(
+        { type: 'customer.subscription.updated', data: { object: { id: 'sub_9', status: 'active', metadata: store } } },
+        fetcher,
+      ),
+      await send(
+        {
+          type: 'customer.subscription.created',
+          data: { object: { id: 'sub_8', status: 'active', metadata: { user: 'u1' } } },
+        },
+        fetcher,
+      ),
+    ]
+    for (const answer of answers) expect(await answer.json()).toEqual({ ignored: true })
+    expect(calls.some((each) => each.url.includes('on_conflict') || each.url.includes('/v1/subscriptions/'))).toBe(
+      false,
+    )
   })
 })

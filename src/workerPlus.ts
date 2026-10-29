@@ -220,6 +220,12 @@ function stripe(env: PlusEnv, fetcher: Fetcher, path: string, form?: URLSearchPa
   })
 }
 
+/**
+ * The mark on Noesis's own checkouts and subscriptions. The Stripe account may also take the Proairetos Store's
+ * payments, and Stripe sends every endpoint every event, so the webhook acts only on events carrying this mark.
+ */
+export const PLUS_APP = 'noesis-plus'
+
 /** POST /api/plus/checkout {plan}: a Stripe Checkout page for a subscription, the first 7 days free once. */
 async function checkout(request: Request, env: PlusEnv, fetcher: Fetcher): Promise<Response> {
   if (!paymentsReady(env)) return reply({ error: 'Noesis Plus is not open yet.' }, 503)
@@ -239,8 +245,10 @@ async function checkout(request: Request, env: PlusEnv, fetcher: Fetcher): Promi
     'line_items[0][price_data][recurring][interval]': PLANS[plan].interval,
     'line_items[0][price_data][product_data][name]': 'Noesis Plus',
     client_reference_id: person.id,
+    'metadata[app]': PLUS_APP,
     'metadata[user]': person.id,
     'metadata[plan]': plan,
+    'subscription_data[metadata][app]': PLUS_APP,
     'subscription_data[metadata][user]': person.id,
     'subscription_data[metadata][plan]': plan,
     allow_promotion_codes: 'true',
@@ -308,7 +316,7 @@ type Subscription = {
   customer?: string
   cancel_at_period_end?: boolean
   current_period_end?: number
-  metadata?: { user?: string; plan?: string }
+  metadata?: { app?: string; user?: string; plan?: string }
   items?: { data?: Array<{ current_period_end?: number; price?: { recurring?: { interval?: string } } }> }
 }
 
@@ -341,7 +349,12 @@ async function webhook(request: Request, env: PlusEnv, fetcher: Fetcher): Promis
   let subscription: Subscription | null = null
   let user: string | undefined
   if (event.type === 'checkout.session.completed') {
-    const session = object as { subscription?: string; client_reference_id?: string; metadata?: { user?: string } }
+    const session = object as {
+      subscription?: string
+      client_reference_id?: string
+      metadata?: { app?: string; user?: string }
+    }
+    if (session.metadata?.app !== PLUS_APP) return reply({ ignored: true })
     user = session.client_reference_id ?? session.metadata?.user
     if (session.subscription) {
       const response = await stripe(env, fetcher, `subscriptions/${encodeURIComponent(session.subscription)}`)
@@ -354,7 +367,8 @@ async function webhook(request: Request, env: PlusEnv, fetcher: Fetcher): Promis
   } else {
     return reply({ ignored: true })
   }
-  if (!subscription || !user) return reply({ ignored: true })
+  // Another app's subscription on the same Stripe account is never Noesis Plus.
+  if (!subscription || !user || subscription.metadata?.app !== PLUS_APP) return reply({ ignored: true })
   const call = admin(env, fetcher)!
   const saved = await call('/rest/v1/noesis_plus?on_conflict=user_id', {
     method: 'POST',
