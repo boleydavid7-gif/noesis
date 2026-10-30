@@ -290,13 +290,6 @@ function ReadingSection({ settings, set, learner }: { settings: Settings; set: S
               label="Tap to turn pages"
             />
           </Row>
-          <Row title="Open books with tools showing">
-            <Toggle
-              checked={reading.startWide}
-              onChange={(value) => set('reading', 'startWide', value)}
-              label="Open books expanded"
-            />
-          </Row>
           <Row title="Page width">
             <Segmented
               label="Page width"

@@ -369,11 +369,6 @@ body.daily-open {
 }
 @media (max-width: 899px) {
   /* Above the chapter bar and the home indicator. */
-  body.reading-focus .reader-page:not(.reader-page-wide) .reader-pick.reader-pick-sheet {
-    position: fixed;
-    z-index: 60;
-    bottom: calc(env(safe-area-inset-bottom) + 76px);
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .reader-pick.reader-pick-sheet {

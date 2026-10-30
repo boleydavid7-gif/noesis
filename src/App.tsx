@@ -1639,12 +1639,7 @@ function App() {
     }
     setNotes((current) => [note, ...current])
     const destination = await persistNote(note)
-    if (!fields.quiet)
-      showNotice(
-        destination === 'remote'
-          ? 'Saved to your Second Brain.'
-          : 'Saved on this device. It will sync when Supabase is available.',
-      )
+    if (!fields.quiet) showNotice(destination === 'remote' ? 'Saved to your Second Brain.' : 'Saved on this device.')
     return note
   }
   // Keeps one of Noema's answers as a note, optionally going straight on to review questions for it.
@@ -2941,6 +2936,16 @@ function App() {
             removeNote(remove)
           }}
           onOpenNote={openNoteLocation}
+          onFallIn={(note) => {
+            setFallInFrom({
+              kind: 'note',
+              title: note.bookTitle || note.title,
+              quote: (note.quote || note.body).slice(0, 1_200),
+              noteId: note.id,
+              bookId: note.bookId,
+            })
+            setActiveNav('Learning Paths')
+          }}
         />
       </Page>
     )
@@ -5399,7 +5404,6 @@ function BrainOverlay({
             <input
               value={draft.title}
               onChange={(event) => setDraft((value) => ({ ...value, title: event.target.value }))}
-              placeholder="Quick note"
             />
           </label>
           {draft.quote ? <blockquote className="reader-note-quote">{draft.quote}</blockquote> : null}

@@ -197,6 +197,10 @@ and a Wrangler dry run. The live health endpoint is
   Markdown export (`holeMarkdown`); "Connects to" lists other holes sharing two words. Now/Later and the old
   hand-made areas are gone from the screen (old holes read as open questions; nothing migrates). Nothing spends the
   allowance in the background.
+- One reader (Oct 30): the expanded reader (`reader-wide-*`, the Expand button, Settings' "Open books expanded",
+  `reading.startWide`) is gone; every book opens in the one reader, from the Library, Home and Second Brain alike.
+  A saved place or a note's passage that is not at a chapter's top is moved down clear of controls lying over the
+  page (a phone). A Second Brain note offers Fall in (a rabbit hole begun from the note, `HoleOrigin` kind `note`).
 - Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
   days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
   hiccup left a provider on one-hour connections). Only 400/401 on renewal drops the renewal token; 429 and 5xx are

@@ -10,17 +10,13 @@ import {
   BookA,
   Languages,
   CloudRain,
-  Brain,
   CircleHelp,
-  FileText,
   Headphones,
   Highlighter,
   History,
   Lightbulb,
   Link2,
-  Maximize2,
   MessageCircleQuestion,
-  Minimize2,
   PanelRight,
   Pause,
   MoreHorizontal,
@@ -384,7 +380,6 @@ export function Reader({
     noteId?: string
     color?: HighlightColor
   } | null>(null)
-  const [wideLayout, setWideLayout] = useState(reading.startWide)
   // The tools panel covers the page on a phone, so it starts closed there.
   const [toolsOpen, setToolsOpen] = useState(() => window.matchMedia('(min-width: 1600px)').matches)
   const [searchOpen, setSearchOpen] = useState(Boolean(initialSearch))
@@ -396,13 +391,10 @@ export function Reader({
   const searchResults = searchReady && !searching ? searchOutcome.hits : []
   const [pageTurn, setPageTurn] = useState<PageDirection | null>(null)
   const [pageNumber, setPageNumber] = useState<number | undefined>()
-  const [wideCaptureKind, setWideCaptureKind] = useState<NoteAction>('highlight')
   const locationRef = useRef<{ page?: number; href?: string; cfi?: string }>({})
   const selectedTextRef = useRef('')
   const bookRef = useLatest(book)
   const readerCallbacksRef = useLatest({ onProgress, onNote })
-  const wideLayoutRef = useLatest(wideLayout)
-  const wideCaptureKindRef = useLatest(wideCaptureKind)
   const chaptersRef = useLatest(toc)
   const currentChapter = toc[chapterIndex] ?? { label: book.chapter || 'Opening', href: book.currentHref ?? '' }
   const chapterCount = toc.length
@@ -950,17 +942,6 @@ export function Reader({
     }
   }
   useEffect(() => {
-    if (!wideLayout) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    // The expanded page covers the whole window, including the sidebar.
-    document.body.classList.add('reader-wide-open')
-    return () => {
-      document.body.style.overflow = previousOverflow
-      document.body.classList.remove('reader-wide-open')
-    }
-  }, [wideLayout])
-  useEffect(() => {
     if (book.format !== 'epub') return
     const element = frame.current
     const current = rendition.current
@@ -982,7 +963,7 @@ export function Reader({
       observer?.disconnect()
       window.removeEventListener('resize', resize)
     }
-  }, [book.format, wideLayout, loading])
+  }, [book.format, loading])
   useEffect(() => {
     let canceled = false
     let cleanupReading = () => undefined
@@ -1389,10 +1370,23 @@ export function Reader({
               // A saved place at the very start of a chapter is the chapter's top too: epub.js puts the first line
               // at the very top of the box (on a phone, under the controls).
               else {
+                // Anywhere else, the place is moved down clear of controls lying over the page (a phone), so a
+                // passage opened from a note shows in full.
                 const box = frame.current?.querySelector<HTMLElement>('.epub-container')
+                let cleared = false
                 for (const wait of [60, 400]) {
                   window.setTimeout(() => {
-                    if (box && box.scrollTop > 0 && box.scrollTop <= 200) box.scrollTop = 0
+                    if (!box) return
+                    if (box.scrollTop > 0 && box.scrollTop <= 200) {
+                      box.scrollTop = 0
+                      return
+                    }
+                    const chrome = bodyRef.current?.closest('.reader-page')?.querySelector('.reader-chrome')
+                    const over = chrome ? chrome.getBoundingClientRect().bottom - box.getBoundingClientRect().top : 0
+                    if (!cleared && over > 0 && box.scrollTop > over) {
+                      cleared = true
+                      box.scrollTop -= over + 16
+                    }
                   }, wait)
                 }
               }
@@ -1454,18 +1448,7 @@ export function Reader({
       rendition.current = null
       epubRef.current = null
     }
-  }, [
-    book.id,
-    bookRef,
-    readerCallbacksRef,
-    wideLayoutRef,
-    wideCaptureKindRef,
-    jumpLocation,
-    readingRef,
-    chapterIndexRef,
-    chaptersRef,
-    goToChapterRef,
-  ])
+  }, [book.id, bookRef, readerCallbacksRef, jumpLocation, readingRef, chapterIndexRef, chaptersRef, goToChapterRef])
   useEffect(() => {
     const query = activeQuery
     if (query.length < 2) return
@@ -1531,352 +1514,282 @@ export function Reader({
   const hereMark = bookNotes.find((note) => isBookmark(note) && sameSpot(note, locationRef.current))
   return (
     <section
-      className={
-        'reader-page panel-card ' +
-        (wideLayout ? 'reader-page-wide' : '') +
-        (wideLayout && toolsOpen ? ' reader-tools-open' : '') +
-        (pageTurn ? ' reader-page-turn-' + pageTurn : '')
-      }
+      className={'reader-page panel-card ' + (pageTurn ? ' reader-page-turn-' + pageTurn : '')}
       style={{ '--reader-paper': READER_COLORS[readerTheme].background } as CSSProperties}
     >
       <div className={'reader-chrome' + (chromeShut ? ' reader-chrome-hidden' : '')}>
-        {wideLayout ? (
-          <div className="reader-wide-topbar" aria-label="Expanded reader controls">
-            <div className="reader-wide-capture">
-              <span>Capture</span>
-              <select
-                value={wideCaptureKind}
-                onChange={(event) => setWideCaptureKind(event.target.value as NoteAction)}
-                aria-label="Choose what to capture"
-              >
-                <option value="highlight">Highlight</option>
-                <option value="note">Note</option>
-                <option value="question">Question</option>
-                <option value="reflect">Reflect</option>
-                <option value="connect">Connect</option>
-              </select>
-              <small>{pageNumber ? `p. ${pageNumber}` : chapterLabel}</small>
-              <button
-                className="reader-wide-capture-button"
-                onClick={() => onNote('', wideCaptureKind, currentNoteLocation())}
-                aria-label={`Open Second Brain for ${wideCaptureKind}`}
-                title={`Capture ${wideCaptureKind} at ${pageNumber ? `page ${pageNumber}` : 'this location'}`}
-              >
-                <Brain size={16} />
-              </button>
-            </div>
-            <div className="reader-wide-actions">
-              <button
-                className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
-                onClick={() => setToolsOpen((value) => !value)}
-                aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
-                aria-pressed={toolsOpen}
-                title="Reading tools"
-              >
-                <PanelRight size={18} />
-              </button>
-              <button
-                className="icon-button"
-                onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
-                aria-label="Ask Noema about this page"
-                title="Ask Noema about this page"
-              >
-                <NoemaIcon size={18} />
-              </button>
-              <button
-                className="icon-button"
-                onClick={() => setWideLayout(false)}
-                aria-label="Exit expanded view"
-                title="Exit expanded view"
-              >
-                <Minimize2 size={18} />
-              </button>
-            </div>
+        <div className="reader-toolbar">
+          <button className="secondary-button" onClick={onClose}>
+            <ArrowLeft size={15} /> Library
+          </button>
+          <div className="reader-title">
+            <strong>{book.title}</strong>
+            <span>
+              {book.format === 'pdf'
+                ? 'PDF document'
+                : external
+                  ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source'
+                  : currentChapter.label}
+              {left
+                ? ` · ${formatDuration(left.chapter)} left in chapter${chapterWordsRef.current.size >= 3 ? ` · about ${formatDuration(left.book)} to finish` : ''}`
+                : ''}
+            </span>
           </div>
-        ) : (
-          <div className="reader-toolbar">
-            <button className="secondary-button" onClick={onClose}>
-              <ArrowLeft size={15} /> Library
+          <div className="reader-controls">
+            {book.format === 'epub' ? (
+              <select
+                className="reader-contents-select"
+                value={currentChapter.href}
+                onChange={(event) => handleChapterSelect(event.target.value)}
+                aria-label="Contents"
+              >
+                {toc.length === 0 ? (
+                  <option value="">Contents</option>
+                ) : (
+                  toc.map((item, index) => (
+                    <option key={item.href + '-' + item.label} value={item.href}>
+                      {chapterFlagList[index] ? '' : '   '}
+                      {item.label}
+                    </option>
+                  ))
+                )}
+              </select>
+            ) : null}
+            <button
+              className={'icon-button' + (hereMark ? ' reader-bookmarked' : '')}
+              onClick={() => {
+                const text = book.format === 'epub' ? extractVisibleReaderText(frame.current).slice(0, 160) : ''
+                onBookmark(currentNoteLocation(), text, hereMark)
+              }}
+              aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}
+              aria-pressed={Boolean(hereMark)}
+              title={hereMark ? 'Remove the bookmark here' : 'Bookmark this spot'}
+            >
+              <Bookmark size={16} fill={hereMark ? 'currentColor' : 'none'} />
             </button>
-            <div className="reader-title">
-              <strong>{book.title}</strong>
-              <span>
-                {book.format === 'pdf'
-                  ? 'PDF document'
-                  : external
-                    ? (book.accessType === 'borrow' ? 'Borrowed' : 'Hosted') + ' reading source'
-                    : currentChapter.label}
-                {left
-                  ? ` · ${formatDuration(left.chapter)} left in chapter${chapterWordsRef.current.size >= 3 ? ` · about ${formatDuration(left.book)} to finish` : ''}`
-                  : ''}
-              </span>
-            </div>
-            <div className="reader-controls">
-              {book.format === 'epub' ? (
-                <select
-                  className="reader-contents-select"
-                  value={currentChapter.href}
-                  onChange={(event) => handleChapterSelect(event.target.value)}
-                  aria-label="Contents"
+            {book.format === 'epub' ? (
+              <button
+                className="icon-button"
+                onClick={() => setSearchOpen((value) => !value)}
+                aria-label="Search this book"
+                aria-pressed={searchOpen}
+              >
+                <Search size={17} />
+              </button>
+            ) : null}
+            {book.format === 'epub' && canListen() ? (
+              <>
+                <button
+                  className={'icon-button' + (listening === 'on' ? ' reader-listening' : '')}
+                  onClick={toggleListening}
+                  aria-label={
+                    listening === 'on' ? 'Pause listening' : listening === 'paused' ? 'Resume listening' : 'Listen'
+                  }
+                  title={listening === 'on' ? 'Pause' : listening === 'paused' ? 'Resume' : 'Listen to this chapter'}
                 >
-                  {toc.length === 0 ? (
-                    <option value="">Contents</option>
+                  {listening === 'on' ? (
+                    <Pause size={16} />
+                  ) : listening === 'paused' ? (
+                    <Play size={16} />
                   ) : (
-                    toc.map((item, index) => (
-                      <option key={item.href + '-' + item.label} value={item.href}>
-                        {chapterFlagList[index] ? '' : '   '}
-                        {item.label}
-                      </option>
-                    ))
+                    <Headphones size={16} />
                   )}
-                </select>
-              ) : null}
-              <button
-                className={'icon-button' + (hereMark ? ' reader-bookmarked' : '')}
-                onClick={() => {
-                  const text = book.format === 'epub' ? extractVisibleReaderText(frame.current).slice(0, 160) : ''
-                  onBookmark(currentNoteLocation(), text, hereMark)
-                }}
-                aria-label={hereMark ? 'Remove bookmark' : 'Bookmark this spot'}
-                aria-pressed={Boolean(hereMark)}
-                title={hereMark ? 'Remove the bookmark here' : 'Bookmark this spot'}
-              >
-                <Bookmark size={16} fill={hereMark ? 'currentColor' : 'none'} />
-              </button>
-              {book.format === 'epub' ? (
-                <button
-                  className="icon-button"
-                  onClick={() => setSearchOpen((value) => !value)}
-                  aria-label="Search this book"
-                  aria-pressed={searchOpen}
-                >
-                  <Search size={17} />
                 </button>
-              ) : null}
-              {book.format === 'epub' && canListen() ? (
-                <>
-                  <button
-                    className={'icon-button' + (listening === 'on' ? ' reader-listening' : '')}
-                    onClick={toggleListening}
-                    aria-label={
-                      listening === 'on' ? 'Pause listening' : listening === 'paused' ? 'Resume listening' : 'Listen'
-                    }
-                    title={listening === 'on' ? 'Pause' : listening === 'paused' ? 'Resume' : 'Listen to this chapter'}
-                  >
-                    {listening === 'on' ? (
-                      <Pause size={16} />
-                    ) : listening === 'paused' ? (
-                      <Play size={16} />
-                    ) : (
-                      <Headphones size={16} />
-                    )}
+                {listening !== 'off' ? (
+                  <button className="icon-button" onClick={stopListening} aria-label="Stop listening" title="Stop">
+                    <Square size={14} />
                   </button>
-                  {listening !== 'off' ? (
-                    <button className="icon-button" onClick={stopListening} aria-label="Stop listening" title="Stop">
-                      <Square size={14} />
-                    </button>
-                  ) : null}
-                </>
-              ) : null}
-              <button
-                className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
-                onClick={() => setToolsOpen((value) => !value)}
-                aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
-                aria-pressed={toolsOpen}
-                title="Notes and Noema beside the page"
-              >
-                <PanelRight size={16} />
-              </button>
-              {book.format === 'epub' ? (
-                <button
-                  className="icon-button"
-                  onClick={() => setWideLayout(true)}
-                  aria-label="Expand"
-                  title="Expand to fill the screen"
-                >
-                  <Maximize2 size={16} />
-                </button>
-              ) : null}
-              <button
-                className={'icon-button' + (moreOpen ? ' reader-listening' : '')}
-                onClick={() => setMoreOpen((value) => !value)}
-                aria-label="More reading tools"
-                aria-expanded={moreOpen}
-                title="Define a word, page controls, background sound, where was I"
-              >
-                <MoreHorizontal size={16} />
-              </button>
-              {moreOpen ? (
-                <div className="reader-more">
-                  {book.format === 'epub' ? (
+                ) : null}
+              </>
+            ) : null}
+            <button
+              className={'icon-button' + (toolsOpen ? ' reader-listening' : '')}
+              onClick={() => setToolsOpen((value) => !value)}
+              aria-label={toolsOpen ? 'Hide reading tools' : 'Show reading tools'}
+              aria-pressed={toolsOpen}
+              title="Notes and Noema beside the page"
+            >
+              <PanelRight size={16} />
+            </button>
+            <button
+              className={'icon-button' + (moreOpen ? ' reader-listening' : '')}
+              onClick={() => setMoreOpen((value) => !value)}
+              aria-label="More reading tools"
+              aria-expanded={moreOpen}
+              title="Define a word, page controls, background sound, where was I"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreOpen ? (
+              <div className="reader-more">
+                {book.format === 'epub' ? (
+                  <button
+                    className="icon-button"
+                    onClick={() => void defineSelection()}
+                    aria-label="Define the selected word"
+                    title="Select a word, then define it"
+                  >
+                    <BookA size={16} />
+                  </button>
+                ) : null}
+                {book.format === 'epub' && translateHere() ? (
+                  <button
+                    className="icon-button"
+                    onClick={() => void translateSelection()}
+                    aria-label="Translate the selected passage"
+                    title="Select a passage, then translate it on this device"
+                  >
+                    <Languages size={16} />
+                  </button>
+                ) : null}
+                {book.format === 'epub' || book.format === 'pdf' ? (
+                  <span className="reader-ambient">
                     <button
-                      className="icon-button"
-                      onClick={() => void defineSelection()}
-                      aria-label="Define the selected word"
-                      title="Select a word, then define it"
+                      className={
+                        'icon-button' + (autoScroll || reading.tapZones || reading.dim > 0 ? ' reader-listening' : '')
+                      }
+                      onClick={() => setControlsOpen((value) => !value)}
+                      aria-label="Page controls"
+                      aria-expanded={controlsOpen}
+                      title="Auto-scroll, dimming and tap zones"
                     >
-                      <BookA size={16} />
+                      <SlidersHorizontal size={16} />
                     </button>
-                  ) : null}
-                  {book.format === 'epub' && translateHere() ? (
-                    <button
-                      className="icon-button"
-                      onClick={() => void translateSelection()}
-                      aria-label="Translate the selected passage"
-                      title="Select a passage, then translate it on this device"
-                    >
-                      <Languages size={16} />
-                    </button>
-                  ) : null}
-                  {book.format === 'epub' || book.format === 'pdf' ? (
-                    <span className="reader-ambient">
-                      <button
-                        className={
-                          'icon-button' + (autoScroll || reading.tapZones || reading.dim > 0 ? ' reader-listening' : '')
-                        }
-                        onClick={() => setControlsOpen((value) => !value)}
-                        aria-label="Page controls"
-                        aria-expanded={controlsOpen}
-                        title="Auto-scroll, dimming and tap zones"
-                      >
-                        <SlidersHorizontal size={16} />
-                      </button>
-                      {controlsOpen ? (
-                        <div className="reader-ambient-pop reader-controls-pop">
-                          <button
-                            className={autoScroll ? 'reader-ambient-on' : ''}
-                            onClick={() => setAutoScroll((value) => !value)}
-                          >
-                            {autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
-                          </button>
-                          <label>
-                            Speed
-                            <input
-                              type="range"
-                              min="1"
-                              max="10"
-                              step="1"
-                              value={reading.autoScrollSpeed}
-                              aria-label="Auto-scroll speed"
-                              onChange={(event) => onReadingChange({ autoScrollSpeed: Number(event.target.value) })}
-                            />
-                          </label>
-                          <label>
-                            Dim the page
-                            <input
-                              type="range"
-                              min="0"
-                              max="60"
-                              step="5"
-                              value={reading.dim}
-                              aria-label="Dim the page"
-                              onChange={(event) => onReadingChange({ dim: Number(event.target.value) })}
-                            />
-                          </label>
-                          {book.format === 'epub' ? (
-                            <div className="reader-controls-narrow">
-                              <label>
-                                Text size
-                                <input
-                                  type="range"
-                                  min="85"
-                                  max="125"
-                                  step="5"
-                                  value={fontSize}
-                                  onChange={(event) => setFontSize(Number(event.target.value))}
-                                  aria-label="Text size on a phone"
-                                />
-                              </label>
-                              <label>
-                                Page color
-                                <select
-                                  value={readerTheme}
-                                  onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
-                                  aria-label="Page color on a phone"
-                                >
-                                  <option value="paper">Paper</option>
-                                  <option value="sepia">Sepia</option>
-                                  <option value="night">Night</option>
-                                  <option value="contrast">High contrast</option>
-                                </select>
-                              </label>
-                            </div>
-                          ) : null}
-                          {book.format === 'epub' && onOwnLook ? (
-                            <label className="reader-controls-check">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(ownLook)}
-                                onChange={(event) => onOwnLook(event.target.checked)}
-                              />
-                              Keep this page look (size, color) for this book only
-                            </label>
-                          ) : null}
-                          {book.format === 'epub' ? (
-                            <label className="reader-controls-check">
-                              <input
-                                type="checkbox"
-                                checked={reading.tapZones}
-                                onChange={(event) => onReadingChange({ tapZones: event.target.checked })}
-                              />
-                              Tap the top or bottom to turn the page
-                            </label>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  {canPlayAmbient() ? (
-                    <span className="reader-ambient">
-                      <button
-                        className={'icon-button' + (ambient.kind ? ' reader-listening' : '')}
-                        onClick={() => setAmbientOpen((value) => !value)}
-                        aria-label="Background sound"
-                        aria-expanded={ambientOpen}
-                        title="Background sound"
-                      >
-                        <CloudRain size={16} />
-                      </button>
-                      {ambientOpen ? (
-                        <div className="reader-ambient-pop">
-                          {[{ id: null, label: 'Off' }, ...AMBIENT_OPTIONS].map((option) => (
-                            <button
-                              key={option.label}
-                              className={ambient.kind === option.id ? 'reader-ambient-on' : ''}
-                              onClick={() => chooseAmbient(option.id as AmbientKind | null)}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
+                    {controlsOpen ? (
+                      <div className="reader-ambient-pop reader-controls-pop">
+                        <button
+                          className={autoScroll ? 'reader-ambient-on' : ''}
+                          onClick={() => setAutoScroll((value) => !value)}
+                        >
+                          {autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
+                        </button>
+                        <label>
+                          Speed
                           <input
                             type="range"
-                            min="0.05"
-                            max="1"
-                            step="0.05"
-                            value={ambient.volume}
-                            aria-label="Sound volume"
-                            onChange={(event) => {
-                              const volume = Number(event.target.value)
-                              ambientRef.current?.setVolume(volume)
-                              const next = { kind: ambient.kind, volume }
-                              setAmbient(next)
-                              writeAmbient(next)
-                            }}
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={reading.autoScrollSpeed}
+                            aria-label="Auto-scroll speed"
+                            onChange={(event) => onReadingChange({ autoScrollSpeed: Number(event.target.value) })}
                           />
-                        </div>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  {book.format === 'epub' ? (
-                    <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
-                      <History size={16} />
+                        </label>
+                        <label>
+                          Dim the page
+                          <input
+                            type="range"
+                            min="0"
+                            max="60"
+                            step="5"
+                            value={reading.dim}
+                            aria-label="Dim the page"
+                            onChange={(event) => onReadingChange({ dim: Number(event.target.value) })}
+                          />
+                        </label>
+                        {book.format === 'epub' ? (
+                          <div className="reader-controls-narrow">
+                            <label>
+                              Text size
+                              <input
+                                type="range"
+                                min="85"
+                                max="125"
+                                step="5"
+                                value={fontSize}
+                                onChange={(event) => setFontSize(Number(event.target.value))}
+                                aria-label="Text size on a phone"
+                              />
+                            </label>
+                            <label>
+                              Page color
+                              <select
+                                value={readerTheme}
+                                onChange={(event) => setReaderTheme(event.target.value as ReaderTheme)}
+                                aria-label="Page color on a phone"
+                              >
+                                <option value="paper">Paper</option>
+                                <option value="sepia">Sepia</option>
+                                <option value="night">Night</option>
+                                <option value="contrast">High contrast</option>
+                              </select>
+                            </label>
+                          </div>
+                        ) : null}
+                        {book.format === 'epub' && onOwnLook ? (
+                          <label className="reader-controls-check">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(ownLook)}
+                              onChange={(event) => onOwnLook(event.target.checked)}
+                            />
+                            Keep this page look (size, color) for this book only
+                          </label>
+                        ) : null}
+                        {book.format === 'epub' ? (
+                          <label className="reader-controls-check">
+                            <input
+                              type="checkbox"
+                              checked={reading.tapZones}
+                              onChange={(event) => onReadingChange({ tapZones: event.target.checked })}
+                            />
+                            Tap the top or bottom to turn the page
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </span>
+                ) : null}
+                {canPlayAmbient() ? (
+                  <span className="reader-ambient">
+                    <button
+                      className={'icon-button' + (ambient.kind ? ' reader-listening' : '')}
+                      onClick={() => setAmbientOpen((value) => !value)}
+                      aria-label="Background sound"
+                      aria-expanded={ambientOpen}
+                      title="Background sound"
+                    >
+                      <CloudRain size={16} />
                     </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+                    {ambientOpen ? (
+                      <div className="reader-ambient-pop">
+                        {[{ id: null, label: 'Off' }, ...AMBIENT_OPTIONS].map((option) => (
+                          <button
+                            key={option.label}
+                            className={ambient.kind === option.id ? 'reader-ambient-on' : ''}
+                            onClick={() => chooseAmbient(option.id as AmbientKind | null)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                        <input
+                          type="range"
+                          min="0.05"
+                          max="1"
+                          step="0.05"
+                          value={ambient.volume}
+                          aria-label="Sound volume"
+                          onChange={(event) => {
+                            const volume = Number(event.target.value)
+                            ambientRef.current?.setVolume(volume)
+                            const next = { kind: ambient.kind, volume }
+                            setAmbient(next)
+                            writeAmbient(next)
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </span>
+                ) : null}
+                {book.format === 'epub' ? (
+                  <button className="icon-button" onClick={onRecap} aria-label="Where was I?" title="Where was I?">
+                    <History size={16} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        )}
+        </div>
         {translated ? (
           <div className="reader-define" role="status">
             {translated.state === 'working' ? <span>Translating…</span> : null}
@@ -1942,7 +1855,7 @@ export function Reader({
             </button>
           </div>
         ) : null}
-        {!wideLayout && book.format === 'epub' && searchOpen ? (
+        {book.format === 'epub' && searchOpen ? (
           <div className="reader-search">
             <Search size={15} />
             <input
@@ -1962,7 +1875,7 @@ export function Reader({
             </span>
           </div>
         ) : null}
-        {!wideLayout && book.format === 'epub' && searchOpen && searchResults.length > 0 ? (
+        {book.format === 'epub' && searchOpen && searchResults.length > 0 ? (
           <ul className="reader-search-results" aria-label="Search results">
             {searchResults.map((hit, index) => (
               <li key={`${hit.cfi}-${index}`}>
@@ -1979,7 +1892,7 @@ export function Reader({
             ))}
           </ul>
         ) : null}
-        {!wideLayout && book.format === 'epub' ? (
+        {book.format === 'epub' ? (
           <div className="reader-settings">
             <label>
               <Type size={14} />
@@ -2006,7 +1919,7 @@ export function Reader({
             </select>
           </div>
         ) : null}
-        {!wideLayout && book.format === 'epub' ? (
+        {book.format === 'epub' ? (
           <div className="reader-progress-row">
             <span>{pageNumber ? `Page ${pageNumber}` : 'Progress'}</span>
             <div className="reader-progress">
@@ -2016,45 +1929,44 @@ export function Reader({
           </div>
         ) : null}
       </div>
-      <div className={'reader-workspace-grid' + (!wideLayout && !toolsOpen ? ' reader-rail-off' : '')}>
-        {!wideLayout ? (
-          <aside className="reader-chapter-rail" aria-label="Book contents">
-            <div className="reader-rail-book">
-              <BookCover book={book} compact />
-              <div>
-                <strong>{book.title}</strong>
-                <span>{book.author}</span>
-              </div>
+      <div className={'reader-workspace-grid' + (!toolsOpen ? ' reader-rail-off' : '')}>
+        <aside className="reader-chapter-rail" aria-label="Book contents">
+          <div className="reader-rail-book">
+            <BookCover book={book} compact />
+            <div>
+              <strong>{book.title}</strong>
+              <span>{book.author}</span>
             </div>
-            <div className="reader-rail-heading">
-              <span>Contents</span>
-              <small>{chapterLabel}</small>
+          </div>
+          <div className="reader-rail-heading">
+            <span>Contents</span>
+            <small>{chapterLabel}</small>
+          </div>
+          {book.format === 'epub' && toc.length > 0 ? (
+            <div className="reader-chapter-list">
+              {toc.map((item, index) => {
+                const isChapter = chapterFlagList[index]
+                const number = chapterFlagList.slice(0, index + 1).filter(Boolean).length
+                return (
+                  <button
+                    key={item.href + '-' + item.label}
+                    className={
+                      (index === chapterIndex ? 'reader-chapter-active' : '') +
+                      (isChapter ? '' : ' reader-chapter-section')
+                    }
+                    onClick={() => goToChapterRef.current(index)}
+                  >
+                    <span>{isChapter ? String(number).padStart(2, '0') : '·'}</span>
+                    <strong>{item.label}</strong>
+                  </button>
+                )
+              })}
             </div>
-            {book.format === 'epub' && toc.length > 0 ? (
-              <div className="reader-chapter-list">
-                {toc.map((item, index) => {
-                  const isChapter = chapterFlagList[index]
-                  const number = chapterFlagList.slice(0, index + 1).filter(Boolean).length
-                  return (
-                    <button
-                      key={item.href + '-' + item.label}
-                      className={
-                        (index === chapterIndex ? 'reader-chapter-active' : '') +
-                        (isChapter ? '' : ' reader-chapter-section')
-                      }
-                      onClick={() => goToChapterRef.current(index)}
-                    >
-                      <span>{isChapter ? String(number).padStart(2, '0') : '·'}</span>
-                      <strong>{item.label}</strong>
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="reader-rail-empty">No chapter list</p>
-            )}
-          </aside>
-        ) : null}
+          ) : (
+            <p className="reader-rail-empty">No chapter list</p>
+          )}
+        </aside>
+
         <div
           ref={bodyRef}
           className={
@@ -2266,80 +2178,55 @@ export function Reader({
             ) : null}
           </div>
         </div>
-        {!wideLayout ? (
-          <aside className="reader-context-rail" aria-label="Reading context">
-            {study && onTopicNote ? (
-              <StudyPanel study={study} onNote={(topic) => onTopicNote(topic, currentNoteLocation())} />
-            ) : null}
-            <div className="reader-context-head">
-              <span>Second Brain</span>
-              <button
-                className="icon-button tiny"
-                onClick={() => onNote('', 'note', currentNoteLocation())}
-                aria-label="Add note"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-            <div className="reader-context-actions">
-              <button onClick={() => onNote('', 'highlight', currentNoteLocation())}>
-                <Highlighter size={13} /> Highlight
-              </button>
-              <button onClick={() => onNote('', 'question', currentNoteLocation())}>
-                <MessageCircleQuestion size={13} /> Question
-              </button>
-              <button onClick={() => onNote('', 'reflect', currentNoteLocation())}>
-                <Lightbulb size={13} /> Reflect
-              </button>
-              <button onClick={() => onNote('', 'connect', currentNoteLocation())}>
-                <Link2 size={13} /> Connect
-              </button>
-            </div>
-            <div className="reader-notes-heading">
-              <span>Saved from this book</span>
-              <small>{bookNotes.length}</small>
-            </div>
-            <BookNotesBrowser
-              notes={bookNotes}
-              book={book}
-              onOpen={onOpenNote}
-              onRemove={onRemoveNote}
-              onCopied={onCopied}
-            />
+        <aside className="reader-context-rail" aria-label="Reading context">
+          {study && onTopicNote ? (
+            <StudyPanel study={study} onNote={(topic) => onTopicNote(topic, currentNoteLocation())} />
+          ) : null}
+          <div className="reader-context-head">
+            <span>Second Brain</span>
             <button
-              className="reader-ask-button"
-              onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
+              className="icon-button tiny"
+              onClick={() => onNote('', 'note', currentNoteLocation())}
+              aria-label="Add note"
             >
-              <NoemaIcon size={14} /> Ask Noema about this
+              <Plus size={14} />
             </button>
-          </aside>
-        ) : null}
+          </div>
+          <div className="reader-context-actions">
+            <button onClick={() => onNote('', 'highlight', currentNoteLocation())}>
+              <Highlighter size={13} /> Highlight
+            </button>
+            <button onClick={() => onNote('', 'question', currentNoteLocation())}>
+              <MessageCircleQuestion size={13} /> Question
+            </button>
+            <button onClick={() => onNote('', 'reflect', currentNoteLocation())}>
+              <Lightbulb size={13} /> Reflect
+            </button>
+            <button onClick={() => onNote('', 'connect', currentNoteLocation())}>
+              <Link2 size={13} /> Connect
+            </button>
+          </div>
+          <div className="reader-notes-heading">
+            <span>Saved from this book</span>
+            <small>{bookNotes.length}</small>
+          </div>
+          <BookNotesBrowser
+            notes={bookNotes}
+            book={book}
+            onOpen={onOpenNote}
+            onRemove={onRemoveNote}
+            onCopied={onCopied}
+          />
+          <button
+            className="reader-ask-button"
+            onClick={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
+          >
+            <NoemaIcon size={14} /> Ask Noema about this
+          </button>
+        </aside>
       </div>
-      {wideLayout && toolsOpen ? (
-        <ReaderWideSidebar
-          book={book}
-          notes={bookNotes}
-          location={{
-            bookId: book.id,
-            bookTitle: book.title,
-            author: book.author,
-            chapter: currentChapter.label,
-            chapterIndex,
-            page: pageNumber,
-            href: currentChapter.href,
-            cfi: book.cfi,
-          }}
-          onNote={onNote}
-          onOpenNote={onOpenNote}
-          onRemoveNote={onRemoveNote}
-          onCopied={onCopied}
-          study={study}
-          onTopicNote={onTopicNote ? (topic) => onTopicNote(topic, currentNoteLocation()) : undefined}
-          onAsk={() => onAsk('Explain the current page or selected passage', currentTutorContext())}
-          onClose={() => setToolsOpen(false)}
-        />
-      ) : null}
-      {!wideLayout && book.format === 'epub' && chapterCount > 0 ? (
+
+      {book.format === 'epub' && chapterCount > 0 ? (
         <div className={'reader-pager' + (chromeShut ? ' reader-chrome-hidden' : '')} aria-label="Chapters">
           <button
             className="reader-page-button"
@@ -2375,118 +2262,6 @@ export function Reader({
           </button>
         </div>
       ) : null}
-      {wideLayout ? (
-        <div className="reader-wide-footer">
-          <button
-            className="reader-page-button"
-            onClick={() => goBackRef.current()}
-            disabled={book.format !== 'epub' || !canGoBack}
-            aria-label="Previous chapter"
-          >
-            <ArrowLeft size={22} />
-          </button>
-          <div className="reader-wide-location">
-            <span>Select chapter</span>
-            <select
-              className="reader-wide-chapter-select"
-              value={currentChapter.href}
-              onChange={(event) => handleChapterSelect(event.target.value)}
-              disabled={chapterCount === 0}
-              aria-label="Select chapter"
-            >
-              {chapterCount === 0 ? (
-                <option value="">Opening</option>
-              ) : (
-                toc.map((item) => (
-                  <option key={item.href + '-' + item.label} value={item.href}>
-                    {item.label}
-                  </option>
-                ))
-              )}
-            </select>
-            <small>{chapterLabel}</small>
-          </div>
-          <button
-            className="reader-page-button"
-            onClick={() => goToChapterRef.current(nextChapterIndex(toc, chapterIndex))}
-            disabled={book.format !== 'epub' || nextChapterIndex(toc, chapterIndex) < 0}
-            aria-label="Next chapter"
-          >
-            <ArrowRight size={22} />
-          </button>
-        </div>
-      ) : null}
     </section>
-  )
-}
-
-function ReaderWideSidebar({
-  book,
-  notes,
-  location,
-  onNote,
-  onOpenNote,
-  onRemoveNote,
-  onCopied,
-  study,
-  onTopicNote,
-  onAsk,
-  onClose,
-}: {
-  onOpenNote: (note: Note) => void
-  onRemoveNote: (note: Note) => void
-  onCopied: (message: string) => void
-  study?: StudyInfo | null
-  onTopicNote?: (topic: string) => void
-  book: LibraryBook
-  notes: Note[]
-  location: BrainNoteLocation
-  onNote: ReaderNoteHandler
-  onAsk: () => void
-  onClose: () => void
-}) {
-  return (
-    <aside className="reader-wide-sidebar" aria-label="Reading tools">
-      <div className="reader-wide-sidebar-head">
-        <div>
-          <h2>Second Brain</h2>
-        </div>
-        <button className="icon-button" onClick={onClose} aria-label="Close reading tools">
-          <X size={16} />
-        </button>
-      </div>
-
-      {study && onTopicNote ? <StudyPanel study={study} onNote={onTopicNote} /> : null}
-      <div className="reader-wide-sidebar-actions">
-        <button onClick={() => onNote('', 'highlight', location)}>
-          <Highlighter size={14} /> Highlight
-        </button>
-        <button onClick={() => onNote('', 'note', location)}>
-          <FileText size={14} /> Note
-        </button>
-        <button onClick={() => onNote('', 'question', location)}>
-          <MessageCircleQuestion size={14} /> Question
-        </button>
-        <button onClick={() => onNote('', 'reflect', location)}>
-          <Lightbulb size={14} /> Reflect
-        </button>
-      </div>
-      <div className="reader-wide-sidebar-section">
-        <div className="reader-wide-sidebar-label">
-          <span>From this book</span>
-          <small>{notes.length}</small>
-        </div>
-        <BookNotesBrowser notes={notes} book={book} onOpen={onOpenNote} onRemove={onRemoveNote} onCopied={onCopied} />
-      </div>
-      <div className="reader-wide-tutor">
-        <div>
-          <NoemaIcon size={15} />
-          <strong>Noema</strong>
-        </div>
-        <button className="secondary-button" onClick={onAsk}>
-          Ask Noema <ArrowRight size={13} />
-        </button>
-      </div>
-    </aside>
   )
 }

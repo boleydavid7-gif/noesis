@@ -32,7 +32,6 @@ export type Settings = {
     theme: ReaderTheme
     font: ReaderFont
     lineHeight: number
-    startWide: boolean
     speechRate: number
     justify: boolean
     paragraphs: ParagraphStyle
@@ -73,7 +72,6 @@ export const DEFAULT_SETTINGS: Settings = {
     theme: 'paper',
     font: 'book',
     lineHeight: 1.65,
-    startWide: false,
     speechRate: 1,
     justify: false,
     paragraphs: 'book',
@@ -249,7 +247,6 @@ export function sanitizeSettings(input: unknown): Settings {
       theme: pick(reading.theme, ['paper', 'sepia', 'night', 'contrast'], d.reading.theme),
       font: pick(reading.font, ['book', 'serif', 'sans', 'easy', 'custom'], d.reading.font),
       lineHeight: Math.round(num(reading.lineHeight, 1.3, 2.2, d.reading.lineHeight) * 20) / 20,
-      startWide: bool(reading.startWide, d.reading.startWide),
       speechRate: Math.round(num(reading.speechRate, 0.6, 1.6, d.reading.speechRate) * 10) / 10,
       justify: bool(reading.justify, d.reading.justify),
       paragraphs: pick(reading.paragraphs, ['book', 'indent', 'space'], d.reading.paragraphs),

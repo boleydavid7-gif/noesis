@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Download, ExternalLink, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
+import { ArrowDown, BookOpen, Download, ExternalLink, Image, Plus, Search, Share2, Trash2, Upload } from 'lucide-react'
 import { diaryDays, type DiaryEntry } from './lib/diary'
 import { formatHours, readingStats } from './lib/stats'
 import { renderYearCard } from './lib/yearCard'
@@ -100,6 +100,7 @@ export function SecondBrainPage({
   onDelete,
   onOpenNote,
   onMerge,
+  onFallIn,
   diary,
   bookmarklet,
   onExport,
@@ -129,6 +130,7 @@ export function SecondBrainPage({
   onDelete: (note: BrainNote) => void
   onOpenNote: (note: BrainNote) => void
   onMerge?: (keep: BrainNote, remove: BrainNote) => void
+  onFallIn?: (note: BrainNote) => void
 }) {
   const [tab, setTab] = useState<TabId>('all')
   const [colorFilter, setColorFilter] = useState<HighlightColor | ''>('')
@@ -393,7 +395,7 @@ export function SecondBrainPage({
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search notes, books, tags…"
+                  placeholder="Search"
                   aria-label="Search notes"
                 />
               </div>
@@ -518,6 +520,11 @@ export function SecondBrainPage({
                         <Image size={13} /> Quote card
                       </button>
                     ) : null}
+                    {selected && onFallIn ? (
+                      <button className="text-button" onClick={() => onFallIn(selected)}>
+                        <ArrowDown size={13} /> Fall in
+                      </button>
+                    ) : null}
                     {selected?.bookId ? (
                       <button className="text-button" onClick={() => onOpenNote(selected)}>
                         <BookOpen size={13} /> Open in book
@@ -527,11 +534,7 @@ export function SecondBrainPage({
                 </div>
                 <label>
                   Title
-                  <input
-                    value={draft.title}
-                    onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                    placeholder="Quick note"
-                  />
+                  <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
                 </label>
                 <div className="brain-page-row">
                   <label>
@@ -553,7 +556,6 @@ export function SecondBrainPage({
                       value={draft.source}
                       onChange={(event) => setDraft({ ...draft, source: event.target.value })}
                       readOnly={Boolean(selected?.bookId)}
-                      placeholder="Book, chapter, or link"
                     />
                   </label>
                 </div>
