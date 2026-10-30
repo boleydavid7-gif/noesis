@@ -2688,25 +2688,16 @@ function App() {
                 value={libraryQuery}
                 onChange={(event) => setLibraryQuery(event.target.value)}
                 placeholder="Search your library"
+                aria-label="Search your library"
               />
             </div>
             <div className="page-toolbar-actions">
-              <select
-                className="library-sort"
-                value={librarySort}
-                onChange={(event) => setLibrarySort(event.target.value as LibrarySort)}
-                aria-label="Sort library"
-              >
-                <option value="recent">Recently added</option>
-                <option value="title">Title</option>
-                <option value="progress">Progress</option>
-              </select>
               <button className="primary-button" onClick={() => fileInput.current?.click()}>
                 <Upload size={15} /> Add books
               </button>
               {learner ? (
                 <button className="secondary-button" onClick={() => folderInput.current?.click()}>
-                  <Folder size={15} /> Import a folder
+                  <Folder size={15} /> Add a folder
                 </button>
               ) : null}
             </div>
@@ -2747,58 +2738,68 @@ function App() {
                 </div>
               ))
             : null}
-          {learner ? (
-            <LibraryDeepSearch
-              books={books}
-              onOpen={openAtPassage}
-              onAsk={askAboutHits}
-              byMeaning={settings.ai.onDevice}
-            />
-          ) : null}
-          {books.length > 1 ? (
-            <div className="shelf-chips" role="tablist" aria-label="Collections">
-              {[
-                { key: '', label: 'All books' },
-                ...(hasFavorites ? [{ key: 'favorites', label: 'Favorites' }] : []),
-                ...(hasReading ? [{ key: 'reading', label: 'Reading' }] : []),
-                ...allShelves
-                  .filter((name) => name !== WANT_SHELF || books.some((book) => book.shelves?.includes(WANT_SHELF)))
-                  .map((name) => ({ key: `shelf:${name}`, label: name })),
-                ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
-                ...(hasFinished ? [{ key: 'finished', label: 'Read' }] : []),
-              ].map((chip) => (
-                <button
-                  key={chip.key || 'all'}
-                  role="tab"
-                  aria-selected={shelfFilter === chip.key}
-                  className={shelfFilter === chip.key ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
-                  onClick={() => setShelfFilter(chip.key)}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {shelfFilter.startsWith('series:')
-            ? (() => {
-                const next = filteredBooks.find((book) => !book.finished && book.progress < 99)
-                return next ? (
-                  <div className="series-next panel-card">
-                    <span>
-                      Next in this series: <strong>{next.title}</strong>
-                      {next.seriesIndex ? ` (#${next.seriesIndex})` : ''}
-                    </span>
-                    <button className="secondary-button" onClick={() => openSavedBook(next)}>
-                      {next.progress > 0 ? 'Continue' : 'Start'}
-                    </button>
-                  </div>
-                ) : null
-              })()
-            : null}
           <Borrowed books={books} onOpenBook={openSavedBook} />
           <BookSection
             title="On this device"
             views
+            sort={
+              <select
+                className="library-sort"
+                value={librarySort}
+                onChange={(event) => setLibrarySort(event.target.value as LibrarySort)}
+                aria-label="Sort library"
+              >
+                <option value="recent">Recently added</option>
+                <option value="title">Title</option>
+                <option value="progress">Progress</option>
+              </select>
+            }
+            filters={
+              <>
+                {books.length > 1 ? (
+                  <div className="shelf-chips" role="tablist" aria-label="Collections">
+                    {[
+                      { key: '', label: 'All books' },
+                      ...(hasFavorites ? [{ key: 'favorites', label: 'Favorites' }] : []),
+                      ...(hasReading ? [{ key: 'reading', label: 'Reading' }] : []),
+                      ...allShelves
+                        .filter(
+                          (name) => name !== WANT_SHELF || books.some((book) => book.shelves?.includes(WANT_SHELF)),
+                        )
+                        .map((name) => ({ key: `shelf:${name}`, label: name })),
+                      ...allSeries.map((name) => ({ key: `series:${name}`, label: `${name} (series)` })),
+                      ...(hasFinished ? [{ key: 'finished', label: 'Read' }] : []),
+                    ].map((chip) => (
+                      <button
+                        key={chip.key || 'all'}
+                        role="tab"
+                        aria-selected={shelfFilter === chip.key}
+                        className={shelfFilter === chip.key ? 'shelf-chip shelf-chip-on' : 'shelf-chip'}
+                        onClick={() => setShelfFilter(chip.key)}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {shelfFilter.startsWith('series:')
+                  ? (() => {
+                      const next = filteredBooks.find((book) => !book.finished && book.progress < 99)
+                      return next ? (
+                        <div className="series-next panel-card">
+                          <span>
+                            Next in this series: <strong>{next.title}</strong>
+                            {next.seriesIndex ? ` (#${next.seriesIndex})` : ''}
+                          </span>
+                          <button className="secondary-button" onClick={() => openSavedBook(next)}>
+                            {next.progress > 0 ? 'Continue' : 'Start'}
+                          </button>
+                        </div>
+                      ) : null
+                    })()
+                  : null}
+              </>
+            }
             books={filteredBooks.filter((book) => book.format !== 'external')}
             onOpen={openSavedBook}
             onDelete={deleteBook}
@@ -2869,6 +2870,14 @@ function App() {
             importLabel="Add an external e-book"
             emptyText="Kindle, Apple Books and other e-books"
           />
+          {learner ? (
+            <LibraryDeepSearch
+              books={books}
+              onOpen={openAtPassage}
+              onAsk={askAboutHits}
+              byMeaning={settings.ai.onDevice}
+            />
+          ) : null}
         </div>
       </Page>
     )
@@ -4592,11 +4601,15 @@ function BookSection({
   onFavorite,
   onRead,
   views = false,
+  sort,
+  filters,
   title = 'My library',
   importLabel = 'Import',
   emptyText = 'No books yet. Import a book file, or look in Explore.',
 }: {
   views?: boolean
+  sort?: React.ReactNode
+  filters?: React.ReactNode
   title?: string
   importLabel?: string
   emptyText?: string
@@ -4662,6 +4675,7 @@ function BookSection({
           <h2>{title}</h2>
         </div>
         <div className="section-tools">
+          {books.length > 1 ? sort : null}
           {views && books.length ? (
             <div className="view-switch" role="radiogroup" aria-label="View">
               {BOOK_VIEWS.map(({ id, label, Icon }) => (
@@ -4686,6 +4700,7 @@ function BookSection({
           ) : null}
         </div>
       </div>
+      {filters}
       {books.length === 0 ? (
         <div className="empty-state">{emptyText}</div>
       ) : (

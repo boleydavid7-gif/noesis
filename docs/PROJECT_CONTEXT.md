@@ -217,6 +217,9 @@ and a Wrangler dry run. The live health endpoint is
   Rabbit Holes (read only; the address is cleaned) with Keep a copy (`keepSharedHole`: fresh ids, every question open,
   the sharer's words not kept as the reader's own, so the reader guesses first) and Not now. `readHoleCode` keeps only
   well-formed parts (https links only).
+- Library order (Oct 30): search, then Add books and Add a folder on one row; Borrowed; "On this device" with its
+  sort (`BookSection` `sort`, beside the view switch; on phones under the heading) and its collections and series card
+  (`filters`) right above the books; External e-books; Ask your library last.
 - Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
   days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
   hiccup left a provider on one-hour connections). Only 400/401 on renewal drops the renewal token; 429 and 5xx are

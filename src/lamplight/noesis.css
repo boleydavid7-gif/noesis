@@ -273,3 +273,43 @@
     flex: 1 1 auto;
   }
 }
+
+/* The library, Oct 30: the order sits with the shelf it orders (beside the view switch), the collections just
+   above the books; Add books and Add a folder share one row under the search. */
+:root .library-section .section-tools .library-sort {
+  min-height: 36px;
+  padding: 0 28px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background-color: var(--ll-tonal, rgba(255, 255, 255, 0.06));
+  color: var(--ll-ink, #e0e0e0);
+  font-size: 14px;
+}
+:root .library-section .shelf-chips {
+  margin: 4px 0 12px;
+}
+:root .library-section .series-next {
+  margin-bottom: 12px;
+}
+@media (max-width: 899px) {
+  :root .page-toolbar-actions > * {
+    flex: 1 1 0;
+  }
+}
+@media (max-width: 620px) {
+  :root .library-section > .section-heading {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 10px;
+  }
+  :root .library-section > .section-heading > div:first-child {
+    flex: 1 1 100%;
+  }
+  :root .library-section > .section-heading .section-tools {
+    display: flex;
+    flex: 1 1 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+}
