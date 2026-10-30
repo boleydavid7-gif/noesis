@@ -1,5 +1,7 @@
-// Subjects: a map of questions around the reader's books. The reading comes first; each question can bring a
-// few things to read, watch or listen to beside it, and the reader's own answer in a sentence or two.
+// Rabbit holes: one question at a time, each with a guess, an answer, the learner's own words and the doors it
+// leads to (Deeper, Sideways, Curiouser). The map is an outline of where the hole has gone; climbing out keeps
+// what stuck and offers recall cards; What you found gathers the learner's own words. Plain and quiet by design:
+// rows, hairlines and the serif for questions, as in reading and research apps.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { exploreError, exploreInto, isExploring, subscribeExploring, type EditSubject } from './lib/subjectExplore'
 import {
@@ -10,80 +12,71 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  Download,
   ExternalLink,
   Headphones,
-  Lightbulb,
+  Map as MapIcon,
   MessageCircleQuestionMark as NoemaIcon,
   Newspaper,
   Pencil,
   Play,
-  Plus,
-  Search,
-  Sparkles,
+  RotateCw,
   Trash2,
   Wrench,
+  X,
 } from 'lucide-react'
 import { FreeCopyFinder } from './FreeCopyFinder'
 import { AtYourLibrary } from './PublicLibrary'
 import type { LibraryBook } from './lib/library'
-import {
-  AuthRequiredError,
-  requestClarification,
-  requestDeeper,
-  requestSubject,
-  requestSumUp,
-  type Clarification,
-} from './lib/pathClient'
+import { authHeaders } from './lib/auth'
+import { noemaUsed } from './lib/plus'
+import { newCard, readReviewCards, writeReviewCards, type DraftCard } from './lib/review'
+import { AuthRequiredError, requestDoors, requestSubject, requestSumUp } from './lib/pathClient'
 import type { LearningPath } from './lib/pathPlan'
 import {
-  NOW_LIMIT,
-  addArea,
-  addQuestion,
-  answerQuestion,
   booksForNow,
-  areaState,
-  canSumUp,
-  cleanMerges,
-  comingBack,
-  deeperFrom,
-  deepestOpen,
-  goDeeper,
-  guidance,
-  inTreeOrder,
-  markUsed,
-  mergeQuestions,
   groupPicks,
-  markCameBack,
+  markUsed,
   minutesText,
-  moveQuestion,
   nowQuestions,
-  pathFromSubject,
-  questionsIn,
-  removeArea,
   removeQuestion,
-  renameArea,
+  answerQuestion,
   reopenQuestion,
-  shelf,
   subjectOf,
   trailOf,
-  sumUpArea,
   updatePick,
   withQuestion,
-  type MergeOffer,
   type Pick,
   type PickType,
   type Question,
   type Subject,
+  type HoleOrigin,
 } from './lib/subjects'
-
-const LEVELS = ['New to it', 'Know the basics', 'Know it well']
-const SUBJECT_EXAMPLES = [
-  'Growing vegetables in a small yard',
-  'How the stock market works',
-  'Ancient Rome',
-  'Why we sleep',
-  'Writing short stories',
-]
+import {
+  DOOR_WORD,
+  climbOut,
+  connectedHoles,
+  doorOf,
+  firstQuestion,
+  foundIn,
+  holeCounts,
+  holeMap,
+  holeMarkdown,
+  isExplained,
+  isVisited,
+  lastOpen,
+  markRecalled,
+  markVisited,
+  recallDue,
+  recallPassage,
+  sinceSurfaced,
+  startHole,
+  sumItUp,
+  takeDoor,
+  withDoors,
+  withGround,
+} from './lib/rabbitHole'
+import './rabbitHole.css'
 
 const PICK_ICON: Record<PickType, typeof BookOpen> = {
   book: BookOpen,
@@ -93,178 +86,111 @@ const PICK_ICON: Record<PickType, typeof BookOpen> = {
   try: Wrench,
 }
 
-const AREA_WORD = { new: 'Not started', exploring: 'Exploring', summed: 'Summed up' } as const
-
 const coverOf = (book: LibraryBook) => book.coverDataUrl || book.coverUrl || ''
+const problem = (reason: unknown, fallback: string) =>
+  reason instanceof AuthRequiredError
+    ? 'Sign in to go down rabbit holes.'
+    : reason instanceof Error
+      ? reason.message
+      : fallback
 
-// ---------- Starting a subject ----------
+// ---------- Falling in ----------
+
+const EXAMPLES = ['Why do we dream?', 'How did the Romans build roads?', 'What is a black hole made of?']
 
 export function SubjectStarter({
-  onSave,
-  onNotice,
+  onStart,
+  from,
+  onClearFrom,
   signedIn,
   onSignIn,
 }: {
-  onSave: (path: LearningPath) => void
-  onNotice: (message: string) => void
+  onStart: (path: LearningPath, firstQuestionId: string) => void
+  from?: HoleOrigin | null
+  onClearFrom?: () => void
   signedIn: boolean
   onSignIn: () => void
 }) {
-  const [goal, setGoal] = useState('')
-  const [level, setLevel] = useState(LEVELS[0])
-  const [clarification, setClarification] = useState<Clarification | null>(null)
-  const [focus, setFocus] = useState('')
-  const [status, setStatus] = useState<'idle' | 'narrowing' | 'choosing' | 'mapping'>('idle')
-  const [error, setError] = useState('')
-  const [needsSignIn, setNeedsSignIn] = useState(false)
-  const run = useRef(0)
-
-  function fail(reason: unknown, id: number) {
-    if (id !== run.current) return
-    setError(reason instanceof Error ? reason.message : 'Noema could not do that right now.')
-    setNeedsSignIn(reason instanceof AuthRequiredError)
-    setStatus(clarification ? 'choosing' : 'idle')
-  }
-
-  async function begin(event?: React.FormEvent) {
+  const [words, setWords] = useState('')
+  const field = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    if (from) field.current?.focus()
+  }, [from])
+  function fallIn(event?: React.FormEvent, text = words) {
     event?.preventDefault()
-    if (goal.trim().length < 3) {
-      setError('Say what you are curious about.')
-      return
-    }
-    const id = (run.current += 1)
-    setError('')
-    setStatus('narrowing')
-    try {
-      const result = await requestClarification(goal.trim())
-      if (id !== run.current) return
-      if (!result.broad) {
-        await map('', id)
-        return
-      }
-      setClarification(result)
-      setFocus(result.focuses[0]?.title ?? '')
-      setStatus('choosing')
-    } catch (reason) {
-      fail(reason, id)
-    }
+    const path = startHole(text, from ?? undefined)
+    const first = path?.subject && firstQuestion(path.subject)
+    if (!path || !first) return
+    onStart(path, first.id)
+    setWords('')
+    onClearFrom?.()
   }
-
-  async function map(chosen: string, id = (run.current += 1)) {
-    setError('')
-    setStatus('mapping')
-    try {
-      const draft = await requestSubject({ goal: goal.trim(), focus: chosen || undefined, level })
-      if (id !== run.current) return
-      const path = pathFromSubject(draft, chosen ? `${goal.trim()}: ${chosen}` : goal.trim(), { level, why: undefined })
-      onSave(path)
-      onNotice(`Started “${path.title}”.`)
-      setGoal('')
-      setClarification(null)
-      setFocus('')
-      setStatus('idle')
-    } catch (reason) {
-      fail(reason, id)
-    }
-  }
-
-  const busy = status === 'narrowing' || status === 'mapping'
   return (
-    <section className="subject-start panel-card" aria-label="Start a rabbit hole">
-      <form onSubmit={begin}>
-        <h3>What are you curious about?</h3>
+    <section className="hole-start panel-card" aria-label="Start a rabbit hole">
+      <form onSubmit={fallIn}>
+        <h3>{from ? 'What do you want to know?' : 'What are you curious about?'}</h3>
+        {from?.quote ? (
+          <figure className="hole-origin">
+            <blockquote>{from.quote.length > 400 ? `${from.quote.slice(0, 400)}…` : from.quote}</blockquote>
+            <figcaption>
+              {from.title}
+              {onClearFrom ? (
+                <button type="button" className="text-button" onClick={onClearFrom} aria-label="Leave the passage out">
+                  <X size={14} />
+                </button>
+              ) : null}
+            </figcaption>
+          </figure>
+        ) : null}
+        <div className="hole-start-row">
+          <textarea
+            ref={field}
+            value={words}
+            onChange={(event) => setWords(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) fallIn(event as unknown as React.FormEvent)
+            }}
+            maxLength={200}
+            rows={1}
+            aria-label={from ? 'What you want to know' : 'What you are curious about'}
+          />
+          <button className="primary-button" type="submit" disabled={!words.trim() && !from?.quote}>
+            <ArrowDown size={15} /> Fall in
+          </button>
+        </div>
         {!signedIn ? (
-          <p className="planner-signin">
-            Needs an account.{' '}
+          <p className="hole-signin">
+            Answers need an account.{' '}
             <button type="button" className="text-button" onClick={onSignIn}>
-              Sign in or create one
+              Sign in
             </button>
           </p>
         ) : null}
-        <textarea
-          value={goal}
-          onChange={(event) => setGoal(event.target.value)}
-          maxLength={400}
-          rows={2}
-          aria-label="What you are curious about"
-        />
-        <div className="subject-start-row">
-          <label>
-            You are
-            <select value={level} onChange={(event) => setLevel(event.target.value)}>
-              {LEVELS.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-          </label>
-          <button className="primary-button" type="submit" disabled={busy}>
-            <Search size={15} /> {status === 'narrowing' ? 'Thinking…' : status === 'mapping' ? 'Mapping…' : 'Start'}
-          </button>
-        </div>
-        {!goal && status === 'idle' ? (
-          <div className="planner-examples">
-            {SUBJECT_EXAMPLES.map((example) => (
-              <button key={example} type="button" onClick={() => setGoal(example)}>
+        {!words && !from ? (
+          <div className="hole-examples">
+            {EXAMPLES.map((example) => (
+              <button key={example} type="button" onClick={() => fallIn(undefined, example)}>
                 {example}
               </button>
             ))}
           </div>
         ) : null}
       </form>
-      {clarification && status !== 'idle' ? (
-        <div className="subject-focus">
-          <h4>{clarification.topic ? `${clarification.topic} covers a lot. Where to begin?` : 'Where to begin?'}</h4>
-          <div className="subject-focus-list" role="radiogroup">
-            {clarification.focuses.map((item) => (
-              <button
-                type="button"
-                key={item.title}
-                role="radio"
-                aria-checked={focus === item.title}
-                className={focus === item.title ? 'subject-focus-on' : ''}
-                onClick={() => setFocus(item.title)}
-              >
-                <strong>{item.title}</strong>
-                <small>{item.description}</small>
-              </button>
-            ))}
-          </div>
-          <div className="subject-start-row">
-            <button className="primary-button" onClick={() => void map(focus)} disabled={busy || !focus}>
-              {status === 'mapping' ? 'Mapping…' : 'Map it'}
-            </button>
-            <button className="text-button" onClick={() => void map('')} disabled={busy}>
-              All of it
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {error ? (
-        <p className="weather-error" role="alert">
-          {error}
-          {needsSignIn ? (
-            <>
-              {' '}
-              <button type="button" className="text-button" onClick={onSignIn}>
-                Sign in
-              </button>
-            </>
-          ) : null}
-        </p>
-      ) : null}
     </section>
   )
 }
 
-// ---------- One subject ----------
+// ---------- One rabbit hole ----------
 
-type View = { kind: 'map' } | { kind: 'question'; id: string } | { kind: 'shelf' }
+type View = { kind: 'map' } | { kind: 'found' } | { kind: 'question'; id: string }
 
 export function SubjectView({
   path,
+  holes = [],
   library,
   onChange,
   onOpenBook,
+  onOpenHole,
   onAsk,
   onNote,
   onNotice,
@@ -273,10 +199,12 @@ export function SubjectView({
 }: {
   onEdit?: EditSubject
   path: LearningPath
+  holes?: LearningPath[]
   initialQuestion?: string
   library: LibraryBook[]
   onChange: (path: LearningPath) => void
   onOpenBook?: (id: string) => void
+  onOpenHole?: (pathId: string, questionId: string) => void
   onAsk?: (prompt: string) => void
   onNote?: (title: string, source: string) => void
   onNotice: (message: string) => void
@@ -286,6 +214,9 @@ export function SubjectView({
     initialQuestion ? { kind: 'question', id: initialQuestion } : { kind: 'map' },
   )
   const [undo, setUndo] = useState<{ label: string; before: Subject } | null>(null)
+  const [climbing, setClimbing] = useState(false)
+  // Coming back after a few days: one thing explained before is asked first, once a visit.
+  const [recall, setRecall] = useState(() => recallDue(subject))
   const topRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -302,23 +233,42 @@ export function SubjectView({
     setView(next)
     window.setTimeout(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 20)
   }
-
   const question = view.kind === 'question' ? subject.questions.find((q) => q.id === view.id) : undefined
+  const dived = sinceSurfaced(subject).length > 0
 
   return (
-    <div className="subject" ref={topRef}>
-      {view.kind !== 'question' ? (
-        <div className="subject-tabs" role="tablist">
-          <button role="tab" aria-selected={view.kind === 'map'} onClick={() => go({ kind: 'map' })}>
-            Questions
+    <div className="subject hole" ref={topRef}>
+      {view.kind !== 'question' || !question ? (
+        <div className="hole-tabs" role="tablist" aria-label="Rabbit hole">
+          <button role="tab" aria-selected={view.kind !== 'found'} onClick={() => go({ kind: 'map' })}>
+            Map
           </button>
-          <button role="tab" aria-selected={view.kind === 'shelf'} onClick={() => go({ kind: 'shelf' })}>
-            Saved
+          <button role="tab" aria-selected={view.kind === 'found'} onClick={() => go({ kind: 'found' })}>
+            What you found
           </button>
         </div>
       ) : null}
+      {recall && view.kind !== 'question' ? (
+        <RecallCard
+          question={recall}
+          onDone={(open) => {
+            save(markRecalled(subject, recall.id))
+            setRecall(null)
+            if (open) go({ kind: 'question', id: recall.id })
+          }}
+        />
+      ) : null}
+      {view.kind === 'found' ? (
+        <FoundPage
+          path={path}
+          subject={subject}
+          onSave={save}
+          onOpen={(id) => go({ kind: 'question', id })}
+          onNotice={onNotice}
+        />
+      ) : null}
       {view.kind === 'map' || (view.kind === 'question' && !question) ? (
-        <SubjectMap
+        <HoleMapView
           path={path}
           subject={subject}
           library={library}
@@ -326,30 +276,54 @@ export function SubjectView({
           onOpen={(id) => go({ kind: 'question', id })}
           onOpenBook={onOpenBook}
           onNotice={onNotice}
+          onClimbOut={dived ? () => setClimbing(true) : undefined}
         />
       ) : null}
-      {view.kind === 'shelf' ? (
-        <SubjectShelf subject={subject} onOpen={(id) => go({ kind: 'question', id })} onSave={save} />
-      ) : null}
       {question ? (
-        <div className="subject-split">
-          <QuestionIndex subject={subject} current={question.id} onOpen={(id) => go({ kind: 'question', id })} />
+        <div className="subject-split hole-split">
+          <aside className="hole-aside" aria-label="The map">
+            <HoleOutline
+              subject={subject}
+              current={question.id}
+              onOpen={(id) => go({ kind: 'question', id })}
+              onSave={save}
+              compact
+            />
+          </aside>
           <QuestionPage
             key={question.id}
             path={path}
+            holes={holes}
             subject={subject}
             question={question}
             library={library}
             onSave={save}
             onBack={() => go({ kind: 'map' })}
             onOpen={(id) => go({ kind: 'question', id })}
+            onOpenHole={onOpenHole}
             onOpenBook={onOpenBook}
             onAsk={onAsk}
             onNote={onNote}
             onNotice={onNotice}
             onEdit={onEdit}
+            onClimbOut={() => setClimbing(true)}
           />
         </div>
+      ) : null}
+      {climbing ? (
+        <ClimbOut
+          path={path}
+          subject={subject}
+          onClose={() => setClimbing(false)}
+          onDone={(next, cards) => {
+            save(next)
+            setClimbing(false)
+            go({ kind: 'map' })
+            onNotice(
+              cards ? `Climbed out. ${cards} recall ${cards === 1 ? 'card' : 'cards'} in Review.` : 'Climbed out.',
+            )
+          }}
+        />
       ) : null}
       {undo ? (
         <div className="subject-undo" role="status">
@@ -369,48 +343,187 @@ export function SubjectView({
   )
 }
 
-// Beside an open question on wider screens: the subject's questions, so another is one click away.
-function QuestionIndex({
+// ---------- Coming back ----------
+
+function RecallCard({ question, onDone }: { question: Question; onDone: (open: boolean) => void }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <section className="hole-recall panel-card" aria-label="Before you go on">
+      <p className="hole-label">Before you go on</p>
+      <h4>{question.text}</h4>
+      {shown ? (
+        <>
+          <blockquote>{question.answer?.text}</blockquote>
+          <div className="subject-actions">
+            <button className="secondary-button" onClick={() => onDone(false)}>
+              Go on
+            </button>
+            <button className="text-button" onClick={() => onDone(true)}>
+              Open it
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="subject-actions">
+          <button className="secondary-button" onClick={() => setShown(true)}>
+            Show what you wrote
+          </button>
+          <button className="text-button" onClick={() => onDone(false)}>
+            Not now
+          </button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ---------- The map ----------
+
+function HoleOutline({
   subject,
   current,
   onOpen,
+  onSave,
+  compact = false,
 }: {
   subject: Subject
-  current: string
+  current?: string
   onOpen: (id: string) => void
+  onSave: (next: Subject, undo?: string) => void
+  compact?: boolean
 }) {
-  const row = (q: Question) => (
-    <li key={q.id}>
-      <button
-        className={q.id === current ? 'question-index-on' : ''}
-        aria-current={q.id === current ? 'true' : undefined}
-        onClick={() => onOpen(q.id)}
-      >
-        {q.text}
-      </button>
-    </li>
-  )
-  const now = nowQuestions(subject)
+  const groups = holeMap(subject)
   return (
-    <nav className="question-index" aria-label="Questions in this subject">
-      {now.length ? (
-        <>
-          <h5>Now</h5>
-          <ul>{now.map(row)}</ul>
-        </>
-      ) : null}
-      {subject.areas.map((area) => {
-        const rest = subject.questions.filter((q) => q.areaId === area.id && q.state !== 'now')
-        return rest.length ? (
-          <div key={area.id}>
-            <h5>{area.title}</h5>
-            <ul>{rest.map(row)}</ul>
-          </div>
-        ) : null
-      })}
-    </nav>
+    <div className={'hole-outline' + (compact ? ' hole-outline--compact' : '')}>
+      {groups.map((group) => (
+        <section key={group.area?.id ?? 'all'} className="hole-group">
+          {group.area ? <h5>{group.area.title}</h5> : null}
+          <ul>
+            {group.rows.map((row) => {
+              const style = { '--depth': Math.min(row.depth, 6) } as CSSProperties
+              if (row.kind === 'door') {
+                if (compact) return null
+                return (
+                  <li key={`door-${row.from.id}-${row.door.text}`} className="hole-row hole-row--door" style={style}>
+                    <button
+                      onClick={() => {
+                        const taken = takeDoor(subject, row.from.id, row.door)
+                        if (!taken.question) return
+                        onSave(taken.subject)
+                        onOpen(taken.question.id)
+                      }}
+                    >
+                      <span className="hole-mark" aria-hidden="true" />
+                      <span className="hole-row-text">{row.door.text}</span>
+                      <small>{DOOR_WORD[row.door.kind]}</small>
+                    </button>
+                  </li>
+                )
+              }
+              const q = row.question
+              const state = isExplained(q) ? 'explained' : isVisited(q) ? 'visited' : 'open'
+              return (
+                <li
+                  key={q.id}
+                  className={`hole-row hole-row--${state}`}
+                  style={style}
+                  aria-current={q.id === current ? 'true' : undefined}
+                >
+                  <button onClick={() => onOpen(q.id)}>
+                    <span className="hole-mark" aria-hidden="true" />
+                    <span className="hole-row-text">{q.text}</span>
+                    {!compact && doorOf(q) ? <small>{DOOR_WORD[doorOf(q)!]}</small> : null}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   )
 }
+
+function HoleMapView({
+  path,
+  subject,
+  library,
+  onSave,
+  onOpen,
+  onOpenBook,
+  onNotice,
+  onClimbOut,
+}: {
+  path: LearningPath
+  subject: Subject
+  library: LibraryBook[]
+  onSave: (next: Subject, undo?: string) => void
+  onOpen: (id: string) => void
+  onOpenBook?: (id: string) => void
+  onNotice: (message: string) => void
+  onClimbOut?: () => void
+}) {
+  const counts = holeCounts(subject)
+  const resume = lastOpen(subject) ?? firstQuestion(subject)
+  const [mapping, setMapping] = useState(false)
+  async function mapGround() {
+    setMapping(true)
+    try {
+      const draft = await requestSubject({ goal: path.title, level: subject.level })
+      onSave(withGround(subject, draft))
+    } catch (reason) {
+      onNotice(problem(reason, 'Noema could not map the ground right now.'))
+    } finally {
+      setMapping(false)
+    }
+  }
+  return (
+    <div className="hole-map">
+      {subject.from?.quote ? (
+        <figure className="hole-origin">
+          <blockquote>
+            {subject.from.quote.length > 300 ? `${subject.from.quote.slice(0, 300)}…` : subject.from.quote}
+          </blockquote>
+          <figcaption>
+            {subject.from.kind === 'book' && subject.from.bookId && onOpenBook ? (
+              <button className="text-button" onClick={() => onOpenBook(subject.from!.bookId!)}>
+                {subject.from.title}
+              </button>
+            ) : (
+              subject.from.title
+            )}
+          </figcaption>
+        </figure>
+      ) : null}
+      <Reading path={path} library={library} onOpenBook={onOpenBook} />
+      <div className="hole-map-head">
+        <p className="hole-facts">
+          {counts.questions} {counts.questions === 1 ? 'question' : 'questions'} · {counts.explained} in your own words
+        </p>
+        <div className="subject-actions">
+          {resume ? (
+            <button className="primary-button" onClick={() => onOpen(resume.id)}>
+              {isVisited(resume) ? 'Back down' : 'Begin'} <ArrowRight size={14} />
+            </button>
+          ) : null}
+          {onClimbOut ? (
+            <button className="secondary-button" onClick={onClimbOut}>
+              Climb out
+            </button>
+          ) : null}
+          {!subject.grounded ? (
+            <button className="text-button" onClick={() => void mapGround()} disabled={mapping}>
+              <MapIcon size={14} /> {mapping ? 'Mapping…' : 'Map the ground'}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <HoleOutline subject={subject} onOpen={onOpen} onSave={onSave} />
+    </div>
+  )
+}
+
+// ---------- One question ----------
 
 // The reader's books for this subject, with where they are in each.
 function Reading({
@@ -453,400 +566,6 @@ function Reading({
     </section>
   )
 }
-
-function QuestionRow({ question, area, onOpen }: { question: Question; area?: string; onOpen: () => void }) {
-  return (
-    <button className="subject-question" onClick={onOpen}>
-      <span>
-        <strong>{question.text}</strong>
-        {question.hook ? <small>{question.hook}</small> : null}
-        {area ? <em>{area}</em> : null}
-      </span>
-      <ArrowRight size={15} aria-hidden="true" />
-    </button>
-  )
-}
-
-function SubjectMap({
-  path,
-  subject,
-  library,
-  onSave,
-  onOpen,
-  onOpenBook,
-  onNotice,
-}: {
-  path: LearningPath
-  subject: Subject
-  library: LibraryBook[]
-  onSave: (next: Subject, undo?: string) => void
-  onOpen: (id: string) => void
-  onOpenBook?: (id: string) => void
-  onNotice: (message: string) => void
-}) {
-  const now = nowQuestions(subject)
-  const back = comingBack(subject)
-  const guide = guidance(subject)
-  const [newArea, setNewArea] = useState('')
-  const areaName = (id: string) => subject.areas.find((area) => area.id === id)?.title
-  return (
-    <div className="subject-map">
-      <div className="subject-map-lead">
-        <Reading path={path} library={library} onOpenBook={onOpenBook} />
-        {back ? (
-          <section className="subject-block subject-back">
-            <h4>From before</h4>
-            <p className="subject-back-q">{back.text}</p>
-            <blockquote>{back.answer?.text}</blockquote>
-            <div className="subject-actions">
-              {back.followUp ? (
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    const added = addQuestion(markCameBack(subject, back.id), back.areaId, back.followUp!, 'side')
-                    onSave(added.subject)
-                    onNotice('Added to Later.')
-                  }}
-                >
-                  <Plus size={14} /> {back.followUp}
-                </button>
-              ) : null}
-              <button className="text-button" onClick={() => onOpen(back.id)}>
-                Add to it
-              </button>
-              <button className="text-button" onClick={() => onSave(markCameBack(subject, back.id))}>
-                Still right
-              </button>
-            </div>
-          </section>
-        ) : null}
-        <section className="subject-block">
-          <h4>Now</h4>
-          {now.length ? (
-            <div className="subject-list">
-              {now.map((q) => (
-                <QuestionRow key={q.id} question={q} area={areaName(q.areaId)} onOpen={() => onOpen(q.id)} />
-              ))}
-            </div>
-          ) : (
-            <p className="subject-empty">Nothing in Now</p>
-          )}
-          {guide.nextUp ? (
-            <div className="subject-next">
-              <span>
-                <small>Next up · {areaName(guide.nextUp.areaId)}</small>
-                <button className="subject-later-text" onClick={() => onOpen(guide.nextUp!.id)}>
-                  {guide.nextUp.text}
-                </button>
-              </span>
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  const moved = moveQuestion(subject, guide.nextUp!.id, 'now')
-                  if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
-                  else onSave(moved.subject)
-                }}
-              >
-                Move to Now
-              </button>
-            </div>
-          ) : null}
-        </section>
-      </div>
-      <section className="subject-block subject-map-areas">
-        <h4>Areas</h4>
-        <div className="subject-areas">
-          {subject.areas.map((area) => (
-            <AreaCard
-              key={area.id}
-              path={path}
-              subject={subject}
-              areaId={area.id}
-              onSave={onSave}
-              onOpen={onOpen}
-              onNotice={onNotice}
-            />
-          ))}
-        </div>
-        <form
-          className="subject-add"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const added = addArea(subject, newArea)
-            if (added.area) {
-              onSave(added.subject)
-              setNewArea('')
-            }
-          }}
-        >
-          <input
-            value={newArea}
-            onChange={(event) => setNewArea(event.target.value)}
-            placeholder="Add an area"
-            aria-label="New area"
-            maxLength={60}
-          />
-          <button className="secondary-button" type="submit" disabled={!newArea.trim()}>
-            Add
-          </button>
-        </form>
-      </section>
-    </div>
-  )
-}
-
-function AreaCard({
-  path,
-  subject,
-  areaId,
-  onSave,
-  onOpen,
-  onNotice,
-}: {
-  path: LearningPath
-  subject: Subject
-  areaId: string
-  onSave: (next: Subject, undo?: string) => void
-  onOpen: (id: string) => void
-  onNotice: (message: string) => void
-}) {
-  const area = subject.areas.find((item) => item.id === areaId)!
-  const state = areaState(subject, areaId)
-  const later = questionsIn(subject, areaId, 'later')
-  const answered = questionsIn(subject, areaId, 'answered')
-  const nowHere = questionsIn(subject, areaId, 'now')
-  const [draft, setDraft] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [renaming, setRenaming] = useState(false)
-  const [name, setName] = useState(area.title)
-  const [summary, setSummary] = useState<string | null>(null)
-  const [merges, setMerges] = useState<MergeOffer[]>([])
-  const [drafting, setDrafting] = useState(false)
-
-  async function draftSummary() {
-    setDrafting(true)
-    try {
-      const inArea = questionsIn(subject, areaId)
-      const result = await requestSumUp({
-        subject: path.title,
-        area: area.title,
-        answers: answered.map((q) => ({ question: q.text, answer: q.answer?.text ?? '' })),
-        questions: inArea.map((q) => q.text),
-      })
-      setSummary(result.text)
-      setMerges(
-        cleanMerges(
-          result.merges,
-          inArea.map((q) => q.id),
-        ),
-      )
-    } catch (reason) {
-      onNotice(reason instanceof Error ? reason.message : 'Noema could not draft a summary right now.')
-      setSummary('')
-    } finally {
-      setDrafting(false)
-    }
-  }
-
-  return (
-    <details className={`subject-area subject-area-${state}`}>
-      <summary>
-        <span className="subject-area-mark" aria-hidden="true" />
-        <span>
-          <strong>{area.title}</strong>
-          {area.blurb ? <small>{area.blurb}</small> : null}
-        </span>
-        <em>{AREA_WORD[state]}</em>
-      </summary>
-      <div className="subject-area-body">
-        {area.summary ? (
-          <div className="subject-summary">
-            <h5>In your words</h5>
-            <p>{area.summary.text}</p>
-          </div>
-        ) : null}
-        {canSumUp(subject, areaId) && summary === null ? (
-          <button className="secondary-button" onClick={() => void draftSummary()} disabled={drafting}>
-            <Pencil size={13} /> {drafting ? 'Drafting…' : 'Sum up this area'}
-          </button>
-        ) : null}
-        {summary !== null ? (
-          <form
-            className="subject-sumup"
-            onSubmit={(event) => {
-              event.preventDefault()
-              onSave(sumUpArea(subject, areaId, summary))
-              setSummary(null)
-            }}
-          >
-            {merges.length ? (
-              <div className="subject-merges">
-                <h5>These ask the same thing</h5>
-                <ul>
-                  {merges.map((offer) => {
-                    const a = subject.questions.find((q) => q.id === offer.keep)
-                    const b = subject.questions.find((q) => q.id === offer.drop)
-                    if (!a || !b) return null
-                    return (
-                      <li key={`${offer.keep}-${offer.drop}`}>
-                        <span>
-                          <small>
-                            {a.text} · {b.text}
-                          </small>
-                          <strong>{offer.text}</strong>
-                        </span>
-                        <span className="subject-actions">
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => {
-                              onSave(mergeQuestions(subject, offer.keep, offer.drop, offer.text), 'Combined.')
-                              setMerges((list) => list.filter((item) => item !== offer))
-                            }}
-                          >
-                            Combine
-                          </button>
-                          <button
-                            type="button"
-                            className="text-button"
-                            onClick={() => setMerges((list) => list.filter((item) => item !== offer))}
-                          >
-                            Keep both
-                          </button>
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            ) : null}
-            <label htmlFor={`sum-${areaId}`}>Sum up this area</label>
-            <textarea id={`sum-${areaId}`} rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} />
-            <div className="subject-actions">
-              <button className="primary-button" type="submit" disabled={!summary.trim()}>
-                Keep
-              </button>
-              <button type="button" className="text-button" onClick={() => setSummary(null)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : null}
-        {nowHere.length ? <p className="subject-empty">Now: {nowHere.map((q) => q.text).join(' · ')}</p> : null}
-        {later.length ? (
-          <>
-            <h5>Later</h5>
-            <ul className="subject-later">
-              {inTreeOrder(later).map(({ question: q, depth }) => (
-                <li
-                  key={q.id}
-                  className={depth ? 'subject-later-deeper' : undefined}
-                  style={depth ? ({ '--depth': Math.min(depth, 4) } as CSSProperties) : undefined}
-                >
-                  <button className="subject-later-text" onClick={() => onOpen(q.id)}>
-                    {q.text}
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      const moved = moveQuestion(subject, q.id, 'now')
-                      if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
-                      else onSave(moved.subject)
-                    }}
-                  >
-                    Now
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-        {answered.length ? (
-          <details className="subject-answered">
-            <summary>Answered ({answered.length})</summary>
-            <ul>
-              {answered.map((q) => (
-                <li key={q.id}>
-                  <button onClick={() => onOpen(q.id)}>
-                    <strong>{q.text}</strong>
-                    <small>{q.answer?.text}</small>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-        {adding ? (
-          <form
-            className="subject-add"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const added = addQuestion(subject, areaId, draft)
-              if (added.question) {
-                onSave(added.subject)
-                setDraft('')
-                setAdding(false)
-              }
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Add a question"
-              autoFocus
-              aria-label={`New question in ${area.title}`}
-              maxLength={200}
-            />
-            <button className="secondary-button" type="submit" disabled={!draft.trim()}>
-              Add
-            </button>
-          </form>
-        ) : null}
-        <div className="subject-area-tools">
-          {renaming ? (
-            <form
-              className="subject-add"
-              onSubmit={(event) => {
-                event.preventDefault()
-                onSave(renameArea(subject, areaId, name))
-                setRenaming(false)
-              }}
-            >
-              <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Area name" maxLength={60} />
-              <button className="secondary-button" type="submit">
-                Save
-              </button>
-              <button type="button" className="text-button" onClick={() => setRenaming(false)}>
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <>
-              {adding ? null : (
-                <button className="text-button" onClick={() => setAdding(true)}>
-                  <Plus size={13} /> Add a question
-                </button>
-              )}
-              <button className="text-button" onClick={() => setRenaming(true)}>
-                <Pencil size={13} /> Rename
-              </button>
-              {subject.areas.length > 1 ? (
-                <button
-                  className="text-button"
-                  onClick={() => onSave(removeArea(subject, areaId), `Removed “${area.title}”. Its questions moved.`)}
-                >
-                  <Trash2 size={13} /> Remove area
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
-      </div>
-    </details>
-  )
-}
-
-// ---------- One question ----------
 
 function PickCard({
   pick,
@@ -935,120 +654,120 @@ const ownedBook = (library: LibraryBook[], title: string) => {
 
 function QuestionPage({
   path,
+  holes,
   subject,
   question,
   library,
   onSave,
   onBack,
   onOpen,
+  onOpenHole,
   onOpenBook,
   onAsk,
   onNote,
   onNotice,
   onEdit,
+  onClimbOut,
 }: {
   onEdit?: EditSubject
   path: LearningPath
+  holes: LearningPath[]
   subject: Subject
   question: Question
   library: LibraryBook[]
   onSave: (next: Subject, undo?: string) => void
   onBack: () => void
   onOpen: (id: string) => void
+  onOpenHole?: (pathId: string, questionId: string) => void
   onOpenBook?: (id: string) => void
   onAsk?: (prompt: string) => void
   onNote?: (title: string, source: string) => void
   onNotice: (message: string) => void
+  onClimbOut: () => void
 }) {
-  const area = subject.areas.find((item) => item.id === question.areaId)
+  const area = subject.areas.length > 1 ? subject.areas.find((item) => item.id === question.areaId) : undefined
+  // Seen before (or already answered): the answer shows at once. A first look asks for a guess first.
+  const [revealed, setRevealed] = useState(() => Boolean(question.visitedAt || question.guess || question.answer))
   const [guess, setGuess] = useState(question.guess ?? '')
   const [answer, setAnswer] = useState(question.answer?.text ?? '')
-  const [editing, setEditing] = useState(!question.answer)
-  const [used, setUsed] = useState<string[]>(question.answer?.pickIds ?? [])
-  const [side, setSide] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [own, setOwn] = useState('')
   const [kind, setKind] = useState<'all' | PickType>('all')
+  const [moreDoors, setMoreDoors] = useState(false)
   const latest = useRef({ subject, question })
   latest.current = { subject, question }
-  const asked = useRef(false)
+  const trail = trailOf(subject, question.id)
 
   const loading = useSyncExternalStore(subscribeExploring, () => isExploring(question.id))
   const failure = useSyncExternalStore(subscribeExploring, () => exploreError(question.id))
-  const error =
-    failure || (!loading && question.picks && question.picks.length === 0 ? 'Nothing found. Try again later.' : '')
-  function explore(fresh = false) {
+  function explore(picksOnly = false) {
     const reading = library.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
     void exploreInto(
-      { path, question, area: area?.title, level: subject.level, reading, fresh },
+      {
+        path,
+        question,
+        area: area?.title,
+        level: subject.level,
+        reading,
+        trail: trail.map((step) => step.text),
+        context: subject.from?.quote,
+        picksOnly,
+        fresh: picksOnly && Boolean(question.picks?.length),
+      },
       onEdit ?? ((_id, change) => onSave(change(latest.current.subject))),
     )
   }
 
-  // The first visit to a question looks for things to explore by itself.
+  // Opening a question marks it looked at; a question never answered asks Noema once (one use: answer and doors,
+  // with its reading list on the same ticket).
   useEffect(() => {
-    if (asked.current || question.picks || question.state === 'answered' || !guidance(subject).autoExplore) return
-    asked.current = true
-    explore()
+    onSave(markVisited(subject, question.id))
+    if (!question.short && !isExploring(question.id)) explore()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const picks = question.picks ?? []
-  // Only what was opened or saved is offered as where the answer came from.
-  const sources = picks.filter((pick) => pick.looked || pick.saved || used.includes(pick.id))
   const groups = groupPicks(picks)
-  const change = (next: Partial<Question>) => onSave(withQuestion(subject, { ...question, ...next }))
-  const trail = trailOf(subject, question.id)
-  const deeper = deeperFrom(subject, question.id)
-  const [digging, setDigging] = useState(false)
-  const [digError, setDigError] = useState('')
-  const [ideas, setIdeas] = useState<string[]>([])
-  const known = (text: string) => subject.questions.some((q) => q.text.toLowerCase() === text.trim().toLowerCase())
-  // Going down is the reader's own question: it is added under this one and opened at once.
-  function ask(text: string) {
-    const words = text.trim()
-    if (!words) return
-    const current = latest.current.subject
-    const there = current.questions.find((q) => q.text.toLowerCase() === words.toLowerCase())
-    if (there) return onOpen(there.id)
-    const next = goDeeper(current, question.id, [words])
-    const added = deeperFrom(next, question.id).find((q) => q.text.toLowerCase() === words.toLowerCase())
-    onSave(next)
-    setSide('')
-    setIdeas([])
-    if (added) onOpen(added.id)
+  const doors = question.doors ?? []
+  const taken = (text: string) =>
+    subject.questions.find((q) => q.text.trim().toLowerCase() === text.trim().toLowerCase())
+  const links = connectedHoles(holes, path.id, question, subjectOf)
+
+  function go(door: { kind: Parameters<typeof takeDoor>[2]['kind']; text: string; hook?: string }) {
+    const result = takeDoor(latest.current.subject, question.id, door)
+    if (!result.question) return
+    onSave(result.subject)
+    setOwn('')
+    onOpen(result.question.id)
   }
-  // Ideas from Noema are only shown; nothing is kept until one is chosen.
-  async function dig() {
-    setDigging(true)
-    setDigError('')
+  async function fetchDoors() {
+    setMoreDoors(true)
     try {
-      const found = await requestDeeper({
+      const fresh = await requestDoors({
         subject: path.title,
-        area: area?.title,
         question: question.text,
-        level: subject.level,
-        trail: trail.map((step) => step.text),
+        trail: [...subject.questions.map((q) => q.text)].slice(-30),
       })
-      const fresh = found.filter((text) => !known(text))
-      if (!fresh.length) setDigError('Nothing new.')
-      setIdeas(fresh)
+      const kept = doors.filter((door) => taken(door.text))
+      onSave(withDoors(latest.current.subject, question.id, [...kept, ...fresh.filter((door) => !taken(door.text))]))
     } catch (reason) {
-      setDigError(
-        reason instanceof AuthRequiredError
-          ? 'Sign in for ideas.'
-          : reason instanceof Error
-            ? reason.message
-            : 'No ideas right now.',
-      )
+      onNotice(problem(reason, 'Noema could not find more doors right now.'))
     } finally {
-      setDigging(false)
+      setMoreDoors(false)
+      noemaUsed()
     }
+  }
+  const reveal = () => {
+    if ((question.guess ?? '') !== guess.trim())
+      onSave(withQuestion(subject, { ...question, guess: guess.trim() || undefined }))
+    setRevealed(true)
   }
 
   return (
-    <article className="question-page">
+    <article className="question-page hole-question">
       <nav className="question-trail" aria-label="How you got here">
         <button className="text-button question-back" onClick={onBack}>
-          <ArrowLeft size={14} /> {path.title}
+          <ArrowLeft size={14} /> Map
         </button>
         {trail.map((step) => (
           <span key={step.id} className="question-trail-step">
@@ -1059,49 +778,27 @@ function QuestionPage({
           </span>
         ))}
       </nav>
+
       <header className="question-head">
-        {area ? <span className="question-area">{area.title}</span> : null}
+        {doorOf(question) || area ? (
+          <span className="question-area">
+            {[doorOf(question) ? DOOR_WORD[doorOf(question)!] : '', area?.title].filter(Boolean).join(' · ')}
+          </span>
+        ) : null}
         <h3>{question.text}</h3>
         {question.hook ? <p className="question-hook">{question.hook}</p> : null}
-        <div className="question-toolbar">
-          {question.state === 'answered' ? (
-            <span className="question-done">
-              <Check size={14} aria-hidden="true" /> Answered
-            </span>
-          ) : (
-            <div className="question-state" role="group" aria-label="When">
-              <button
-                aria-pressed={question.state === 'now'}
-                onClick={() => {
-                  if (question.state === 'now') return
-                  const moved = moveQuestion(subject, question.id, 'now')
-                  if (moved.full) onNotice(`Now holds ${NOW_LIMIT}. Move one to Later first.`)
-                  else onSave(moved.subject)
-                }}
-              >
-                Now
-              </button>
-              <button
-                aria-pressed={question.state === 'later'}
-                onClick={() => {
-                  if (question.state !== 'later') onSave(moveQuestion(subject, question.id, 'later').subject)
-                }}
-              >
-                Later
-              </button>
-            </div>
-          )}
-          <span className="question-tools">
-            {onAsk ? (
-              <button
-                className="question-tool"
-                onClick={() => onAsk(`${question.text} (${path.title})`)}
-                aria-label="Ask Noema"
-                title="Ask Noema"
-              >
-                <NoemaIcon size={17} />
-              </button>
-            ) : null}
+        <span className="question-tools">
+          {onAsk ? (
+            <button
+              className="question-tool"
+              onClick={() => onAsk(`${question.text} (${path.title})`)}
+              aria-label="Ask Noema"
+              title="Ask Noema"
+            >
+              <NoemaIcon size={17} />
+            </button>
+          ) : null}
+          {trail.length || subject.questions.length > 1 ? (
             <button
               className="question-tool"
               onClick={() => {
@@ -1113,314 +810,540 @@ function QuestionPage({
             >
               <Trash2 size={16} />
             </button>
-          </span>
-        </div>
+          ) : null}
+        </span>
       </header>
 
-      {!question.answer ? (
-        <label className="question-guess">
-          <Lightbulb size={16} aria-hidden="true" />
+      {!revealed ? (
+        <form
+          className="hole-guess q-card"
+          onSubmit={(event) => {
+            event.preventDefault()
+            reveal()
+          }}
+        >
+          <label htmlFor={`guess-${question.id}`}>Your guess</label>
           <input
+            id={`guess-${question.id}`}
             value={guess}
-            placeholder="Your guess"
-            aria-label="Your guess"
             onChange={(event) => setGuess(event.target.value)}
-            onBlur={() => {
-              if ((question.guess ?? '') !== guess.trim()) change({ guess: guess.trim() || undefined })
-            }}
             maxLength={300}
+            enterKeyHint="go"
           />
-        </label>
-      ) : null}
-
-      {question.short || loading ? (
-        <section className="q-section">
-          <h4 className="q-label">Answer</h4>
-          <div className="q-card q-answer">
-            {question.short ? (
-              <p>{question.short}</p>
-            ) : (
-              <div className="q-answer-wait" aria-live="polite">
-                <span className="skeleton" />
-                <span className="skeleton" />
-                <span className="skeleton" />
-              </div>
-            )}
-            <small className="q-caption">
-              <NoemaIcon size={12} aria-hidden="true" /> Noema
-            </small>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="q-section question-block">
-        <div className="q-label-row">
-          <h4 className="q-label">Explore</h4>
-          {!loading ? (
-            <button className="text-button" onClick={() => explore(Boolean(question.picks?.length))}>
-              <Search size={13} /> {picks.length ? 'More' : 'Find'}
+          <div className="subject-actions">
+            <button className="primary-button" type="submit">
+              Show the answer
             </button>
-          ) : null}
-        </div>
-        {loading ? (
-          <div className="pick-loading" aria-live="polite">
-            <span className="skeleton" />
-            <span className="skeleton" />
-            <span className="skeleton" />
-            <small>Finding…</small>
-          </div>
-        ) : null}
-        {error ? <p className="weather-error">{error}</p> : null}
-        {groups.length > 1 ? (
-          <div className="pick-filter" role="tablist" aria-label="Show">
-            <button role="tab" aria-selected={kind === 'all'} onClick={() => setKind('all')}>
-              All <span>{picks.length}</span>
+            <button type="button" className="text-button" onClick={() => setRevealed(true)}>
+              Skip
             </button>
-            {groups.map((group) => (
-              <button
-                key={group.type}
-                role="tab"
-                aria-selected={kind === group.type}
-                onClick={() => setKind(group.type)}
-              >
-                {group.label} <span>{group.picks.length}</span>
-              </button>
-            ))}
           </div>
-        ) : null}
-        {groups
-          .filter((group) => kind === 'all' || group.type === kind || !groups.some((item) => item.type === kind))
-          .map((group) => (
-            <div className="pick-group" key={group.type}>
-              <h5>{group.label}</h5>
-              <div className="pick-list">
-                {group.picks.map((pick) => (
-                  <PickCard
-                    key={pick.id}
-                    pick={pick}
-                    owned={pick.type === 'book' ? ownedBook(library, pick.title) : undefined}
-                    onOpenBook={onOpenBook}
-                    onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: !pick.saved }))}
-                    onLooked={() => {
-                      if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-      </section>
-
-      <section className="q-section question-answer">
-        <h4 className="q-label">In your own words</h4>
-        <div className="q-card">
-          {question.answer && !editing ? (
-            <>
-              <blockquote>{question.answer.text}</blockquote>
-              <div className="subject-actions">
-                <button className="text-button" onClick={() => setEditing(true)}>
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    onSave(reopenQuestion(subject, question.id))
-                    setEditing(true)
-                  }}
-                >
-                  Reopen
-                </button>
-                {onNote ? (
-                  <button className="text-button" onClick={() => onNote(question.text, path.title)}>
-                    Add a note
+        </form>
+      ) : (
+        <>
+          {question.guess ? <p className="hole-guessed">You guessed: {question.guess}</p> : null}
+          <section className="q-section">
+            <div className="q-card q-answer">
+              {question.short ? (
+                <p>{question.short}</p>
+              ) : loading ? (
+                <div className="q-answer-wait" aria-live="polite">
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                </div>
+              ) : failure ? (
+                <p className="weather-error">
+                  {failure}{' '}
+                  <button className="text-button" onClick={() => explore()}>
+                    <RotateCw size={13} /> Try again
                   </button>
-                ) : null}
+                </p>
+              ) : null}
+              {question.short ? (
+                <small className="q-caption">
+                  <NoemaIcon size={12} aria-hidden="true" /> Noema
+                </small>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="q-section question-answer">
+            <h4 className="q-label">In your own words</h4>
+            {question.answer && !editing ? (
+              <div className="q-card">
+                <blockquote>{question.answer.text}</blockquote>
+                <div className="subject-actions">
+                  <button className="text-button" onClick={() => setEditing(true)}>
+                    <Pencil size={13} /> Edit
+                  </button>
+                  {onNote ? (
+                    <button className="text-button" onClick={() => onNote(question.text, path.title)}>
+                      Add a note
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </>
-          ) : (
+            ) : (
+              <form
+                className="hole-own"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const words = answer.trim()
+                  if (!words) {
+                    if (question.answer) onSave(reopenQuestion(subject, question.id))
+                  } else onSave(answerQuestion(subject, question.id, words, question.answer?.pickIds ?? []))
+                  setEditing(false)
+                }}
+              >
+                <textarea
+                  rows={2}
+                  value={answer}
+                  onChange={(event) => setAnswer(event.target.value)}
+                  aria-label="In your own words"
+                  maxLength={600}
+                />
+                <div className="subject-actions">
+                  <button className="secondary-button" type="submit" disabled={!answer.trim() && !question.answer}>
+                    Save
+                  </button>
+                  {editing ? (
+                    <button type="button" className="text-button" onClick={() => setEditing(false)}>
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            )}
+          </section>
+
+          {question.useIt ? (
+            <section className="q-section question-use">
+              <h4 className="q-label">Use it</h4>
+              <div className="q-card">
+                <p>{question.useIt.text}</p>
+                <div className="subject-actions">
+                  {question.useIt.doneAt ? (
+                    <>
+                      <span className="question-use-done">
+                        <Check size={14} aria-hidden="true" /> Done
+                      </span>
+                      <button className="text-button" onClick={() => onSave(markUsed(subject, question.id, false))}>
+                        Not yet
+                      </button>
+                    </>
+                  ) : (
+                    <button className="secondary-button" onClick={() => onSave(markUsed(subject, question.id, true))}>
+                      <Check size={14} /> Done
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="q-section hole-doors" aria-label="Where next">
+            <h4 className="q-label">Where next</h4>
+            <ul className="hole-door-list">
+              {doors.map((door) => {
+                const there = taken(door.text)
+                return (
+                  <li key={door.text}>
+                    <button onClick={() => (there ? onOpen(there.id) : go(door))}>
+                      <span className="hole-door-kind">{DOOR_WORD[door.kind]}</span>
+                      <span className="hole-door-text">
+                        <strong>{door.text}</strong>
+                        {door.hook ? <small>{door.hook}</small> : null}
+                      </span>
+                      {there ? (
+                        isExplained(there) ? (
+                          <Check size={15} aria-label="In your own words" />
+                        ) : (
+                          <small className="hole-door-been">Been there</small>
+                        )
+                      ) : (
+                        <ChevronRight size={16} aria-hidden="true" />
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+              {!doors.length && loading ? (
+                <li className="hole-door-wait" aria-hidden="true">
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                </li>
+              ) : null}
+            </ul>
             <form
+              className="hole-own-door"
               onSubmit={(event) => {
                 event.preventDefault()
-                onSave(answerQuestion(subject, question.id, answer, used))
-                setEditing(false)
-                onNotice('Saved.')
+                go({ kind: 'own', text: own })
               }}
             >
-              <textarea
-                rows={3}
-                value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
-                placeholder="Your answer"
-                aria-label="Your answer"
-                maxLength={600}
+              <input
+                value={own}
+                onChange={(event) => setOwn(event.target.value)}
+                aria-label="Your own question"
+                placeholder="Your own question"
+                maxLength={200}
+                enterKeyHint="go"
               />
-              {sources.length ? (
-                <div className="answer-sources" role="group" aria-label="Where you found it">
-                  {sources.map((pick) => (
-                    <button
-                      type="button"
-                      key={pick.id}
-                      aria-pressed={used.includes(pick.id)}
-                      className={used.includes(pick.id) ? 'chip chip-on' : 'chip'}
-                      onClick={() =>
-                        setUsed((list) =>
-                          list.includes(pick.id) ? list.filter((id) => id !== pick.id) : [...list, pick.id],
-                        )
-                      }
-                    >
-                      {pick.title.length > 40 ? `${pick.title.slice(0, 40)}…` : pick.title}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <div className="subject-actions">
-                <button className="primary-button" type="submit" disabled={!answer.trim()}>
-                  Save
-                </button>
-                {question.answer ? (
-                  <button type="button" className="text-button" onClick={() => setEditing(false)}>
-                    Cancel
-                  </button>
-                ) : null}
-              </div>
+              <button className="secondary-button" type="submit" disabled={own.trim().length < 2} aria-label="Go down">
+                <ArrowDown size={16} />
+              </button>
             </form>
-          )}
-        </div>
-      </section>
-
-      {question.useIt ? (
-        <section className="q-section question-use">
-          <h4 className="q-label">Use it</h4>
-          <div className="q-card">
-            <p>{question.useIt.text}</p>
-            {question.useIt.doneAt ? (
-              <div className="subject-actions">
-                <span className="question-use-done">
-                  <Check size={14} aria-hidden="true" /> Done{' '}
-                  {new Date(question.useIt.doneAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </span>
-                <button className="text-button" onClick={() => onSave(markUsed(subject, question.id, false))}>
-                  Not yet
+            <div className="subject-actions">
+              {doors.length && !loading ? (
+                <button className="text-button" onClick={() => void fetchDoors()} disabled={moreDoors}>
+                  {moreDoors ? 'Finding…' : 'More doors'}
                 </button>
-              </div>
-            ) : (
-              <div className="subject-actions">
-                <button className="secondary-button" onClick={() => onSave(markUsed(subject, question.id, true))}>
-                  <Check size={14} /> Done
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-      ) : null}
+              ) : null}
+              <button className="text-button" onClick={onClimbOut}>
+                Climb out
+              </button>
+            </div>
+          </section>
 
-      <section className="q-section question-deeper">
-        <h4 className="q-label">Go deeper</h4>
-        <div className="q-card">
-          {deeper.length ? (
-            <ul className="deeper-list">
-              {deeper.map((q) => (
-                <li key={q.id}>
-                  <button onClick={() => onOpen(q.id)}>
-                    <span>{q.text}</span>
-                    {q.state === 'answered' ? (
-                      <Check size={15} aria-label="Answered" />
-                    ) : deeperFrom(subject, q.id).length ? (
-                      <small>{deeperFrom(subject, q.id).length} further</small>
-                    ) : null}
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <form
-            className="deeper-ask"
-            onSubmit={(event) => {
-              event.preventDefault()
-              ask(side)
-            }}
-          >
-            <input
-              value={side}
-              onChange={(event) => setSide(event.target.value)}
-              placeholder="Next question"
-              aria-label="Your next question"
-              maxLength={200}
-              enterKeyHint="go"
-            />
-            <button className="primary-button" type="submit" disabled={!side.trim()} aria-label="Go down">
-              <ArrowDown size={16} />
-            </button>
-          </form>
-          {(() => {
-            const offered = [
-              ...(question.followUp && !known(question.followUp) ? [question.followUp] : []),
-              ...ideas.filter((idea) => idea !== question.followUp),
-            ]
-            return offered.length ? (
-              <div className="deeper-ideas">
-                {offered.map((idea) => (
-                  <button key={idea} className="deeper-idea" onClick={() => ask(idea)}>
-                    {idea}
+          <section className="q-section question-block">
+            <div className="q-label-row">
+              <h4 className="q-label">Read, watch, listen</h4>
+              {!loading && question.short ? (
+                <button className="text-button" onClick={() => explore(true)}>
+                  {picks.length ? 'More' : 'Find'}
+                </button>
+              ) : null}
+            </div>
+            {loading && !picks.length ? (
+              <div className="pick-loading" aria-live="polite">
+                <span className="skeleton" />
+                <span className="skeleton" />
+              </div>
+            ) : null}
+            {groups.length > 1 ? (
+              <div className="pick-filter" role="tablist" aria-label="Show">
+                <button role="tab" aria-selected={kind === 'all'} onClick={() => setKind('all')}>
+                  All <span>{picks.length}</span>
+                </button>
+                {groups.map((group) => (
+                  <button
+                    key={group.type}
+                    role="tab"
+                    aria-selected={kind === group.type}
+                    onClick={() => setKind(group.type)}
+                  >
+                    {group.label} <span>{group.picks.length}</span>
                   </button>
                 ))}
               </div>
-            ) : null
-          })()}
-          <button className="text-button deeper-more" onClick={() => void dig()} disabled={digging}>
-            <Sparkles size={13} /> {digging ? 'Thinking…' : ideas.length ? 'More ideas' : 'Ideas'}
-          </button>
-          {digError ? <p className="weather-error">{digError}</p> : null}
-        </div>
-      </section>
+            ) : null}
+            {groups
+              .filter((group) => kind === 'all' || group.type === kind || !groups.some((item) => item.type === kind))
+              .map((group) => (
+                <div className="pick-group" key={group.type}>
+                  <h5>{group.label}</h5>
+                  <div className="pick-list">
+                    {group.picks.map((pick) => (
+                      <PickCard
+                        key={pick.id}
+                        pick={pick}
+                        owned={pick.type === 'book' ? ownedBook(library, pick.title) : undefined}
+                        onOpenBook={onOpenBook}
+                        onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: !pick.saved }))}
+                        onLooked={() => {
+                          if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </section>
+
+          {links.length && onOpenHole ? (
+            <section className="q-section hole-links" aria-label="Connects to">
+              <h4 className="q-label">Connects to</h4>
+              <ul className="hole-door-list">
+                {links.map(({ path: other, question: q }) => (
+                  <li key={other.id}>
+                    <button onClick={() => onOpenHole(other.id, q.id)}>
+                      <span className="hole-door-kind">{other.title}</span>
+                      <span className="hole-door-text">
+                        <strong>{q.text}</strong>
+                      </span>
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
+      )}
     </article>
   )
 }
 
-// ---------- Saved ----------
+// ---------- Climbing out ----------
 
-function SubjectShelf({
+function ClimbOut({
+  path,
   subject,
-  onOpen,
-  onSave,
+  onClose,
+  onDone,
 }: {
+  path: LearningPath
   subject: Subject
-  onOpen: (id: string) => void
-  onSave: (next: Subject, undo?: string) => void
+  onClose: () => void
+  onDone: (next: Subject, cards: number) => void
 }) {
-  const groups = shelf(subject)
-  if (!groups.length) return <p className="subject-empty">Nothing saved yet</p>
+  const visited = sinceSurfaced(subject)
+  const [stuck, setStuck] = useState('')
+  const [drafts, setDrafts] = useState<Array<DraftCard & { keep: boolean }> | null>(null)
+  const [drafting, setDrafting] = useState(false)
+  const [error, setError] = useState('')
+  const passage = recallPassage(subject, visited)
+  useEffect(() => {
+    const away = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    document.addEventListener('keydown', away)
+    return () => document.removeEventListener('keydown', away)
+  }, [onClose])
+
+  async function draft() {
+    setDrafting(true)
+    setError('')
+    try {
+      const response = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify({ passage, bookTitle: path.title, count: 3 }),
+      })
+      const result = (await response.json()) as { ok?: boolean; cards?: DraftCard[]; error?: string }
+      if (!response.ok || !result.ok || !result.cards) throw new Error(result.error || 'Noema could not draft cards.')
+      setDrafts(result.cards.map((card) => ({ ...card, keep: true })))
+    } catch (reason) {
+      setError(problem(reason, 'Noema could not draft cards.'))
+    } finally {
+      setDrafting(false)
+      noemaUsed()
+    }
+  }
+  function finish() {
+    const chosen = (drafts ?? []).filter((card) => card.keep && card.question.trim() && card.answer.trim())
+    if (chosen.length) {
+      const made = chosen.map((card) =>
+        newCard(
+          { question: card.question.trim(), answer: card.answer.trim() },
+          { source: passage.slice(0, 600), bookTitle: path.title },
+        ),
+      )
+      writeReviewCards([...made, ...readReviewCards()])
+    }
+    onDone(climbOut(subject, stuck), chosen.length)
+  }
   return (
-    <div className="subject-shelf">
-      {groups.map((group) => (
-        <div className="pick-group" key={group.type}>
-          <h5>{group.label}</h5>
-          <div className="pick-list">
-            {group.items.map(({ pick, question }) => (
-              <div key={pick.id} className="shelf-item">
-                <PickCard
-                  pick={pick}
-                  onToggleSave={() => onSave(updatePick(subject, question.id, pick.id, { saved: false }), 'Unsaved.')}
-                  onLooked={() => {
-                    if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
-                  }}
-                />
-                <button className="text-button shelf-question" onClick={() => onOpen(question.id)}>
-                  For: {question.text}
-                </button>
-              </div>
+    <div className="brain-backdrop" data-overlay onMouseDown={onClose}>
+      <section
+        className="hole-climb panel-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="climb-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h3 id="climb-title">Climbing out</h3>
+          <button className="icon-button" onClick={onClose} aria-label="Close">
+            <X size={16} />
+          </button>
+        </header>
+        {visited.length ? (
+          <ol className="hole-climb-trail">
+            {visited.map((q) => (
+              <li key={q.id} className={isExplained(q) ? 'is-explained' : undefined}>
+                {q.text}
+              </li>
             ))}
+          </ol>
+        ) : null}
+        <label className="hole-climb-field">
+          What stuck?
+          <textarea rows={2} value={stuck} onChange={(event) => setStuck(event.target.value)} maxLength={300} />
+        </label>
+        {passage ? (
+          <div className="hole-climb-cards">
+            <h4>Keep it</h4>
+            {drafts ? (
+              <ul>
+                {drafts.map((card, index) => (
+                  <li key={index}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={card.keep}
+                        onChange={() =>
+                          setDrafts((list) =>
+                            list!.map((item, at) => (at === index ? { ...item, keep: !item.keep } : item)),
+                          )
+                        }
+                      />
+                      <span>
+                        <strong>{card.question}</strong>
+                        <small>{card.answer}</small>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <button className="secondary-button" onClick={() => void draft()} disabled={drafting}>
+                {drafting ? 'Drafting…' : 'Draft recall cards'}
+              </button>
+            )}
+            {error ? <p className="weather-error">{error}</p> : null}
           </div>
+        ) : null}
+        <div className="subject-actions">
+          <button className="primary-button" onClick={finish}>
+            Done
+          </button>
+          <button className="text-button" onClick={onClose}>
+            Cancel
+          </button>
         </div>
-      ))}
+      </section>
+    </div>
+  )
+}
+
+// ---------- What you found ----------
+
+function FoundPage({
+  path,
+  subject,
+  onSave,
+  onOpen,
+  onNotice,
+}: {
+  path: LearningPath
+  subject: Subject
+  onSave: (next: Subject, undo?: string) => void
+  onOpen: (id: string) => void
+  onNotice: (message: string) => void
+}) {
+  const found = foundIn(subject)
+  const explained = subject.questions.filter(isExplained)
+  const [draft, setDraft] = useState<string | null>(null)
+  const [drafting, setDrafting] = useState(false)
+  async function sumUp() {
+    setDrafting(true)
+    try {
+      const result = await requestSumUp({
+        subject: path.title,
+        area: path.title,
+        answers: explained.map((q) => ({ question: q.text, answer: q.answer!.text })),
+        questions: [],
+      })
+      setDraft(result.text)
+    } catch (reason) {
+      onNotice(problem(reason, 'Noema could not draft it right now.'))
+    } finally {
+      setDrafting(false)
+    }
+  }
+  function exportIt() {
+    const blob = new Blob([holeMarkdown(path, subject)], { type: 'text/markdown' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `${path.title.replace(/[\\/:*?"<>|]+/g, '').slice(0, 60) || 'Rabbit hole'}.md`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1_000)
+  }
+  if (!found.length && !subject.summary && !subject.stuck?.length)
+    return <div className="empty-state">Nothing kept yet</div>
+  return (
+    <div className="hole-found">
+      <div className="subject-actions hole-found-tools">
+        {explained.length >= 2 && draft === null ? (
+          <button className="secondary-button" onClick={() => void sumUp()} disabled={drafting}>
+            <Pencil size={13} /> {drafting ? 'Drafting…' : subject.summary ? 'Sum it up again' : 'Sum it up'}
+          </button>
+        ) : null}
+        <button className="text-button" onClick={exportIt}>
+          <Download size={14} /> Export
+        </button>
+      </div>
+      {draft !== null ? (
+        <form
+          className="hole-own"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSave(sumItUp(subject, draft))
+            setDraft(null)
+          }}
+        >
+          <label htmlFor="hole-sum">In your words</label>
+          <textarea id="hole-sum" rows={5} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          <div className="subject-actions">
+            <button className="primary-button" type="submit" disabled={!draft.trim()}>
+              Keep
+            </button>
+            <button type="button" className="text-button" onClick={() => setDraft(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : subject.summary ? (
+        <section className="hole-found-summary">
+          <h4 className="q-label">In your words</h4>
+          <p>{subject.summary.text}</p>
+        </section>
+      ) : null}
+      {subject.stuck?.length ? (
+        <section>
+          <h4 className="q-label">What stuck</h4>
+          <ul className="hole-stuck">
+            {subject.stuck.map((line) => (
+              <li key={line.at}>{line.text}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <ol className="hole-found-list">
+        {found.map(({ question, picks }) => (
+          <li key={question.id}>
+            <button className="hole-found-q" onClick={() => onOpen(question.id)}>
+              {question.text}
+            </button>
+            {question.guess ? <p className="hole-guessed">You guessed: {question.guess}</p> : null}
+            {question.answer ? <blockquote>{question.answer.text}</blockquote> : null}
+            {picks.length ? (
+              <ul className="hole-found-picks">
+                {picks.map((pick) => (
+                  <li key={pick.id}>
+                    {pick.url ? (
+                      <a href={pick.url} target="_blank" rel="noreferrer noopener">
+                        {pick.title}
+                      </a>
+                    ) : (
+                      pick.title
+                    )}
+                    {pick.source ? <small> · {pick.source}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
 
 // ---------- On Home ----------
 
-// Books for the questions in Now, then the questions themselves: the reading leads.
+// Books for the questions looked at lately, then those questions, then the way back down the latest hole.
 export function HomeQuestions({
   paths,
   library,
@@ -1435,23 +1358,32 @@ export function HomeQuestions({
   onFindBook: (title: string) => void
 }) {
   const books = booksForNow(paths).slice(0, 8)
+  const down = paths
+    .map((path) => ({ path, question: lastOpen(subjectOf(path)) }))
+    .filter((item): item is { path: LearningPath; question: Question } => Boolean(item.question))
+    .sort((a, b) => (b.question.visitedAt ?? '').localeCompare(a.question.visitedAt ?? ''))[0]
   const questions = paths
     .flatMap((path) => nowQuestions(subjectOf(path)).map((question) => ({ path, question })))
-    .slice(0, 4)
-  // The most recent rabbit hole someone went down, when it is not already among Now.
-  const down = paths
-    .map((path) => ({ path, question: deepestOpen(subjectOf(path)) }))
-    .filter((item): item is { path: LearningPath; question: Question } => Boolean(item.question))
-    .filter((item) => !questions.some((q) => q.question.id === item.question.id))
-    .sort((a, b) => b.question.askedAt.localeCompare(a.question.askedAt))[0]
+    .filter((item) => item.question.id !== down?.question.id)
+    .slice(0, 3)
   if (!books.length && !questions.length && !down) return null
   return (
-    <section className="section-block home-questions" aria-label="Your questions">
+    <section className="section-block home-questions" aria-label="Rabbit holes">
       <div className="section-heading">
         <div>
-          <h2>Your questions</h2>
+          <h2>Rabbit holes</h2>
         </div>
       </div>
+      {down ? (
+        <button className="home-down panel-card" onClick={() => onOpenQuestion(down.path.id, down.question.id)}>
+          <ArrowDown size={18} aria-hidden="true" />
+          <span>
+            <small>Back down the rabbit hole</small>
+            <strong>{down.question.text}</strong>
+          </span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      ) : null}
       {books.length ? (
         <div className="bookshelf-row">
           {books.map(({ path, question, pick }) => {
@@ -1481,26 +1413,19 @@ export function HomeQuestions({
         </div>
       ) : null}
       {questions.length ? (
-        <div className="subject-list">
+        <ul className="hole-door-list">
           {questions.map(({ path, question }) => (
-            <QuestionRow
-              key={`${path.id}-${question.id}`}
-              question={question}
-              area={path.title}
-              onOpen={() => onOpenQuestion(path.id, question.id)}
-            />
+            <li key={`${path.id}-${question.id}`}>
+              <button onClick={() => onOpenQuestion(path.id, question.id)}>
+                <span className="hole-door-kind">{path.title}</span>
+                <span className="hole-door-text">
+                  <strong>{question.text}</strong>
+                </span>
+                <ChevronRight size={16} aria-hidden="true" />
+              </button>
+            </li>
           ))}
-        </div>
-      ) : null}
-      {down ? (
-        <button className="home-down panel-card" onClick={() => onOpenQuestion(down.path.id, down.question.id)}>
-          <ArrowDown size={18} aria-hidden="true" />
-          <span>
-            <small>Back down the rabbit hole</small>
-            <strong>{down.question.text}</strong>
-          </span>
-          <ChevronRight size={16} aria-hidden="true" />
-        </button>
+        </ul>
       ) : null}
     </section>
   )

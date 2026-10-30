@@ -1,0 +1,495 @@
+/* Rabbit holes, the dive (Subjects.tsx): quiet rows and hairlines like a reading or research app, the serif for
+   questions, the lamp only for what is lit. No pictures, no badges, no bubbles. */
+
+.hole {
+  display: grid;
+  gap: 20px;
+}
+
+/* ---------- Falling in ---------- */
+.hole-start form {
+  display: grid;
+  gap: 12px;
+}
+.hole-start h3 {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 24px;
+  font-weight: 500;
+}
+.hole-start-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.hole-start-row textarea {
+  flex: 1;
+  min-height: 46px;
+  resize: none;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.hole-start-row .primary-button {
+  flex: none;
+  white-space: nowrap;
+}
+.hole-signin {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.hole-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hole-examples button {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: none;
+  font-size: 13px;
+}
+.hole-examples button:hover {
+  color: var(--ll-ink, #fff);
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.45);
+}
+
+/* Where a hole began: the passage, set like a pull quote. */
+.hole-origin {
+  margin: 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.55);
+}
+.hole-origin blockquote {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ll-ink, #eef2f7);
+}
+.hole-origin figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- Tabs and the map's head ---------- */
+.hole-tabs {
+  display: inline-flex;
+  justify-self: start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--ll-inset, rgba(255, 255, 255, 0.04));
+}
+.hole-tabs button {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: none;
+  font-size: 14px;
+}
+.hole-tabs button[aria-selected='true'] {
+  color: var(--ll-ink, #fff);
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.16);
+}
+.hole-map {
+  display: grid;
+  gap: 18px;
+}
+.hole-map-head {
+  display: grid;
+  gap: 10px;
+}
+.hole-facts {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.hole-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- The outline ---------- */
+.hole-outline {
+  display: grid;
+  gap: 16px;
+}
+.hole-group h5 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.hole-group ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hole-row {
+  --step: 18px;
+  position: relative;
+  padding-left: calc(var(--depth, 0) * var(--step));
+}
+.hole-row button {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.07));
+  border-radius: 0;
+  color: var(--ll-ink, #eef2f7);
+  background: none;
+  text-align: left;
+}
+.hole-row button:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.hole-row-text {
+  font-family: var(--ll-serif);
+  font-size: 17px;
+  line-height: 1.35;
+}
+.hole-row small {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* Where a question stands: explained in your own words (filled), looked at (a ring), not yet (a faint ring),
+   a door not taken (dashed, muted words). */
+.hole-mark {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.35;
+}
+.hole-row--visited .hole-mark {
+  border-color: rgba(var(--accent-rgb, 220, 194, 142), 0.9);
+  opacity: 0.85;
+}
+.hole-row--explained .hole-mark {
+  border-color: rgb(var(--accent-rgb, 220, 194, 142));
+  background: rgb(var(--accent-rgb, 220, 194, 142));
+  opacity: 1;
+}
+.hole-row--open .hole-row-text {
+  color: var(--muted);
+}
+.hole-row--door .hole-mark {
+  border-style: dashed;
+}
+.hole-row--door .hole-row-text {
+  color: var(--muted);
+  font-style: italic;
+}
+.hole-row[aria-current='true'] button {
+  background: rgba(var(--accent-rgb, 220, 194, 142), 0.08);
+}
+.hole-outline--compact .hole-row-text {
+  font-size: 15px;
+}
+.hole-outline--compact .hole-row button {
+  min-height: 40px;
+  padding: 8px 6px;
+}
+
+/* ---------- One question ---------- */
+.hole-aside {
+  display: none;
+}
+@media (min-width: 62rem) {
+  @container (min-width: 720px) {
+    .hole-split {
+      grid-template-columns: minmax(220px, 0.42fr) minmax(0, 1fr);
+    }
+    .hole-aside {
+      position: sticky;
+      top: 16px;
+      display: block;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+  }
+}
+.hole-question {
+  display: grid;
+  gap: 18px;
+}
+.hole-question .question-head h3 {
+  font-family: var(--ll-serif);
+  font-size: clamp(24px, 4vw, 30px);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.hole-guess {
+  display: grid;
+  gap: 10px;
+}
+.hole-guess label {
+  color: var(--muted);
+  font-size: 14px;
+}
+.hole-guessed {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-style: italic;
+}
+.hole-own {
+  display: grid;
+  gap: 10px;
+}
+.hole-own textarea {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+/* Doors: a plain list, the kind on the left as in a research app's related questions. */
+.hole-doors {
+  display: grid;
+  gap: 10px;
+}
+.hole-door-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+  list-style: none;
+}
+.hole-door-list li {
+  border-bottom: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+}
+.hole-door-list button {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 4px;
+  border: 0;
+  border-radius: 0;
+  color: var(--ll-ink, #eef2f7);
+  background: none;
+  text-align: left;
+}
+.hole-door-list button:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.hole-door-kind {
+  overflow: hidden;
+  color: rgb(var(--accent-rgb, 220, 194, 142));
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hole-door-text {
+  display: grid;
+  gap: 2px;
+}
+.hole-door-text strong {
+  font-family: var(--ll-serif);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.hole-door-text small,
+.hole-door-been {
+  color: var(--muted);
+  font-size: 13px;
+}
+.hole-door-wait {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+.hole-own-door {
+  display: flex;
+  gap: 8px;
+}
+.hole-own-door input {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .hole-door-list button {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 2px;
+  }
+  .hole-door-kind {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Coming back ---------- */
+.hole-recall {
+  display: grid;
+  gap: 10px;
+}
+.hole-recall h4 {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 20px;
+  font-weight: 500;
+}
+.hole-recall blockquote,
+.hole-found blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+  color: var(--ll-ink, #eef2f7);
+  line-height: 1.5;
+}
+
+/* ---------- Climbing out ---------- */
+.hole-climb {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  margin: auto;
+  overflow: auto;
+}
+.hole-climb header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hole-climb h3 {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 24px;
+  font-weight: 500;
+}
+.hole-climb-trail {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.hole-climb-trail .is-explained {
+  color: var(--ll-ink, #eef2f7);
+}
+.hole-climb-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.hole-climb-cards {
+  display: grid;
+  gap: 10px;
+}
+.hole-climb-cards h4 {
+  margin: 0;
+  font-size: 15px;
+}
+.hole-climb-cards ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hole-climb-cards label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.hole-climb-cards label span {
+  display: grid;
+  gap: 2px;
+}
+.hole-climb-cards small {
+  color: var(--muted);
+}
+
+/* ---------- What you found ---------- */
+.hole-found {
+  display: grid;
+  gap: 20px;
+}
+.hole-found-summary p {
+  margin: 6px 0 0;
+  font-family: var(--ll-serif);
+  font-size: 18px;
+  line-height: 1.55;
+}
+.hole-stuck {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.hole-found-list {
+  display: grid;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hole-found-list > li {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+}
+.hole-found-q {
+  padding: 0;
+  border: 0;
+  color: var(--ll-ink, #eef2f7);
+  background: none;
+  font-family: var(--ll-serif);
+  font-size: 20px;
+  line-height: 1.3;
+  text-align: left;
+}
+.hole-found-picks {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.hole-found-picks small {
+  color: var(--muted);
+}
+
+/* Fields in the dive show as fields: a well with a hairline, the lamp's ring on focus (from Lamplight). */
+:root .app-shell :is(.hole-guess, .hole-own, .hole-own-door, .hole-start-row, .hole-climb) :is(input, textarea) {
+  border: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.14));
+  background: var(--ll-inset, rgba(0, 0, 0, 0.25));
+}
+.hole-start {
+  padding: 20px;
+}
+.hole-question .question-head {
+  position: relative;
+  padding-right: 96px;
+}
+.hole-question .question-tools {
+  position: absolute;
+  top: 0;
+  right: 0;
+}

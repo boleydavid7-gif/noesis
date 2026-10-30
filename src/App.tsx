@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { MARK_GLYPH } from './lib/markGlyph'
 import { createPortal } from 'react-dom'
 import {
+  ArrowDown,
   ArrowRight,
   MoreHorizontal,
   NotebookPen,
@@ -146,8 +147,9 @@ import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
 import { AddExternalBook, Borrowed } from './Borrowed'
 import { newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
-import { emptySubject, guidance, subjectCounts, subjectFor, subjectOf } from './lib/subjects'
-import { exploreInto, isExploring, questionsToPrepare, type EditSubject } from './lib/subjectExplore'
+import { subjectFor, subjectOf, type HoleOrigin } from './lib/subjects'
+import { holeCounts } from './lib/rabbitHole'
+import type { EditSubject } from './lib/subjectExplore'
 import type { LearningPath } from './lib/pathPlan'
 import type { StudyInfo } from './StudyPanel'
 import { CalendarPanel } from './CalendarPanel'
@@ -425,7 +427,6 @@ function App() {
   const [coverFinderOpen, setCoverFinderOpen] = useState(false)
   const [selectionOffer, setSelectionOffer] = useState<SelectionOffer | null>(null)
   const [noteDraft, setNoteDraft] = useState<NoteDraft>({ title: '', body: '', source: '', kind: 'note' })
-  const [pathDraft, setPathDraft] = useState({ title: '', description: '' })
   const [authUser, setAuthUser] = useState<User | null>(null)
   const plusStatus = usePlus()
   useEffect(() => {
@@ -465,6 +466,8 @@ function App() {
   const [justSavedPath, setJustSavedPath] = useState<string | null>(null)
   // A question opened from Home or elsewhere: its subject opens on that question.
   const [openAt, setOpenAt] = useState<{ pathId: string; questionId: string } | null>(null)
+  // "Fall in" on a passage while reading: the rabbit hole starts from it.
+  const [fallInFrom, setFallInFrom] = useState<HoleOrigin | null>(null)
   const [signOutClear, setSignOutClear] = useState(false)
   const [keepDismissed, setKeepDismissed] = useState(() => {
     try {
@@ -1935,61 +1938,12 @@ function App() {
       return next
     })
   }, [])
-  // Before a question is opened, its picks are found in the background: the questions in Now and the next one
-  // suggested, one at a time, each tried once per visit.
-  const prepared = useRef(new Set<string>())
-  const [prepareTick, setPrepareTick] = useState(0)
-  useEffect(() => {
-    if (!learner || !authUser) return
-    const timer = window.setTimeout(() => {
-      for (const path of paths) {
-        const subject = subjectOf(path)
-        const guide = guidance(subject)
-        if (!guide.autoExplore) continue
-        const question = questionsToPrepare(subject, guide.nextUp).find((q) => !prepared.current.has(q.id))
-        if (!question) continue
-        if (isExploring(question.id)) return
-        prepared.current.add(question.id)
-        const reading = books.filter((book) => path.bookIds.includes(book.id)).map((book) => book.title)
-        void exploreInto(
-          {
-            path,
-            question,
-            area: subject.areas.find((area) => area.id === question.areaId)?.title,
-            level: subject.level,
-            reading,
-          },
-          editSubject,
-        ).finally(() => setPrepareTick((value) => value + 1))
-        return
-      }
-    }, 800)
-    return () => window.clearTimeout(timer)
-  }, [paths, learner, authUser, books, editSubject, prepareTick])
   function deletePath(id: string) {
     const next = paths.filter((path) => path.id !== id)
     markDeleted('path', id)
     setPaths(next)
     writePaths(next)
     showNotice('Rabbit hole removed.')
-  }
-  function createPath(event: React.FormEvent) {
-    event.preventDefault()
-    if (!pathDraft.title.trim()) return
-    const path: LearningPath = {
-      id: `path-${crypto.randomUUID()}`,
-      title: pathDraft.title.trim(),
-      description: pathDraft.description.trim() || 'Your own questions, around your reading.',
-      bookIds: [],
-      createdAt: new Date().toISOString(),
-      updated: new Date().toISOString(),
-      subject: emptySubject(),
-    }
-    const next = [path, ...paths]
-    setPaths(next)
-    writePaths(next)
-    setPathDraft({ title: '', description: '' })
-    showNotice('Subject started.')
   }
   function savePlannedPath(path: LearningPath) {
     const next = [path, ...paths]
@@ -2919,29 +2873,15 @@ function App() {
       <Page title="Rabbit Holes" subtitle="">
         <FreeCopyContext.Provider value={addResource}>
           <SubjectStarter
-            onSave={savePlannedPath}
-            onNotice={showNotice}
+            onStart={(path, questionId) => {
+              savePlannedPath(path)
+              setOpenAt({ pathId: path.id, questionId })
+            }}
+            from={fallInFrom}
+            onClearFrom={() => setFallInFrom(null)}
             signedIn={Boolean(authUser)}
             onSignIn={() => goSignIn('sign-in')}
           />
-          <h3 className="paths-own-heading">Or start one yourself</h3>
-          <form className="create-form panel-card" onSubmit={createPath}>
-            <input
-              value={pathDraft.title}
-              onChange={(event) => setPathDraft({ ...pathDraft, title: event.target.value })}
-              placeholder="Subject"
-              aria-label="Subject"
-            />
-            <input
-              value={pathDraft.description}
-              onChange={(event) => setPathDraft({ ...pathDraft, description: event.target.value })}
-              placeholder="What you want to understand (optional)"
-              aria-label="What you want to understand"
-            />
-            <button className="primary-button" type="submit">
-              <Plus size={15} /> Start
-            </button>
-          </form>
           <PathSection
             key={openAt ? `${openAt.pathId}:${openAt.questionId}` : (justSavedPath ?? 'paths')}
             initialQuestion={openAt}
@@ -2966,6 +2906,7 @@ function App() {
             onNote={openTopicNote}
             onNotice={showNotice}
             onEdit={editSubject}
+            onOpenHole={(pathId, questionId) => setOpenAt({ pathId, questionId })}
             onOpenBook={(id) => {
               const found = books.find((book) => book.id === id)
               if (found) openSavedBook(found)
@@ -3535,6 +3476,15 @@ function App() {
       <Reader
         book={selectedBook}
         notes={notes}
+        onFallIn={(text) => {
+          setFallInFrom({
+            kind: 'book',
+            title: selectedBook.title,
+            quote: text.slice(0, 1_200),
+            bookId: selectedBook.id,
+          })
+          setActiveNav('Learning Paths')
+        }}
         onClose={() => {
           setSelectedBookId(null)
           setReaderJump(null)
@@ -3908,6 +3858,22 @@ function App() {
               }}
             >
               <Link2 size={14} /> Connect
+            </button>
+            <button
+              onClick={() => {
+                const book = selectedBook && activeNav === 'Read' ? selectedBook : null
+                setFallInFrom({
+                  kind: book ? 'book' : 'note',
+                  title: book ? book.title : 'A passage',
+                  quote: selectionOffer.text.slice(0, 1_200),
+                  bookId: book?.id,
+                })
+                setSelectionOffer(null)
+                window.getSelection()?.removeAllRanges()
+                setActiveNav('Learning Paths')
+              }}
+            >
+              <ArrowDown size={14} /> Fall in
             </button>
           </div>
         ) : null}
@@ -5136,8 +5102,10 @@ function PathSection({
   initialOpen = null,
   initialQuestion = null,
   onEdit,
+  onOpenHole,
 }: {
   onEdit?: EditSubject
+  onOpenHole?: (pathId: string, questionId: string) => void
   initialQuestion?: { pathId: string; questionId: string } | null
   onOpenBook?: (id: string) => void
   paths: LearningPath[]
@@ -5162,12 +5130,10 @@ function PathSection({
     return () => window.clearTimeout(timer)
   }, [initialOpen])
   const active = paths.find((path) => path.id === selected) ?? null
-  // What a tile says: the questions in Now, else how many areas; and the book being read for it.
+  // What a tile says: how many questions, and how many of them in the reader's own words.
   const tileLine = (path: LearningPath) => {
-    const counts = subjectCounts(subjectOf(path))
-    return counts.now
-      ? `${counts.now} ${counts.now === 1 ? 'question' : 'questions'} now`
-      : `${counts.areas} ${counts.areas === 1 ? 'area' : 'areas'}`
+    const counts = holeCounts(subjectOf(path))
+    return `${counts.questions} ${counts.questions === 1 ? 'question' : 'questions'}${counts.explained ? ` · ${counts.explained} in your words` : ''}`
   }
   const readingFor = (path: LearningPath) =>
     books
@@ -5265,6 +5231,8 @@ function PathSection({
           {onUpdate ? (
             <SubjectView
               path={active}
+              holes={paths}
+              onOpenHole={onOpenHole}
               initialQuestion={initialQuestion?.pathId === active.id ? initialQuestion.questionId : undefined}
               onEdit={onEdit}
               library={books}

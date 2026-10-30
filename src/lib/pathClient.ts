@@ -1,6 +1,7 @@
 import { authHeaders } from './auth'
 import { noemaUsed } from './plus'
-import type { SubjectDraft } from './subjects'
+import type { Door, SubjectDraft } from './subjects'
+import { cleanDoors } from './rabbitHole'
 import { unverifiedBook, type BookCandidate, type ResolvedBook } from './pathPlan'
 
 const CACHE_KEY = 'noesis:book-cache:v1'
@@ -138,6 +139,8 @@ export type Explored = {
   short?: string
   followUp?: string
   useIt?: string
+  doors: Door[]
+  ticket?: string
   books: BookCandidate[]
   picks: ExploredPick[]
 }
@@ -149,6 +152,9 @@ export async function exploreQuestion(input: {
   level?: string
   reading?: string[]
   part?: 'answer' | 'picks'
+  trail?: string[]
+  context?: string
+  ticket?: string
 }): Promise<Explored> {
   const result = await post<Partial<Explored>>(
     '/api/question',
@@ -160,9 +166,23 @@ export async function exploreQuestion(input: {
     short: result.short,
     followUp: result.followUp,
     useIt: result.useIt,
+    doors: cleanDoors(result.doors ?? []),
+    ticket: typeof result.ticket === 'string' ? result.ticket : undefined,
     books: result.books ?? [],
     picks: result.picks ?? [],
   }
+}
+
+// More doors from a question: three fresh ones (one use of Noema).
+export async function requestDoors(input: { subject: string; question: string; trail: string[] }): Promise<Door[]> {
+  const result = await post<{ doors?: unknown }>(
+    '/api/question',
+    { ...input, part: 'doors' },
+    'Noema could not find more doors right now. Try again in a moment.',
+  )
+  return Array.isArray(result.doors)
+    ? (result.doors as Door[]).filter((door) => door && typeof door.text === 'string')
+    : []
 }
 
 // Rabbit holes: three questions one level further down.

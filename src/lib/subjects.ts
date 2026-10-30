@@ -1,6 +1,7 @@
-// A subject is a map of questions around the learner's reading, not a course. Areas (four to seven) hold the questions; a question is
-// Now (at most three at a time), Later, or Answered in the learner's own words. Each question carries a few
-// picks to read, watch, listen to, or try, grouped by kind. Everything here is pure, so it is tested alone.
+// A subject (a rabbit hole) is a tree of questions around the learner's reading, not a course. A question is open
+// or explained in the learner's own words (stored as 'answered'; older records may say 'now' or 'later', both open).
+// Each question carries a short answer, a few picks to read, watch, listen to, or try, and the doors it leads to.
+// Areas are optional groups. Everything here is pure, so it is tested alone.
 
 import type { LearningPath, PathPlan, ResolvedBook } from './pathPlan'
 import { isPublicHttps } from './pathPlan'
@@ -37,8 +38,11 @@ export type Question = {
   text: string
   hook?: string // why it is interesting, one line
   state: QuestionState
-  origin: 'start' | 'side' | 'own' | 'deeper'
-  parentId?: string // the question this one went deeper from
+  origin: 'start' | 'side' | 'own' | 'deeper' | 'curious'
+  parentId?: string // the question this one came from
+  doors?: Door[] // where it leads: deeper, sideways, curiouser
+  visitedAt?: string // when it was last opened
+  recalledAt?: string // when it was last recalled on coming back
   guess?: string
   short?: string // Noema's short answer, folded until opened
   followUp?: string // a question the answer leads to, offered when it comes back
@@ -50,11 +54,21 @@ export type Question = {
 }
 export type UseIt = { text: string; doneAt?: string }
 export type Area = { id: string; title: string; blurb?: string; summary?: { text: string; at: string } }
+export type Door = { kind: DoorKind; text: string; hook?: string }
+export type DoorKind = 'deeper' | 'side' | 'curious'
+// Where a rabbit hole began, when it began in a book or a note.
+export type HoleOrigin = { kind: 'book' | 'note'; title: string; quote?: string; bookId?: string; noteId?: string }
+export type Stuck = { text: string; at: string }
 export type Subject = {
   why?: string
   level?: string
   areas: Area[]
   questions: Question[]
+  from?: HoleOrigin
+  stuck?: Stuck[] // "What stuck?" lines, one per climb out
+  surfacedAt?: string // the last climb out
+  summary?: { text: string; at: string } // Sum it up, from the learner's own words
+  grounded?: boolean // Map the ground has run
 }
 
 export const NOW_LIMIT = 3
@@ -80,7 +94,11 @@ export function questionsIn(subject: Subject, areaId: string, state?: QuestionSt
   return subject.questions.filter((q) => q.areaId === areaId && (!state || q.state === state))
 }
 
-export const nowQuestions = (subject: Subject) => subject.questions.filter((q) => q.state === 'now')
+// The open questions the learner has been looking at, most recent first (an older record's Now counts as looked at).
+export const nowQuestions = (subject: Subject) =>
+  subject.questions
+    .filter((q) => q.state !== 'answered' && (q.visitedAt || q.state === 'now'))
+    .sort((a, b) => (b.visitedAt ?? '').localeCompare(a.visitedAt ?? ''))
 
 // Answered since the area was last summed up; five or more offers "Sum up this area".
 export function canSumUp(subject: Subject, areaId: string): boolean {

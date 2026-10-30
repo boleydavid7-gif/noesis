@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   Bookmark,
@@ -298,6 +299,7 @@ function keepPlaceOnResize(instance: unknown, element: HTMLElement, place: () =>
 }
 
 export function Reader({
+  onFallIn,
   book,
   notes,
   onClose,
@@ -342,6 +344,8 @@ export function Reader({
   onTopicNote?: (topic: string, location: BrainNoteLocation) => void
   onRecap: () => void
   onHighlight: (text: string, color: HighlightColor, location: BrainNoteLocation) => void
+  /** Starts a rabbit hole from the selected passage. */
+  onFallIn?: (text: string) => void
   onHighlightEdit: (noteId: string, color: HighlightColor | null) => void
 
   onSaveWord: (word: string, definition: string, location: BrainNoteLocation) => void
@@ -2227,6 +2231,18 @@ export function Reader({
                   >
                     <NoemaIcon size={15} /> Ask Noema
                   </button>
+                  {onFallIn && pick.text ? (
+                    <button
+                      className="reader-pick-action"
+                      onClick={() => {
+                        const text = pick.text
+                        finishPick()
+                        onFallIn(text)
+                      }}
+                    >
+                      <ArrowDown size={15} /> Fall in
+                    </button>
+                  ) : null}
                   {pick.noteId ? (
                     <button
                       className="reader-pick-action reader-pick-remove"

@@ -5,7 +5,15 @@ import { cleanSubjectReply, subjectFromDraft, withAnswerPart, withPicks, type Su
 vi.mock('../lib/pathClient', () => ({
   exploreQuestion: vi.fn(async (input: { part?: string }) =>
     input.part === 'answer'
-      ? { hook: 'A hook', short: 'Short.', followUp: 'Next?', books: [], picks: [] }
+      ? {
+          hook: 'A hook',
+          short: 'Short.',
+          followUp: 'Next?',
+          doors: [{ kind: 'deeper', text: 'What lives in a spoon of soil?' }],
+          ticket: 't-1',
+          books: [],
+          picks: [],
+        }
       : {
           books: [{ title: 'Teaming with Microbes', author: 'Jeff Lowenfels' }],
           picks: [{ type: 'read', title: 'Soil', source: 'Wikipedia', url: 'https://en.wikipedia.org/wiki/Soil' }],
@@ -57,7 +65,7 @@ describe('filling a question in', () => {
 })
 
 describe('exploring in the background', () => {
-  it('asks for both halves at once, saves each, adds books last, and never asks twice at once', async () => {
+  it('asks for the answer, then the reading list on its ticket; saves each, books last, never twice at once', async () => {
     let subject: Subject = subjectFromDraft(draft)
     const path = { id: 'p', title: 'Gardening', description: '', bookIds: [], createdAt: '', subject } as LearningPath
     const edit = vi.fn((_id: string, change: (s: Subject) => Subject) => {
@@ -76,8 +84,11 @@ describe('exploring in the background', () => {
         .mock.calls.map((call) => call[0].part)
         .sort(),
     ).toEqual(['answer', 'picks'])
+    const picksCall = vi.mocked(exploreQuestion).mock.calls.find((call) => call[0].part === 'picks')!
+    expect(picksCall[0]).toMatchObject({ ticket: 't-1' })
     const filled = subject.questions.find((item) => item.id === q.id)!
     expect(filled.short).toBe('Short.')
+    expect(filled.doors?.map((door) => door.kind)).toEqual(['deeper'])
     expect(filled.picks?.map((pick) => pick.type)).toEqual(['read', 'book'])
   })
 })

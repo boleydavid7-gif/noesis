@@ -183,6 +183,20 @@ and a Wrangler dry run. The live health endpoint is
   the top; Go deeper leads with the reader's own question ("What do you want to know next?"), which is added under
   this one and opened at once; "Need an idea?" shows Noema's three as chips, kept only when one is chosen; Home offers "Back down the
   rabbit hole" with the deepest open question (`deepestOpen`).
+- Rabbit holes, the dive (Oct 30; `lib/rabbitHole.ts`, `Subjects.tsx`, `rabbitHole.css`, tests `holeDive.test.ts`):
+  a hole starts from one question ("What are you curious about?", Fall in; or Fall in on a passage picked in the
+  reader or the Library's selection bar, `HoleOrigin` kept on `Subject.from`, named by the passage). Nothing is
+  mapped ahead: each question page asks for a guess first (pretesting; "You guessed:" kept), then one Noema call gives
+  the answer and three doors (Deeper, Sideways, Curiouser: `Door`, `cleanDoors`), so a step is one use; the picks
+  call carries the answer's step ticket (`stepTicket`, HMAC, 15 min) and is not counted. A door becomes a question
+  only when taken (`takeDoor`), or the person writes their own. "In your own words" marks a question explained. The
+  Map (`holeMap`) is an outline of questions and untaken doors (each door once), "Map the ground" asks for a few
+  starting questions (one use), More doors one use. "Climb out" (`climbOut`) shows the trail, asks "What stuck?" and
+  can draft recall cards into Review; coming back after `RECALL_AFTER_DAYS` (2) asks to recall what was written
+  first (`recallDue`). What you found lists answers in the person's words, Sum it up (two or more explained) and
+  Markdown export (`holeMarkdown`); "Connects to" lists other holes sharing two words. Now/Later and the old
+  hand-made areas are gone from the screen (old holes read as open questions; nothing migrates). Nothing spends the
+  allowance in the background.
 - Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
   days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
   hiccup left a provider on one-hour connections). Only 400/401 on renewal drops the renewal token; 429 and 5xx are
@@ -227,7 +241,7 @@ and a Wrangler dry run. The live health endpoint is
   static About page (`public/about/`, real text for search engines, on `legal.css`), and in `index.html` and
   `notes/index.html` a description, canonical address, link-preview tags (`public/social/noesis.png`, 1200×630) and
   WebApplication details (JSON-LD) between `<!-- search -->` markers. Google verification tag already in `index.html`.
-- The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "Nothing to fall into yet".
+- The name is "Rabbit Holes" (title case) wherever it names the feature; the empty list says "No rabbit holes yet".
 
 - Materials (Lamplight): no blur anywhere. Bars are mica (`--ll-mica`, from the scheme: opaque, the room's hue a little
   stronger than the page, the lamp washing in from above, `--ll-mica-surface` in `src/lamplight/noesis.css`); backdrops are a

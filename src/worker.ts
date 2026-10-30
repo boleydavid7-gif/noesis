@@ -18,6 +18,7 @@ import {
   type PickDraft,
   type PickType,
 } from './lib/subjects'
+import { cleanDoors } from './lib/rabbitHole'
 
 type Env = {
   ASSETS: { fetch(request: Request): Promise<Response> }
@@ -93,7 +94,6 @@ function rateLimited(request: Request, route: string, limit: number, windowMs = 
   bucket.count += 1
   return bucket.count > limit
 }
-
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -257,13 +257,44 @@ async function guardAi(
   limit: number,
   busy: string,
   signIn: string,
+  count = true,
 ): Promise<Response | null> {
   if (rateLimited(request, route, limit)) return json({ ok: false, error: busy }, 429)
   const person = await personFrom(request, env)
   if (env.TUTOR_REQUIRE_AUTH?.trim().toLowerCase() === 'true' && !person) {
     return json({ ok: false, error: signIn }, 401)
   }
-  return takeNoema(env, person)
+  return count ? takeNoema(env, person) : null
+}
+
+// A rabbit hole's step is one use of Noema: the answer (with its doors) counts, and the reading list for the same
+// question, asked for at the same moment, carries a ticket from the answer so it does not count again. The ticket
+// is an HMAC of the question and the time with the server's own secret, good for fifteen minutes.
+const TICKET_MINUTES = 15
+async function ticketMac(env: Env, message: string): Promise<string | null> {
+  const secret = env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (!secret) return null
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(`noesis-step:${secret}`),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)))
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+export async function stepTicket(env: Env, question: string, now = Date.now()): Promise<string | undefined> {
+  const mac = await ticketMac(env, `${now}|${question.toLowerCase()}`)
+  return mac ? `${now}.${mac}` : undefined
+}
+export async function ticketHolds(env: Env, ticket: unknown, question: string, now = Date.now()): Promise<boolean> {
+  if (typeof ticket !== 'string') return false
+  const [time, mac] = ticket.split('.')
+  const at = Number(time)
+  if (!Number.isFinite(at) || !mac || at > now + 60_000 || now - at > TICKET_MINUTES * 60_000) return false
+  const expected = await ticketMac(env, `${at}|${question.toLowerCase()}`)
+  return Boolean(expected) && expected === mac
 }
 
 async function answerTutor(request: Request, env: Env): Promise<Response> {
@@ -1760,16 +1791,42 @@ async function goDeeperFrom(
   }
 }
 
+// More doors from a question: three fresh questions to go on to, leaving out the ones already there.
+async function doorsFrom(
+  input: { subject?: unknown; question?: unknown; level?: unknown; trail?: unknown; context?: unknown },
+  env: Env,
+): Promise<Response> {
+  const subject = textOf(input.subject, 100)
+  const question = textOf(input.question, 200)
+  const trail = (Array.isArray(input.trail) ? input.trail : [])
+    .map((item) => textOf(item, 200))
+    .filter(Boolean)
+    .slice(-10)
+  if (!subject || question.length < 3) return json({ ok: false, error: 'Choose a question first.' }, 400)
+  const result = await generate(env, {
+    system: [
+      'You help a curious reader go down a rabbit hole in a reading app.',
+      'Reply with JSON only, in exactly this shape: {"deeper":{"text":"","hook":""},"sideways":{"text":"","hook":""},"curiouser":{"text":"","hook":""}}.',
+      'Each "text" is a question under 15 words; each "hook" is under 12 words on why it pulls. "deeper" narrows into a cause, mechanism, case or detail inside the question; "sideways" goes to a neighboring idea, person, place or field; "curiouser" is an unexpected but true link.',
+      'None may repeat a question already asked. Use American English.',
+    ].join(' '),
+    prompt: `Subject: ${subject}${trail.length ? `\nAlready asked: ${trail.join(' | ')}` : ''}\nQuestion: ${question}`,
+    maxOutputTokens: 350,
+    temperature: 0.8,
+    json: true,
+    timeoutMs: 15_000,
+  })
+  if (!result.ok) return json({ ok: false, error: result.error }, result.status)
+  try {
+    const doors = cleanDoors(JSON.parse(result.text))
+    if (!doors.length) return json({ ok: false, error: 'Noema found no new doors. Try again.' }, 502)
+    return json({ ok: true, doors })
+  } catch {
+    return json({ ok: false, error: 'Noema answered in an unexpected format. Try again.' }, 502)
+  }
+}
+
 async function exploreQuestion(request: Request, env: Env): Promise<Response> {
-  const refused = await guardAi(
-    request,
-    env,
-    'question',
-    15,
-    'Too many requests. Try again in a minute.',
-    'Sign in to explore questions.',
-  )
-  if (refused) return refused
   const input = await readJson<{
     subject?: unknown
     area?: unknown
@@ -1778,9 +1835,23 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     reading?: unknown
     part?: unknown
     trail?: unknown
-  }>(request)
+    context?: unknown
+    ticket?: unknown
+  }>(request.clone())
+  const free = input?.part === 'picks' && (await ticketHolds(env, input.ticket, textOf(input.question, 200)))
+  const refused = await guardAi(
+    request,
+    env,
+    'question',
+    15,
+    'Too many requests. Try again in a minute.',
+    'Sign in to explore questions.',
+    !free,
+  )
+  if (refused) return refused
   if (!input) return json({ ok: false, error: 'Send a valid JSON request.' }, 400)
   if (input.part === 'deeper') return goDeeperFrom(input, env)
+  if (input.part === 'doors') return doorsFrom(input, env)
   // The app asks for the two halves at once, so each is a short answer that comes back quickly:
   // "answer" (hook, short answer, follow-up, use it) and "picks" (what to read, watch and listen to).
   const part = input.part === 'answer' || input.part === 'picks' ? input.part : 'both'
@@ -1795,8 +1866,15 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
   if (!subject || question.length < 3) return json({ ok: false, error: 'Choose a question to explore.' }, 400)
   const asksAnswer = part !== 'picks'
   const asksPicks = part !== 'answer'
+  const trail = (Array.isArray(input.trail) ? input.trail : [])
+    .map((item) => textOf(item, 200))
+    .filter(Boolean)
+    .slice(-6)
+  const context = textOf(input.context, 600)
   const shape = [
-    asksAnswer ? '"hook":"","short":"","followUp":"","useIt":""' : '',
+    asksAnswer
+      ? '"hook":"","short":"","followUp":"","useIt":"","doors":{"deeper":{"text":"","hook":""},"sideways":{"text":"","hook":""},"curiouser":{"text":"","hook":""}}'
+      : '',
     asksPicks
       ? '"wiki":"","books":[{"title":"","author":"","why":""}],"read":[{"title":"","source":"","url":"","minutes":0,"why":""}],"watch":[{"title":"","source":"","url":"","search":"","minutes":0,"why":""}],"listen":[{"search":"","why":""}],"try":[{"title":"","source":"","url":"","why":""}]'
       : '',
@@ -1813,6 +1891,9 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
       `Reply with JSON only, in exactly this shape: {${shape}}.`,
       asksAnswer
         ? '"hook" is one line on what makes the question interesting. "short" answers it plainly in three or four sentences. "followUp" is one question the answer naturally leads to.'
+        : '',
+      asksAnswer
+        ? `"doors" are three questions to go on to, each under 15 words with a "hook" under 12 words on why it pulls: "deeper" narrows into a cause, mechanism, case or detail inside this question; "sideways" goes to a neighboring idea, person, place or field; "curiouser" is an unexpected but true link, a surprise. None may repeat a question on the way down.`
         : '',
       asksAnswer
         ? '"useIt" is one small, concrete thing the reader could do in the next few days to use the answer, under 15 words, starting with a verb (for example "Squeeze a handful of your soil and see if it holds together"); give it only when the subject is practical (a skill, craft, garden, kitchen, body, money, tools), otherwise "".'
@@ -1837,8 +1918,8 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
     ]
       .filter(Boolean)
       .join(' '),
-    prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}\nQuestion: ${question}`,
-    maxOutputTokens: part === 'answer' ? 700 : part === 'picks' ? 1_800 : 3_500,
+    prompt: `Subject: ${subject}${area ? `\nArea: ${area}` : ''}${context ? `\nIt began with this passage: ${context}` : ''}${trail.length ? `\nOn the way down: ${trail.join(' > ')}` : ''}\nQuestion: ${question}`,
+    maxOutputTokens: part === 'answer' ? 950 : part === 'picks' ? 1_800 : 3_500,
     temperature: 0.4,
     json: true,
     timeoutMs: part === 'answer' ? 20_000 : part === 'picks' ? 25_000 : 40_000,
@@ -1858,6 +1939,8 @@ async function exploreQuestion(request: Request, env: Env): Promise<Response> {
       short: draft.short,
       followUp: draft.followUp,
       useIt: draft.useIt,
+      doors: cleanDoors(parsed.doors),
+      ticket: await stepTicket(env, question),
       books: [],
       picks: [],
     })

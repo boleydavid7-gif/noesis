@@ -4,6 +4,7 @@
 import { exploreQuestion, resolveBooks } from './pathClient'
 import type { LearningPath } from './pathPlan'
 import { withAnswerPart, withPicks, type Pick, type Question, type Subject } from './subjects'
+import { withDoors } from './rabbitHole'
 
 export type EditSubject = (pathId: string, change: (subject: Subject) => Subject) => void
 
@@ -20,7 +21,18 @@ export const isExploring = (questionId: string) => running.has(questionId)
 export const exploreError = (questionId: string) => failed.get(questionId) ?? ''
 
 export function exploreInto(
-  input: { path: LearningPath; question: Question; area?: string; level?: string; reading: string[]; fresh?: boolean },
+  input: {
+    path: LearningPath
+    question: Question
+    area?: string
+    level?: string
+    reading: string[]
+    fresh?: boolean
+    trail?: string[]
+    context?: string
+    /** Only the reading list (the answer is already there): one use of Noema. */
+    picksOnly?: boolean
+  },
   edit: EditSubject,
 ): Promise<void> {
   const { path, question } = input
@@ -33,36 +45,45 @@ export function exploreInto(
     question: question.text,
     level: input.level,
     reading: input.reading,
+    trail: input.trail,
+    context: input.context,
   }
-  const answer = exploreQuestion({ ...base, part: 'answer' }).then((found) =>
-    edit(path.id, (subject) => withAnswerPart(subject, question.id, found)),
-  )
-  const picks = exploreQuestion({ ...base, part: 'picks' }).then(async (found) => {
-    edit(path.id, (subject) => withPicks(subject, question.id, found.picks, input.fresh))
-    const books = await resolveBooks(found.books).catch(() => [])
-    if (!books.length) return
-    const bookPicks: Array<Omit<Pick, 'id'>> = books.map((book) => ({
-      type: 'book',
-      title: book.title,
-      source: book.authors.slice(0, 2).join(', '),
-      url: book.infoUrl,
-      why: book.note,
-      book: { ...book, description: undefined },
-    }))
-    edit(path.id, (subject) => withPicks(subject, question.id, bookPicks))
-  })
+  // The answer comes first, with its doors; the reading list follows with the answer's ticket, so the step is one
+  // use of Noema, not two.
+  const answer: Promise<string | undefined> = input.picksOnly
+    ? Promise.resolve(undefined)
+    : exploreQuestion({ ...base, part: 'answer' }).then((found) => {
+        edit(path.id, (subject) => withDoors(withAnswerPart(subject, question.id, found), question.id, found.doors))
+        return found.ticket
+      })
+  const picks = answer
+    .catch(() => undefined)
+    .then((ticket) => exploreQuestion({ ...base, part: 'picks', ticket }))
+    .then(async (found) => {
+      edit(path.id, (subject) => withPicks(subject, question.id, found.picks, input.fresh))
+      const books = await resolveBooks(found.books).catch(() => [])
+      if (!books.length) return
+      const bookPicks: Array<Omit<Pick, 'id'>> = books.map((book) => ({
+        type: 'book',
+        title: book.title,
+        source: book.authors.slice(0, 2).join(', '),
+        url: book.infoUrl,
+        why: book.note,
+        book: { ...book, description: undefined },
+      }))
+      edit(path.id, (subject) => withPicks(subject, question.id, bookPicks))
+    })
   const work = Promise.allSettled([answer, picks]).then(([a, p]) => {
-    if (p.status === 'rejected') {
-      const reason = p.reason as { message?: string; name?: string }
-      failed.set(
-        question.id,
-        reason?.constructor?.name === 'AuthRequiredError'
-          ? 'Sign in to find things to explore.'
-          : reason?.message || 'Noema could not find things right now.',
-      )
-      // The answer part may still have come in; the picks can be asked for again.
-      if (a.status === 'rejected') return
-    }
+    const reason = (a.status === 'rejected' ? a.reason : p.status === 'rejected' ? p.reason : null) as {
+      message?: string
+    } | null
+    if (!reason) return
+    failed.set(
+      question.id,
+      reason?.constructor?.name === 'AuthRequiredError'
+        ? 'Sign in to go down rabbit holes.'
+        : reason?.message || 'Noema could not find things right now.',
+    )
   })
   running.set(question.id, work)
   tell()
