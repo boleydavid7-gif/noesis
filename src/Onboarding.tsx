@@ -323,9 +323,12 @@ export function Onboarding({
               <a className="intro-sibling" href="https://proairetos.com/" target="_blank" rel="noopener">
                 <img src="/partners/proairetos.png" alt="" width={40} height={40} />
                 <span className="intro-row-text">
-                  <small>From the same maker</small>
                   <strong>Proairetos</strong>
-                  <span>Plan your days and reflect</span>
+                  <span className="intro-sibling-about">
+                    <b>Adjust your sails</b>
+                    The sea isn’t yours to control. Your sails are. Bring your plans, people, money, health and home
+                    into one calm place, and steer by what matters to you.
+                  </span>
                 </span>
                 <span className="intro-sibling-open">Open</span>
               </a>
