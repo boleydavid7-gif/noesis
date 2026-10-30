@@ -22,6 +22,28 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 
 const MAX_QUOTES = 25
 
+// Any small record as link-safe text: deflated where the browser can, base64url either way.
+export async function packJson(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(value))
+  if (typeof CompressionStream === 'undefined') return `p.${toBase64Url(bytes)}`
+  return `z.${toBase64Url(await pipe(bytes, new CompressionStream('deflate-raw')))}`
+}
+
+// Reads packJson's text back; null when it is not one, or opens to more than `limit` bytes.
+export async function unpackJson(code: string, limit = 400_000): Promise<unknown> {
+  if (code.length > 200_000) return null
+  try {
+    const [kind, data] = [code.slice(0, 1), code.slice(2)]
+    let bytes: Uint8Array = fromBase64Url(data)
+    if (kind === 'z') bytes = await pipe(bytes, new DecompressionStream('deflate-raw'))
+    else if (kind !== 'p') return null
+    if (bytes.byteLength > limit) return null
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown
+  } catch {
+    return null
+  }
+}
+
 export async function encodeCollection(collection: SharedCollection): Promise<string> {
   const clean: SharedCollection = {
     title: collection.title.slice(0, 80),

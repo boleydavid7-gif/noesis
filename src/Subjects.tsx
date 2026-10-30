@@ -21,6 +21,7 @@ import {
   Pencil,
   Play,
   RotateCw,
+  Share2,
   Trash2,
   Wrench,
   X,
@@ -79,6 +80,7 @@ import {
 import './rabbitHole.css'
 import { SourceSheet } from './SourceSheet'
 import { sourceView } from './lib/source'
+import { holeCode, holeLink, type SharedHole } from './lib/holeShare'
 
 const PICK_ICON: Record<PickType, typeof BookOpen> = {
   book: BookOpen,
@@ -477,6 +479,19 @@ function HoleMapView({
   const counts = holeCounts(subject)
   const resume = lastOpen(subject) ?? firstQuestion(subject)
   const [mapping, setMapping] = useState(false)
+  async function share() {
+    try {
+      const url = holeLink(window.location.origin, await holeCode({ ...path, subject }))
+      if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+        await navigator.share({ title: path.title, url }).catch(() => undefined)
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      onNotice('Link copied.')
+    } catch {
+      onNotice('Couldn’t make the link. Try again.')
+    }
+  }
   async function mapGround() {
     setMapping(true)
     try {
@@ -529,6 +544,11 @@ function HoleMapView({
           {!subject.grounded ? (
             <button className="text-button" onClick={() => void mapGround()} disabled={mapping}>
               <MapIcon size={14} /> {mapping ? 'Mapping…' : 'Map the ground'}
+            </button>
+          ) : null}
+          {counts.questions ? (
+            <button className="text-button" onClick={() => void share()}>
+              <Share2 size={14} /> Share
             </button>
           ) : null}
         </div>
@@ -1487,6 +1507,95 @@ export function HomeQuestions({
           ))}
         </ul>
       ) : null}
+    </section>
+  )
+}
+
+// A rabbit hole someone shared: read it here, keep a copy to go down it yourself.
+export function SharedHoleView({
+  shared,
+  onKeep,
+  onDismiss,
+}: {
+  shared: SharedHole
+  onKeep: () => void
+  onDismiss: () => void
+}) {
+  const depthOf = (id: string | undefined, seen = new Set<string>()): number => {
+    const q = id ? shared.questions.find((item) => item.id === id) : undefined
+    if (!q?.parentId || seen.has(q.id)) return 0
+    seen.add(q.id)
+    return 1 + depthOf(q.parentId, seen)
+  }
+  // Each question under the one it came from, in the order they were asked.
+  const ordered: typeof shared.questions = []
+  const place = (parent: string | undefined) => {
+    for (const q of shared.questions.filter((item) => item.parentId === parent && !ordered.includes(item))) {
+      ordered.push(q)
+      place(q.id)
+    }
+  }
+  place(undefined)
+  for (const q of shared.questions) if (!ordered.includes(q)) ordered.push(q)
+  return (
+    <section className="hole-shared panel-card" aria-labelledby="shared-hole-title">
+      <p className="hole-label">Shared with you</p>
+      <h3 id="shared-hole-title">{shared.title}</h3>
+      {shared.from?.quote ? (
+        <figure className="hole-origin">
+          <blockquote>
+            {shared.from.quote.length > 300 ? `${shared.from.quote.slice(0, 300)}…` : shared.from.quote}
+          </blockquote>
+          <figcaption>
+            {shared.from.url ? (
+              <a className="text-button" href={shared.from.url} target="_blank" rel="noreferrer noopener">
+                {shared.from.title} <ExternalLink size={11} aria-hidden="true" />
+              </a>
+            ) : (
+              shared.from.title
+            )}
+          </figcaption>
+        </figure>
+      ) : null}
+      {shared.summary ? <p className="hole-shared-summary">{shared.summary}</p> : null}
+      <ol className="hole-shared-list">
+        {ordered.map((q) => (
+          <li key={q.id} style={{ '--depth': Math.min(depthOf(q.id), 4) } as CSSProperties}>
+            <h4>{q.text}</h4>
+            {q.own ? <blockquote>{q.own}</blockquote> : null}
+            {q.short ? (
+              <details>
+                <summary>Noema’s answer</summary>
+                <p>{q.short}</p>
+              </details>
+            ) : null}
+            {q.picks?.length ? (
+              <ul className="hole-shared-picks">
+                {q.picks.map((pick) => (
+                  <li key={pick.id}>
+                    {pick.url ? (
+                      <a href={pick.url} target="_blank" rel="noreferrer noopener">
+                        {pick.title}
+                      </a>
+                    ) : (
+                      pick.title
+                    )}
+                    {pick.source ? <small> · {pick.source}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+      <div className="subject-actions">
+        <button className="primary-button" onClick={onKeep}>
+          Keep a copy
+        </button>
+        <button className="text-button" onClick={onDismiss}>
+          Not now
+        </button>
+      </div>
     </section>
   )
 }

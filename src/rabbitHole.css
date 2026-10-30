@@ -675,3 +675,85 @@
     font-size: 18px;
   }
 }
+
+/* ---------- A rabbit hole someone shared ---------- */
+.hole-shared {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.hole-shared h3 {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.hole-shared-summary {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 18px;
+  line-height: 1.55;
+}
+.hole-shared-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+  list-style: none;
+}
+.hole-shared-list > li {
+  display: grid;
+  gap: 8px;
+  padding: 14px 0 14px calc(var(--depth, 0) * 16px);
+  border-bottom: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+}
+.hole-shared-list h4 {
+  margin: 0;
+  font-family: var(--ll-serif);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.hole-shared-list blockquote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+  line-height: 1.5;
+}
+.hole-shared-list details p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.hole-shared-list summary {
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.hole-shared-picks {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.hole-shared-picks small {
+  color: var(--muted);
+}
+.hole-shared-picks {
+  padding-left: 0;
+  list-style: none;
+}
+.hole-shared-picks a {
+  color: rgb(var(--accent-rgb, 220, 194, 142));
+  text-decoration: none;
+}
+.hole-shared-picks a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hole-shared-list summary::marker {
+  color: var(--muted);
+}

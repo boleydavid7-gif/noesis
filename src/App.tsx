@@ -143,7 +143,8 @@ import { WebdavBrowser } from './WebdavBrowser'
 import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
-import { HomeQuestions, SubjectStarter, SubjectView, type SourceHands } from './Subjects'
+import { HomeQuestions, SharedHoleView, SubjectStarter, SubjectView, type SourceHands } from './Subjects'
+import { keepSharedHole, readHoleCode, type SharedHole } from './lib/holeShare'
 import { AddExternalBook, Borrowed } from './Borrowed'
 import { newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
@@ -459,6 +460,7 @@ function App() {
   const [readerSearch, setReaderSearch] = useState('')
 
   const [sharedView, setSharedView] = useState<SharedCollection | null>(null)
+  const [sharedHoleView, setSharedHoleView] = useState<SharedHole | null>(null)
   const [noemaUseContext, setNoemaUseContext] = useState(true)
   const [tutorOk, setTutorOk] = useState(false)
   const [reviewStartNote, setReviewStartNote] = useState<string | null>(null)
@@ -1072,7 +1074,15 @@ function App() {
     }
     const shared = window.location.hash.match(/^#share=(.+)$/)
     if (shared) void decodeCollection(shared[1]).then((collection) => collection && setSharedView(collection))
-    if (incoming || shared) window.history.replaceState(null, '', window.location.pathname)
+    // A rabbit hole someone shared opens on Rabbit Holes, to read and keep.
+    const hole = window.location.hash.match(/^#hole=(.+)$/)
+    if (hole)
+      void readHoleCode(hole[1]).then((found) => {
+        if (!found) return
+        setSharedHoleView(found)
+        setActiveNav('Learning Paths')
+      })
+    if (incoming || shared || hole) window.history.replaceState(null, '', window.location.pathname)
   }, [])
   // Ctrl or Cmd + K opens the quick search from anywhere.
   useEffect(() => {
@@ -2867,6 +2877,20 @@ function App() {
     return (
       <Page title="Rabbit Holes" subtitle="">
         <FreeCopyContext.Provider value={addResource}>
+          {sharedHoleView ? (
+            <SharedHoleView
+              shared={sharedHoleView}
+              onDismiss={() => setSharedHoleView(null)}
+              onKeep={() => {
+                const kept = keepSharedHole(sharedHoleView)
+                savePlannedPath(kept)
+                setSharedHoleView(null)
+                const first = kept.subject?.questions.find((q) => !q.parentId)
+                if (first) setOpenAt({ pathId: kept.id, questionId: first.id })
+                showNotice('Kept in your rabbit holes.')
+              }}
+            />
+          ) : null}
           <SubjectStarter
             onStart={(path, questionId) => {
               savePlannedPath(path)
