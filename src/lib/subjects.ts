@@ -57,7 +57,14 @@ export type Area = { id: string; title: string; blurb?: string; summary?: { text
 export type Door = { kind: DoorKind; text: string; hook?: string }
 export type DoorKind = 'deeper' | 'side' | 'curious'
 // Where a rabbit hole began, when it began in a book or a note.
-export type HoleOrigin = { kind: 'book' | 'note'; title: string; quote?: string; bookId?: string; noteId?: string }
+export type HoleOrigin = {
+  kind: 'book' | 'note' | 'page'
+  title: string
+  quote?: string
+  bookId?: string
+  noteId?: string
+  url?: string
+}
 export type Stuck = { text: string; at: string }
 export type Subject = {
   why?: string

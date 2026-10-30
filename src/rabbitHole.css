@@ -493,3 +493,185 @@
   top: 0;
   right: 0;
 }
+
+/* ---------- A source, read inside Noesis ---------- */
+.pick-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.pick-open-here {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  text-align: left;
+}
+.pick-open-here:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pick-original {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  color: var(--muted);
+}
+.brain-backdrop.hole-source-backdrop {
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  justify-content: center;
+}
+.hole-source {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(760px, calc(100vw - 32px));
+  height: min(900px, calc(100dvh - 48px));
+  padding: 0;
+  overflow: hidden;
+}
+.hole-source-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 20px;
+  border-bottom: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+}
+.hole-source-site {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hole-source-head .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+.hole-source-body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 24px clamp(20px, 6vw, 56px) 40px;
+}
+.hole-source-body h3 {
+  max-width: 34ch;
+  margin: 0 0 8px;
+  font-family: var(--ll-serif);
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 500;
+  line-height: 1.2;
+}
+.hole-source-meta {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.hole-source-text {
+  max-width: 66ch;
+  font-family: var(--ll-serif);
+  font-size: 19px;
+  line-height: 1.65;
+  color: var(--ll-ink, #eef2f7);
+}
+.hole-source-text p,
+.hole-source-text blockquote,
+.hole-source-text pre {
+  margin: 0 0 1em;
+}
+.hole-source-text h4 {
+  margin: 1.4em 0 0.5em;
+  font-family: var(--ll-sans);
+  font-size: 18px;
+  font-weight: 600;
+}
+.hole-source-text blockquote {
+  padding-left: 14px;
+  border-left: 2px solid rgba(var(--accent-rgb, 220, 194, 142), 0.5);
+}
+.hole-source-text pre {
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--ll-inset, rgba(0, 0, 0, 0.25));
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.hole-source-text .is-item {
+  position: relative;
+  padding-left: 18px;
+}
+.hole-source-text .is-item::before {
+  content: '';
+  position: absolute;
+  top: 0.75em;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.hole-source-player {
+  overflow: hidden;
+  width: 100%;
+  margin: 12px 0 16px;
+  border-radius: 12px;
+  background: #000;
+}
+.hole-source-player.is-audio {
+  height: 232px;
+  background: none;
+}
+.hole-source-player iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.hole-source-audio {
+  width: 100%;
+  margin: 12px 0 16px;
+}
+.hole-source-why {
+  color: var(--muted);
+  font-size: 15px;
+}
+.hole-source-error {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  color: var(--muted);
+}
+.hole-source-pick {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--ll-hair, rgba(255, 255, 255, 0.08));
+  background: var(--ll-mica, var(--panel, #0f1724));
+}
+@media (max-width: 560px) {
+  .brain-backdrop.hole-source-backdrop {
+    place-items: stretch;
+    padding: 0;
+  }
+  .hole-source {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .hole-source-head {
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+  .hole-source-text {
+    font-size: 18px;
+  }
+}

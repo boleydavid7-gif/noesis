@@ -201,6 +201,14 @@ and a Wrangler dry run. The live health endpoint is
   `reading.startWide`) is gone; every book opens in the one reader, from the Library, Home and Second Brain alike.
   A saved place or a note's passage that is not at a chapter's top is moved down clear of controls lying over the
   page (a phone). A Second Brain note offers Fall in (a rabbit hole begun from the note, `HoleOrigin` kind `note`).
+- Sources inside Noesis (Oct 30; `lib/source.ts`, `SourceSheet.tsx`, Worker `/api/article` in `workerArticle.ts`, tests
+  `source.test.ts`): a rabbit hole's read picks open in a sheet (portalled to body): the Worker fetches the page (public
+  https only, redirects checked each hop, 2 MB, html only, 30 a minute) and sends it back as text in JSON; the device
+  reads it with Readability (`@mozilla/readability`, loaded on demand) and keeps plain blocks only (headings,
+  paragraphs, quotes, items, code), never the page's markup. Videos (YouTube through youtube-nocookie, Vimeo) and
+  episodes (Spotify, Apple Podcasts, audio files) play in their makers' players (`playerFor`). A passage picked on a
+  page offers Keep (a Second Brain highlight with the address) and Fall in (a hole from it, `HoleOrigin` kind `page`
+  with `url`). The title's small arrow still opens the original site; PDFs, books and other files keep their old ways.
 - Staying connected (`lib/cloudProviders.ts`): the one-hour fallback after a failed renewing sign-in now lasts three
   days and only follows a plain refusal (400/401), never a network error (the first version kept it for good, so one
   hiccup left a provider on one-hour connections). Only 400/401 on renewal drops the renewal token; 429 and 5xx are

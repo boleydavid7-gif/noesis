@@ -143,7 +143,7 @@ import { WebdavBrowser } from './WebdavBrowser'
 import type { Command } from './lib/commands'
 import { SecondBrainPage } from './SecondBrainPage'
 import { FreeCopyContext } from './lib/freeCopy'
-import { HomeQuestions, SubjectStarter, SubjectView } from './Subjects'
+import { HomeQuestions, SubjectStarter, SubjectView, type SourceHands } from './Subjects'
 import { AddExternalBook, Borrowed } from './Borrowed'
 import { newLoan, readLoans, writeLoans } from './lib/loans'
 import { cleanLink, linkLabel } from './lib/notesBooks'
@@ -2902,6 +2902,14 @@ function App() {
             onNotice={showNotice}
             onEdit={editSubject}
             onOpenHole={(pathId, questionId) => setOpenAt({ pathId, questionId })}
+            sources={{
+              fallIn: (origin) => {
+                setFallInFrom(origin)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              },
+              keep: (passage, title, url) =>
+                void addNote({ title, body: passage, quote: passage, source: url, kind: 'highlight', tags: [] }),
+            }}
             onOpenBook={(id) => {
               const found = books.find((book) => book.id === id)
               if (found) openSavedBook(found)
@@ -5108,7 +5116,9 @@ function PathSection({
   initialQuestion = null,
   onEdit,
   onOpenHole,
+  sources,
 }: {
+  sources?: SourceHands
   onEdit?: EditSubject
   onOpenHole?: (pathId: string, questionId: string) => void
   initialQuestion?: { pathId: string; questionId: string } | null
@@ -5238,6 +5248,7 @@ function PathSection({
               path={active}
               holes={paths}
               onOpenHole={onOpenHole}
+              sources={sources}
               initialQuestion={initialQuestion?.pathId === active.id ? initialQuestion.questionId : undefined}
               onEdit={onEdit}
               library={books}

@@ -77,6 +77,8 @@ import {
   withGround,
 } from './lib/rabbitHole'
 import './rabbitHole.css'
+import { SourceSheet } from './SourceSheet'
+import { sourceView } from './lib/source'
 
 const PICK_ICON: Record<PickType, typeof BookOpen> = {
   book: BookOpen,
@@ -184,6 +186,12 @@ export function SubjectStarter({
 
 type View = { kind: 'map' } | { kind: 'found' } | { kind: 'question'; id: string }
 
+// What a source opened inside Noesis can do with a passage picked in it.
+export type SourceHands = {
+  fallIn: (origin: HoleOrigin) => void
+  keep: (passage: string, title: string, url: string) => void
+}
+
 export function SubjectView({
   path,
   holes = [],
@@ -196,7 +204,9 @@ export function SubjectView({
   onNotice,
   initialQuestion,
   onEdit,
+  sources,
 }: {
+  sources?: SourceHands
   onEdit?: EditSubject
   path: LearningPath
   holes?: LearningPath[]
@@ -306,6 +316,7 @@ export function SubjectView({
             onNote={onNote}
             onNotice={onNotice}
             onEdit={onEdit}
+            sources={sources}
             onClimbOut={() => setClimbing(true)}
           />
         </div>
@@ -489,6 +500,10 @@ function HoleMapView({
               <button className="text-button" onClick={() => onOpenBook(subject.from!.bookId!)}>
                 {subject.from.title}
               </button>
+            ) : subject.from.kind === 'page' && subject.from.url ? (
+              <a className="text-button" href={subject.from.url} target="_blank" rel="noreferrer noopener">
+                {subject.from.title} <ExternalLink size={11} aria-hidden="true" />
+              </a>
             ) : (
               subject.from.title
             )}
@@ -573,12 +588,14 @@ function PickCard({
   onToggleSave,
   onLooked,
   onOpenBook,
+  onOpenHere,
 }: {
   pick: Pick
   owned?: LibraryBook
   onToggleSave: () => void
   onLooked: () => void
   onOpenBook?: (id: string) => void
+  onOpenHere?: () => void
 }) {
   const Icon = PICK_ICON[pick.type]
   const time = minutesText(pick)
@@ -593,7 +610,24 @@ function PickCard({
         </span>
       )}
       <div className="pick-body">
-        {pick.url ? (
+        {pick.url && onOpenHere ? (
+          <span className="pick-title-row">
+            <button className="pick-open-here" onClick={onOpenHere}>
+              <strong>{pick.title}</strong>
+            </button>
+            <a
+              className="pick-original"
+              href={pick.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={onLooked}
+              aria-label={`Open ${pick.title} on its site`}
+              title="Open on its site"
+            >
+              <ExternalLink size={12} aria-hidden="true" />
+            </a>
+          </span>
+        ) : pick.url ? (
           <a href={pick.url} target="_blank" rel="noreferrer noopener" onClick={onLooked}>
             <strong>{pick.title}</strong> <ExternalLink size={11} aria-hidden="true" />
           </a>
@@ -668,7 +702,9 @@ function QuestionPage({
   onNotice,
   onEdit,
   onClimbOut,
+  sources,
 }: {
+  sources?: SourceHands
   onEdit?: EditSubject
   path: LearningPath
   holes: LearningPath[]
@@ -694,6 +730,7 @@ function QuestionPage({
   const [own, setOwn] = useState('')
   const [kind, setKind] = useState<'all' | PickType>('all')
   const [moreDoors, setMoreDoors] = useState(false)
+  const [reading, setReading] = useState<Pick | null>(null)
   const latest = useRef({ subject, question })
   latest.current = { subject, question }
   const trail = trailOf(subject, question.id)
@@ -1055,12 +1092,35 @@ function QuestionPage({
                         onLooked={() => {
                           if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
                         }}
+                        onOpenHere={
+                          sourceView(pick)
+                            ? () => {
+                                if (!pick.looked) onSave(updatePick(subject, question.id, pick.id, { looked: true }))
+                                setReading(pick)
+                              }
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
                 </div>
               ))}
           </section>
+          {reading ? (
+            <SourceSheet
+              pick={reading}
+              onClose={() => setReading(null)}
+              onFallIn={
+                sources
+                  ? (passage, title, url) => {
+                      setReading(null)
+                      sources.fallIn({ kind: 'page', title, quote: passage, url })
+                    }
+                  : undefined
+              }
+              onKeep={sources?.keep}
+            />
+          ) : null}
 
           {links.length && onOpenHole ? (
             <section className="q-section hole-links" aria-label="Connects to">

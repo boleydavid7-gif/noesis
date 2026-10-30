@@ -1,4 +1,5 @@
 import { handlePlus, personFrom, takeNoema } from './workerPlus'
+import { fetchArticle } from './workerArticle'
 import {
   buyLinks,
   isPublicHttps,
@@ -2204,6 +2205,11 @@ const worker = {
     }
     if (url.pathname === '/api/search' && request.method === 'GET') return searchFreeResources(request)
     if (url.pathname === '/api/resource' && request.method === 'GET') return proxyResource(request)
+    if (url.pathname === '/api/article' && request.method === 'GET') {
+      if (rateLimited(request, 'article', 30))
+        return json({ ok: false, error: 'Too many pages at once. Try again in a minute.' }, 429)
+      return fetchArticle(request)
+    }
     if (url.pathname === '/api/covers' && request.method === 'GET') return searchCovers(request, env)
     if (url.pathname === '/api/cover' && request.method === 'GET') return proxyCover(request)
     return env.ASSETS.fetch(request)
